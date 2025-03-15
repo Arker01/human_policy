@@ -19,7 +19,7 @@ from tqdm import tqdm
 
 import hdt.constants
 from cet.utils_fk import FKCmdDictGenerator, target_task_link_names
-from cet.eval_6d import load_policy, get_task_and_precomuted_embeddings, get_norm_stats, normalize_input
+from cet.eval_6d import load_policy, get_norm_stats, normalize_input
 
 def on_press(key):
     """Callback function for keyboard events."""
@@ -117,7 +117,6 @@ def main(args, player):
     actions_gt, left_imgs, right_imgs, states, init_action, init_left_img, init_right_img = _load_hdf5(args['hdf_file_path'])
     norm_stats = get_norm_stats(args['norm_stats_path'], embodiment_name="h1_inspire_sim")
     policy, visual_preprocessor = load_policy(args['model_path'], args['policy_config_path'], device)
-    plain_task_text, selected_embedding = get_task_and_precomuted_embeddings(args['lang_embeddings_path'])
     
     # Constants
     ZEROING_LENGTH = 50
@@ -185,8 +184,7 @@ def main(args, player):
             if output is None or act_index == chunk_size - 0:
                 print('output = ', None)
                 print("Predicted Chunk exhausted at", t_start)
-                cond_dict = {'plain_text': plain_task_text, 'language_embeddings': selected_embedding}
-                output = policy(image_data, qpos_data, cond_dict)[0].detach().cpu().numpy() # (chuck_size,action_dim)
+                output = policy(image_data, qpos_data)[0].detach().cpu().numpy() # (chuck_size,action_dim)
                 output = output * norm_stats["action_std"] + norm_stats["action_mean"]
                 act_index = 0
                 
@@ -229,7 +227,6 @@ if __name__ == '__main__':
     parser.add_argument('--hdf_file_path', type=str, help='hdf file path', required=True)
     parser.add_argument('--norm_stats_path', type=str, help='norm stats path', required=True)
     parser.add_argument('--model_path', type=str, help='model path', required=True)
-    parser.add_argument('--lang_embeddings_path', type=str, help='lang embeddings path', required=False, default="./placeholder_text.txt")
     parser.add_argument('--chunk_size', type=int, help='chunk size', default=64)
     parser.add_argument('--policy_config_path', type=str, help='policy config path', required=True)
     parser.add_argument('--plot', action='store_true')

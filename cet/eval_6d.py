@@ -17,24 +17,6 @@ def get_norm_stats(data_path, embodiment_name="h1_inspire"):
     norm_stats = norm_stats[embodiment_name]
     return norm_stats
 
-def get_task_and_precomuted_embeddings(lang_path):
-    if lang_path.endswith(".pkl"):
-        # Precomputed T5 embeddings
-        with open(lang_path, "rb") as f:
-            task_lang_embedding = pickle.load(f)
-        assert len(task_lang_embedding.keys()) == 1
-        plain_task_text = list(task_lang_embedding.keys())[0]
-        selected_embedding = task_lang_embedding[plain_task_text].squeeze().cuda().float().unsqueeze(0)
-    elif lang_path.endswith(".txt"):
-        # Plain text
-        with open(lang_path, "r") as f:
-            plain_task_text = f.read().strip()
-        selected_embedding = None
-    else:
-        raise ValueError("Invalid language path: {}".format(lang_path))
-    
-    return [plain_task_text], selected_embedding
-
 def load_policy(policy_path, policy_config_path, device):
     with open(policy_config_path, "r") as fp:
         policy_config = yaml.safe_load(fp)
@@ -49,8 +31,8 @@ def load_policy(policy_path, policy_config_path, device):
                 self.policy = policy
 
             @torch.no_grad()
-            def forward(self, image, qpos, cond_dict):
-                return self.policy(image, qpos, torch.tensor([0]).to(image.device))
+            def forward(self, image, qpos):
+                return self.policy(image, qpos)
             
         my_policy_wrapper = polciy_wrapper(policy)
         my_policy_wrapper.eval().to(device)
@@ -85,11 +67,8 @@ def load_policy(policy_path, policy_config_path, device):
                 self.policy = policy
 
             @torch.no_grad()
-            def forward(self, image, qpos, cond_dict):
-                assert 'language_embeddings' in cond_dict
-                valid_mask = torch.ones(cond_dict['language_embeddings'].shape[:2], dtype=torch.bool).to(device=device)
-                cond_dict['language_embeddings_mask'] = valid_mask
-                return self.policy(image, qpos, conditioning_dict=cond_dict)
+            def forward(self, image, qpos):
+                return self.policy(image, qpos, conditioning_dict={})
     
         my_policy_wrapper = polciy_wrapper(policy)
         my_policy_wrapper.eval().to(device)
@@ -193,8 +172,6 @@ if __name__ == '__main__':
 
     policy, visual_preprocessor = load_policy(args['model_path'], args['model_cfg_path'], device)
 
-    plain_task_text, selected_embedding = get_task_and_precomuted_embeddings(args['lang_embeddings_path'])
-
     # Reset robot and the environment
     output = None
     act = None
@@ -225,9 +202,7 @@ if __name__ == '__main__':
             qpos_data[:, hdt.constants.OUTPUT_HEAD_EEF] = 0
 
             if output is None or act_index == chunk_size - 10:
-                print("Predicted Chunk exhausted at", t_start)
-                cond_dict = {'plain_text': plain_task_text, 'language_embeddings': selected_embedding}
-                output = policy(image_data, qpos_data, cond_dict)[0].detach().cpu().numpy() # (chuck_size,action_dim)
+                output = policy(image_data, qpos_data)[0].detach().cpu().numpy() # (chuck_size,action_dim)
                 output = output * norm_stats["action_std"] + norm_stats["action_mean"]
                 act_index = 0
             act = output[act_index]

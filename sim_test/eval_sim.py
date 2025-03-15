@@ -103,9 +103,7 @@ def eval_bc(config, num_rollouts=50):
     # temporal_agg = config['temporal_agg']
     onscreen_cam = 'angle'
 
-    from cet.eval_6d import get_norm_stats, load_policy, get_task_and_precomuted_embeddings
-
-    plain_task_text, selected_embedding = get_task_and_precomuted_embeddings(config['lang_embeddings_path'])
+    from cet.eval_6d import get_norm_stats, load_policy
 
     # load policy and stats
     norm_stats = get_norm_stats(config['norm_stats_path'], 'sim_aloha')
@@ -214,16 +212,14 @@ def eval_bc(config, num_rollouts=50):
                 if t == 0:
                     # warm up
                     for _ in range(10):
-                        cond_dict = {'plain_text': plain_task_text, 'language_embeddings': selected_embedding}
-                        output = policy(image_data, qpos, cond_dict)
+                        output = policy(image_data, qpos)
                     print('network warm up done')
                     time1 = time.time()
 
                 ### query policy
                 time3 = time.time()
                 if t % query_frequency == 0:
-                    cond_dict = {'plain_text': plain_task_text, 'language_embeddings': selected_embedding}
-                    all_actions = policy(image_data, qpos, cond_dict)
+                    all_actions = policy(image_data, qpos)
                 raw_action = all_actions[:, t % query_frequency]
                 if temporal_agg:
                     all_time_actions[[t], t:t+num_queries] = all_actions[:, :num_queries]

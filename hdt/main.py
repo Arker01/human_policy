@@ -355,9 +355,8 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
                 super().__init__()
                 self.policy = policy
 
-            def forward(self, image, qpos, language_conditioning):
-                cond_dict = {'language_embeddings': language_conditioning}
-                return self.policy(image, qpos, conditioning_dict=cond_dict)
+            def forward(self, image, qpos):
+                return self.policy(image, qpos, conditioning_dict={})
 
         # TRACING_DEVICE = 'cuda'
         TRACING_DEVICE = 'cuda'
@@ -369,15 +368,15 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
         image, qpos, _, _, conditioning_dict = data
         image = image.to(TRACING_DEVICE)
         qpos = qpos.to(TRACING_DEVICE)
-        conditioning_dict = {k: v.to(TRACING_DEVICE) for k, v in conditioning_dict.items()}
+        conditioning_dict = {k: maybe_to_tensor(v, TRACING_DEVICE) for k, v in conditioning_dict.items()}
         # warm up
         for _ in range(10):
-            trajectory = my_policy_wrapper(image[0:1], qpos[0:1], conditioning_dict['language_embeddings'][0:1])
+            trajectory = my_policy_wrapper(image[0:1], qpos[0:1])
         # benchmark speed
         start = time.time()
         N_iters = 50
         for _ in range(N_iters):
-            trajectory = my_policy_wrapper(image[0:1], qpos[0:1], conditioning_dict['language_embeddings'][0:1])
+            trajectory = my_policy_wrapper(image[0:1], qpos[0:1])
         end = time.time()
         print("Total time: ", end - start)
         print(f"Rollout speed: {N_iters / (end - start)} Hz")
@@ -385,8 +384,7 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
         # Jit trace
         image_data = torch.rand(image[0:1].shape, device=TRACING_DEVICE)
         qpos_data = torch.rand(qpos[0:1].shape, device=TRACING_DEVICE)
-        language_conditioning = torch.rand(conditioning_dict['language_embeddings'][0:1].shape, device=TRACING_DEVICE)
-        input_data = (image_data, qpos_data, language_conditioning)
+        input_data = (image_data, qpos_data)
 
         traced_policy = torch.jit.trace(my_policy_wrapper, input_data)
 
@@ -398,9 +396,9 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
         loaded_policy = torch.jit.load(traced_path)
         # Manually set seed to make diffusion sampling deterministic in comparisons
         torch.random.manual_seed(0)
-        jit_output = loaded_policy(image_data, qpos_data, language_conditioning)
+        jit_output = loaded_policy(image_data, qpos_data)
         torch.random.manual_seed(0)
-        vanilla_output = my_policy_wrapper(image_data, qpos_data, language_conditioning)
+        vanilla_output = my_policy_wrapper(image_data, qpos_data)
 
         l1_err = torch.nn.functional.l1_loss(jit_output, vanilla_output, reduction='none').cpu().detach().numpy()
         assert (l1_err < 1e-3).all(), f"JIT trace error: {l1_err.max()}"
