@@ -1,0 +1,8 @@
+common:
+  policy_class: DP
+  state_dim: 128
+  action_dim: 128
+  camera_names: ['left', 'right']
+
+data:
+  image_resolution_hw: [240, 320]

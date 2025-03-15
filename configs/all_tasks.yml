@@ -1,0 +1,5 @@
+tasks:
+  h1_inspire_sim:
+    file: h1_inspire_sim.yml
+    name: H1 7DoF + 6DoF Hand (Sim)
+    img: h1_inspire.png
