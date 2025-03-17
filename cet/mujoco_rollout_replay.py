@@ -1,7 +1,3 @@
-# Move global declaration to top of file, before any usage
-global toggle_value 
-toggle_value = False
-
 import mujoco as mj
 import mujoco.viewer as mjv
 from cet.sim_mujoco import MujocoSim
@@ -20,20 +16,6 @@ from tqdm import tqdm
 import hdt.constants
 from cet.utils_fk import FKCmdDictGenerator, target_task_link_names
 from cet.eval_6d import load_policy, get_norm_stats, normalize_input
-
-def on_press(key):
-    """Callback function for keyboard events."""
-    try:
-        if key.char == 'r':
-            print("Recording toggled")
-            global toggle_value
-            toggle_value = not toggle_value
-
-        elif key.char == 'q':
-            print("Exiting...")
-            return False
-    except AttributeError:
-        pass
 
 def _load_hdf5(hdf5_path):
     """ Load hdf5 file """
@@ -86,42 +68,24 @@ def process_image(img, original_res=(1280, 720), offset_w=0, resize_width=320, r
     img_resized = cv2.resize(img_cropped, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
     img_resized = img_resized.transpose(2, 0, 1)
     
-    return img_resized
-        
-def display_images(left_img, right_img, left_img_gt, right_img_gt):
-    """
-    Concatenate and display the ground truth and inference images
-    """
-    # Transpose images to H x W x C
-    img = np.concatenate((left_img.cpu().numpy().transpose((1, 2, 0)), right_img.cpu().numpy().transpose((1, 2, 0))), axis=1)
-    img_gt = np.concatenate((left_img_gt.transpose((1, 2, 0)), right_img_gt.transpose((1, 2, 0))), axis=1)
+    return img_resized   
 
-    plt.subplot(2, 1, 1)
-    plt.cla()
-    plt.title("Reference Demonstration View")
-    plt.imshow(img_gt, aspect='equal')
-    plt.axis("off")
-    
-    plt.subplot(2, 1, 2)
-    plt.cla()
-    plt.title("Real-time Inference View")
-    plt.imshow(img, aspect='equal')
-    plt.axis("off")
-    
-    plt.pause(0.001)     
-
-def main(args, player):
+def main(args, player, policy_rollout):
     """ Main function to evaluate the policy in the simulator """
+    device = args['device']
     
     # Load initial dataset and model
     actions_gt, left_imgs, right_imgs, states, init_action, init_left_img, init_right_img = _load_hdf5(args['hdf_file_path'])
-    norm_stats = get_norm_stats(args['norm_stats_path'], embodiment_name="h1_inspire_sim")
-    policy, visual_preprocessor = load_policy(args['model_path'], args['policy_config_path'], device)
+    if policy_rollout:
+        norm_stats = get_norm_stats(args['norm_stats_path'], embodiment_name="h1_inspire_sim")
+        policy, visual_preprocessor = load_policy(args['model_path'], args['policy_config_path'], device)
     
     # Constants
+    # By default, robot URDF starts with both arms laid down
+    # The zeroing phase is to bring the arms to the front with preset qpos
     ZEROING_LENGTH = 50
     INIT_FIRST_ACTION_LENGTH = 180
-    assert INIT_FIRST_ACTION_LENGTH > ZEROING_LENGTH + 10 # Ensure safe initialization
+    assert INIT_FIRST_ACTION_LENGTH > ZEROING_LENGTH + 10
         
     GT_TIME_FIX = False
     output, act = None, None
@@ -161,7 +125,6 @@ def main(args, player):
                 continue
                 
             # Inference phase: 
-            print("step", t)
             t_start = t - INIT_FIRST_ACTION_LENGTH
 
             # Fix GT_TIME to complete the rollout trajectory
@@ -176,21 +139,25 @@ def main(args, player):
             
             # Fetch qpos from sim and generate FK observations
             cur_state = np.array(player.data.qpos[hdt.constants.H1_ALL_INDICES][13:]) #  38-dim: 7*2 arms, 12*2 fingers
-            fk_cmd_dict, _, _, _, _, _, _, _ = generator.generate_fk_obs(qpos=cur_state, head_mat=np.zeros((4, 4)), norm_qpos_to_urdf=False) # TODO: head_mat is simply masked during training for now.
-            qpos_data, image_data = normalize_input(fk_cmd_dict[0], cur_left_img, cur_right_img, 
-                                                    norm_stats, visual_preprocessor, match_human=True)
+            # NOTE: head_mat is simply masked from training for now.
+            fk_cmd_dict, _, _, _, _, _, _, _ = generator.generate_fk_obs(qpos=cur_state, head_mat=np.zeros((4, 4)), norm_qpos_to_urdf=False)
+
+            if policy_rollout:
+                qpos_data, image_data = normalize_input(fk_cmd_dict[0], cur_left_img, cur_right_img, 
+                                                        norm_stats, visual_preprocessor, match_human=True)
             
-            # If output is exhausted, generate new predictions
-            if output is None or act_index == chunk_size - 0:
-                print('output = ', None)
-                print("Predicted Chunk exhausted at", t_start)
-                output = policy(image_data, qpos_data)[0].detach().cpu().numpy() # (chuck_size,action_dim)
-                output = output * norm_stats["action_std"] + norm_stats["action_mean"]
-                act_index = 0
-                
-            # Select current action
-            act = output[act_index]
-            act_index += 1
+                # If output is exhausted, generate new predictions
+                if output is None or act_index == chunk_size - 0:
+                    print("Predicted Chunk exhausted at", t_start)
+                    output = policy(image_data, qpos_data)[0].detach().cpu().numpy() # (chuck_size,action_dim)
+                    output = output * norm_stats["action_std"] + norm_stats["action_mean"]
+                    act_index = 0
+                    
+                # Select current action
+                act = output[act_index]
+                act_index += 1
+            else:
+                act = cur_action_gt
             
             if args['plot']:
                 predicted_list.append(act[hdt.constants.OUTPUT_RIGHT_EEF[3:6]])
@@ -199,15 +166,6 @@ def main(args, player):
             # Step the simulator
             player.step_init(act, viewer)  
             record_list.append(act)
-                
-            # Plot the current and ground truth images
-            display_images(image_data[0,0], image_data[0,1], cur_left_img_gt, cur_right_img_gt)
-            
-            # Reset the environment
-            global toggle_value
-            if toggle_value:
-                player.reset_env_randomize(record_obj_pose=False)
-                toggle_value = False
         
         # Plot the predicted and ground truth actions
         if args['plot']:
@@ -225,21 +183,23 @@ def main(args, player):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Eval HDT policy on figures w/ optional sim visualization', add_help=False)
     parser.add_argument('--hdf_file_path', type=str, help='hdf file path', required=True)
-    parser.add_argument('--norm_stats_path', type=str, help='norm stats path', required=True)
-    parser.add_argument('--model_path', type=str, help='model path', required=True)
+    parser.add_argument('--norm_stats_path', type=str, help='norm stats path', required=False)
+    parser.add_argument('--model_path', type=str, help='model path', required=False)
     parser.add_argument('--chunk_size', type=int, help='chunk size', default=64)
-    parser.add_argument('--policy_config_path', type=str, help='policy config path', required=True)
+    parser.add_argument('--policy_config_path', type=str, help='policy config path', required=False)
     parser.add_argument('--plot', action='store_true')
     parser.add_argument('--tasktype', type=str, help='Scene setup', required=True, choices=['microwave', 'tap', 'pour', 'pickplace', 'wiping', 'pepsi'])
-
+    parser.add_argument('--device', type=str, help='Device', default="cuda")
     args = vars(parser.parse_args())
 
+    if args['model_path'] is not None:
+        assert args['norm_stats_path'] is not None
+        assert args['policy_config_path'] is not None
+        policy_rollout = True
+    else:
+        policy_rollout = False
+
     chunk_size = args['chunk_size']
-    device = "cuda"
-    
-    from pynput import keyboard
-    listener = keyboard.Listener(on_press=on_press)
-    listener.start()
 
     root_path = str(Path(__file__).resolve().parent.parent)
     config_path = root_path + "/configs/all_tasks.yml"
@@ -249,4 +209,4 @@ if __name__ == '__main__':
 
     player = MujocoSim(config_files, root_path=root_path, task_id=0, tasktype=args['tasktype'], cfgs=None)
 
-    main(args, player)
+    main(args, player, policy_rollout)

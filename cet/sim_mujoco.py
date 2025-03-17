@@ -24,7 +24,7 @@ class MujocoSim:
                 self,
                 config_files,
                 root_path=None,
-                print_freq=True,
+                print_freq=False,
                 teleop_control=False,
                 task_id=0,
                 tasktype=None,
@@ -222,7 +222,7 @@ class MujocoSim:
             # self._apply_pd_gains(cfg, robot_dof_props)
             # PD IS BEING SET EXPLICITLY IN STEP FUNCTION
             
-            self.model.geom_friction = 0.8
+            self.model.geom_friction = 0.6
 
             # Store joint names and DOF count
             joint_names = [self.model.joint(i).name for i in range(self.model.njnt)][:self.robot_joint_ids.shape[0]]
