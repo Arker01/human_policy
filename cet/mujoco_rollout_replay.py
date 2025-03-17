@@ -5,8 +5,7 @@ from cet.sim_mujoco import MujocoSim
 import cv2
 import yaml
 import h5py
-import pickle
-import torch
+import time
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
@@ -108,9 +107,14 @@ def main(args, player, policy_rollout):
     # Launch simulator viewer
     with mj.viewer.launch_passive(player.model, player.data) as viewer:
         player.setup_viewer(viewer)
+
+        end_time = states.shape[0] + INIT_FIRST_ACTION_LENGTH
+        if policy_rollout:
+            # 600 extra steps because policy predictions don't match ground truth
+            end_time += 600
             
         # Main simulation loop
-        for t in tqdm(range(states.shape[0] + INIT_FIRST_ACTION_LENGTH + 600)):
+        for t in tqdm(range(end_time)):
             # Fetch images from simulator and process them
             cur_left_img = process_image(player.get_camera_image(0))
             cur_right_img = process_image(player.get_camera_image(1))
@@ -188,7 +192,7 @@ if __name__ == '__main__':
     parser.add_argument('--chunk_size', type=int, help='chunk size', default=64)
     parser.add_argument('--policy_config_path', type=str, help='policy config path', required=False)
     parser.add_argument('--plot', action='store_true')
-    parser.add_argument('--tasktype', type=str, help='Scene setup', required=True, choices=['microwave', 'tap', 'pour', 'pickplace', 'wiping', 'pepsi'])
+    parser.add_argument('--tasktype', type=str, help='Scene setup', required=True, choices=['microwave', 'tap', 'pour', 'pickplace', 'wiping', 'pepsi', 'h1_only'])
     parser.add_argument('--device', type=str, help='Device', default="cuda")
     args = vars(parser.parse_args())
 
