@@ -154,6 +154,9 @@ def main(args, base_dir):
         'load_pretrained_path': args['load_pretrained_path'],
     }
     mode = "disabled" if args["no_wandb"] or args["val_and_jit_trace"] else "online"
+    if True:
+        # NOTE(roger): disable wandb for public release
+        mode = "disabled"
     if accelerator.is_main_process:
         wandb.init(project="human2robot", name=args['exptid'], group="RogerQiu",
                    entity="RogerQiu", mode=mode, dir="../data/logs",
