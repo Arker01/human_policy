@@ -13,6 +13,7 @@
 </p>
 
 <p align="center">
+<img src="./repo_assets/alpha_blending.webp" width="80%"/>
 <img src="./repo_assets/dataset_viz.webp" width="80%"/>
 </p>
 
