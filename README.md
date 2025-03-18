@@ -12,6 +12,10 @@
   <div align="center"></div>
 </p>
 
+<p align="center">
+<img src="./repo_assets/dataset_viz.webp" width="80%"/>
+</p>
+
 ## Introduction
 
 This repository contains the codebase for the paper "Humanoid Policy ~ Human Policy".
