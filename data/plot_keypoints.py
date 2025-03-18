@@ -303,7 +303,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description='Plot processed data from HDF5 file')
     parser.add_argument('--file', '-f', type=str, 
-                        default="../data/recordings/processed/303-grasp_coke_random-2024_12_12-19_13_53/processed_episode_10.hdf5",
+                        default="./recordings/processed/303-grasp_coke_random-2024_12_12-19_13_53/processed_episode_10.hdf5",
                         help='Path to the processed HDF5 file')
     args = parser.parse_args()
 
