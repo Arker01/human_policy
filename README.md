@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-<h3 align="center"><a href="https://human-as-robot.github.io/">Website</a> | <a href="https://arxiv.org/">arXiv</a> | <a href="https://huggingface.co/datasets/RogerQi/PH2D">Data</a>
+<h3 align="center"><a href="https://human-as-robot.github.io/">Website</a> | <a href="https://arxiv.org/">arXiv</a> | <a href="https://huggingface.co/datasets/RogerQi/PH2D">Data</a> | <a href="https://docs.google.com/document/d/1Uv1rq5z7xdVqhdSUz7M4Yce71tjLqtkIqcCxfBlN5NI/edit?usp=sharing">Hardware</a>
   <div align="center"></div>
 </p>
 
@@ -23,7 +23,7 @@ This repository contains the codebase for the paper "Humanoid Policy ~ Human Pol
 
 It trains egocentric (i.e., without wrist camera) humanoid manipulation policies, with few wrappers to focus on the core components.
 
-## Repo Structure[feat] add human data collection script based on opentv
+## Repo Structure
 
 ```
 | - assets: robot URDFs and meshes
@@ -136,5 +136,4 @@ python mujoco_rollout_replay.py  --hdf_file_path ../data/recordings/processed/10
 
 - [ ] Add teleoperation scripts to collect more Mujoco data
 - [ ] Alleviate the known 'sticky finger' friction issue in Mujoco sim rollout
-- [ ] Add ZED camera mount hardware documentation for human data collection
 - [ ] Update detailed instructions for collecting human data using camera mount and script
