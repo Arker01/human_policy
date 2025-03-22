@@ -175,3 +175,8 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# where we store human data
+data/recordings/
+
+*.pem
