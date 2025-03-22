@@ -23,7 +23,7 @@ This repository contains the codebase for the paper "Humanoid Policy ~ Human Pol
 
 It trains egocentric (i.e., without wrist camera) humanoid manipulation policies, with few wrappers to focus on the core components.
 
-## Repo Structure
+## Repo Structure[feat] add human data collection script based on opentv
 
 ```
 | - assets: robot URDFs and meshes
@@ -136,3 +136,5 @@ python mujoco_rollout_replay.py  --hdf_file_path ../data/recordings/processed/10
 
 - [ ] Add teleoperation scripts to collect more Mujoco data
 - [ ] Alleviate the known 'sticky finger' friction issue in Mujoco sim rollout
+- [ ] Add ZED camera mount hardware documentation for human data collection
+- [ ] Update detailed instructions for collecting human data using camera mount and script
