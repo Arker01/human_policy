@@ -32,6 +32,7 @@ It trains egocentric (i.e., without wrist camera) humanoid manipulation policies
 | - data: placeholder for data with some visualization scripts
 | - docs: documentations
 | - hdt: main learning framework
+| - human_data: script and interface for collecting human demonstration data
 | - sim_test (legacy): legacy ALOHA cube transferring test as a dummy example for sanity check
 ```
 
@@ -132,8 +133,63 @@ cd ../cet
 python mujoco_rollout_replay.py  --hdf_file_path ../data/recordings/processed/1061new_sim_pepsi_grasp_h1_2_inspire-2025_02_11-22_20_48/processed_episode_0.hdf5 --norm_stats_path ../hdt/mujoco_sim_test_resnet_100cs/dataset_stats.pkl  --plot --model_path ../hdt/mujoco_sim_test_resnet_100cs/policy_traced.pt  --tasktype pepsi --chunk_size 100 --policy_config_path ../hdt/configs/models/act_resnet.yaml
 ```
 
+## Human Data Collection Guide
+
+After setting up the **ZED camera mount** following our [hardware documentation](https://docs.google.com/document/d/1Uv1rq5z7xdVqhdSUz7M4Yce71tjLqtkIqcCxfBlN5NI/edit?usp=sharing), you can start collecting human data.
+
+### Step 1: Install Dependencies
+
+First, initialize and update the [opentv](https://robot-tv.github.io/) submodule:
+
+```bash
+git submodule update --init --recursive
+```
+
+Then follow the [README](./human_data/opentv/README.md) to complete the environment setup.
+
+---
+
+### Step 2: Collect Human Data
+
+Run the following command to start the data collection process:
+
+```bash
+cd ./human_data
+python human_data.py --des task_name --description "description of the task"
+```
+
+- `--des`: A short name for the task (e.g., `pouring`, `cutting`)
+- `--description`: A more detailed description of the task
+
+---
+
+### Gesture-Based Control
+
+We use simple hand gestures to control the data collection flow:
+
+<p align="center">
+  <img src="./repo_assets/gesture.png" width="60%"/>
+</p>
+
+- **Record Gesture**: Start and stop recording a demonstration.
+- **Drop Gesture**: Cancel the current recording.
+
+---
+
+### Recording Pipeline
+
+The following diagram shows the internal state transitions during the data collection process:
+
+<p align="center">
+  <img src="./repo_assets/pipeline.png" width="80%"/>
+</p>
+
+1. Use the **Record Gesture** to enter and exit the `RECORDING` state.
+2. Use the **Drop Gesture** to cancel the current gesture and return to `WAITING`.
+
+---
+
 ## TODOs
 
 - [ ] Add teleoperation scripts to collect more Mujoco data
 - [ ] Alleviate the known 'sticky finger' friction issue in Mujoco sim rollout
-- [ ] Update detailed instructions for collecting human data using camera mount and script
