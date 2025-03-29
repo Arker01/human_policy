@@ -11,6 +11,7 @@ import wandb
 import time
 import yaml
 
+import accelerate
 from accelerate import Accelerator
 from data_utils_hdt import load_data # data functions
 from data_utils_hdt import compute_dict_mean, set_seed, detach_dict # helper functions
@@ -248,7 +249,10 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
     ckpt_dir = config['ckpt_dir']
     seed = config['seed']
 
-    set_seed(seed)
+    state = accelerate.state.AcceleratorState()
+    process_idx = state.process_index
+
+    set_seed(process_idx * 1000 + seed)
 
     min_val_loss = np.inf
 
@@ -287,21 +291,6 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
 
     with tqdm(total=num_epochs, initial=train_from_iter) as pbar:
         for data in train_dataloader:
-            if True:
-                import accelerate
-                state = accelerate.state.AcceleratorState()
-                process_idx = state.process_index
-                image_bnchw = data[0]
-                first_image = image_bnchw[0, 0]
-                another_image = image_bnchw[12, 0]
-                first_image_cpu = (first_image.cpu().numpy() * 255).astype(np.uint8)
-                another_image_cpu = (another_image.cpu().numpy() * 255).astype(np.uint8)
-                first_image_cpu = first_image_cpu.transpose(1, 2, 0)
-                another_image_cpu = another_image_cpu.transpose(1, 2, 0)
-                from PIL import Image
-                Image.fromarray(first_image_cpu).save(f'first_image_{process_idx}.png')
-                Image.fromarray(another_image_cpu).save(f'another_image_{process_idx}.png')
-                break
             if cur_iter >= num_epochs or config['val_and_jit_trace']:
                 break
 
