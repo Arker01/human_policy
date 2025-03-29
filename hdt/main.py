@@ -11,6 +11,7 @@ import wandb
 import time
 import yaml
 
+import accelerate
 from accelerate import Accelerator
 from data_utils_hdt import load_data # data functions
 from data_utils_hdt import compute_dict_mean, set_seed, detach_dict # helper functions
@@ -248,7 +249,10 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
     ckpt_dir = config['ckpt_dir']
     seed = config['seed']
 
-    set_seed(seed)
+    state = accelerate.state.AcceleratorState()
+    process_idx = state.process_index
+
+    set_seed(process_idx * 1000 + seed)
 
     min_val_loss = np.inf
 
