@@ -193,3 +193,4 @@ The following diagram shows the internal state transitions during the data colle
 
 - [ ] Add teleoperation scripts to collect more Mujoco data
 - [ ] Alleviate the known 'sticky finger' friction issue in Mujoco sim rollout
+- [ ] Add example for forward kinematrics / retargeting for a new humanoid
