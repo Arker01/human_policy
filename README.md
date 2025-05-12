@@ -187,6 +187,15 @@ The following diagram shows the internal state transitions during the data colle
 1. Use the **Record Gesture** to enter and exit the `RECORDING` state.
 2. Use the **Drop Gesture** to cancel the current gesture and return to `WAITING`.
 
+### Step 3: Post-process Human Data
+
+Run the following command to start the data collection process:
+
+```bash
+cd ./cet
+python post_process_zed.py --taskid task_name --multiprocess
+```
+
 ---
 
 ## TODOs
