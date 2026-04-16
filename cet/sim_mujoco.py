@@ -15,6 +15,14 @@ import mujoco as mj
 from opentv.RobotController import RobotController
 from cet.utils import policy2ctrl_cmd, safe_as_quat, safe_from_quat
 
+try:
+    from pink.tasks import DampingTask
+
+    if not hasattr(DampingTask, "set_target_from_configuration"):
+        setattr(DampingTask, "set_target_from_configuration", lambda self, configuration: None)
+except Exception:
+    pass
+
 ROBOT_POS = [0, 0, 1.6]
 ROBOT_POS_OFFSET = [0, 0, 0]  # For table-top manipulation
 ROBOT_POS = [ROBOT_POS[i] + ROBOT_POS_OFFSET[i] for i in range(3)]
@@ -270,14 +278,28 @@ class MujocoSim:
             'armature': self.model.dof_armature[self.robot_joint_ids],    # Joint armature (rotor inertia)
         }
  
-    def setup_viewer(self, viewer):
+    def setup_viewer(self, viewer, preset: str = "default"):
         """ Initialize the MuJoCo viewer and configure recording cameras"""
         self.viewer = viewer
         
         # Set viewer position based on environment type
         env_name = self.cfgs[self.cur_env]["name"]
-        self.viewer_pos = np.array([0.16, 0, 1.65] if "gr1" in env_name else [0.15, 0, 1.65])
-        self.viewer_target = np.array([0.45, 0, 1.45])  # TODO: Adjust based on head_pos in YAML
+        default_target = np.array([0.45, 0, 1.45], dtype=np.float32)  # TODO: Adjust based on head_pos in YAML
+        default_pos = np.array([0.16, 0, 1.65] if "gr1" in env_name else [0.15, 0, 1.65], dtype=np.float32)
+
+        robot_center = np.array([ROBOT_POS[0], ROBOT_POS[1], 1.25], dtype=np.float32)
+        if preset == "front":
+            self.viewer_target = robot_center
+            self.viewer_pos = robot_center + np.array([2.0, 0.0, 0.6], dtype=np.float32)
+        elif preset == "side":
+            self.viewer_target = robot_center
+            self.viewer_pos = robot_center + np.array([0.0, -2.0, 0.6], dtype=np.float32)
+        elif preset == "top":
+            self.viewer_target = robot_center
+            self.viewer_pos = robot_center + np.array([0.0, 0.0, 2.2], dtype=np.float32)
+        else:
+            self.viewer_pos = default_pos
+            self.viewer_target = default_target
         # FOR TESTING RW DATA:
         # self.viewer_target = np.array([0.45, 0, 1.30])
 
@@ -656,6 +678,12 @@ class MujocoSim:
             self.model.light_specular[i] = np.random.uniform(0.5, 1.0, 3)
 
     def end(self):
-        if self.is_viewer:
-            glfw.destroy_window(self.hidden_window)
-        glfw.terminate()
+        try:
+            if getattr(self, "hidden_window", None) is not None:
+                glfw.destroy_window(self.hidden_window)
+                self.hidden_window = None
+        finally:
+            try:
+                glfw.terminate()
+            except Exception:
+                pass

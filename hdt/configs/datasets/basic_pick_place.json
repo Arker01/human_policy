@@ -1,0 +1,8 @@
+{
+    "train": [
+        "basic_pick_place"
+    ],
+    "val": [
+        "basic_pick_place"
+    ]
+}

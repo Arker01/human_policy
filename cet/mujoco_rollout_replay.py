@@ -15,13 +15,85 @@ from tqdm import tqdm
 import hdt.constants
 from cet.utils_fk import FKCmdDictGenerator, target_task_link_names
 from cet.eval_6d import load_policy, get_norm_stats, normalize_input
+from pytorch3d.transforms import rotation_6d_to_matrix, matrix_to_rotation_6d
+import torch
+
+def _fix_action_for_mujoco(
+    actions_gt: np.ndarray,
+    *,
+    pos_only: bool = False,
+    scale: float = 1.0,
+    swap_lr: bool = False,
+    flip_x: bool = False,
+    flip_y: bool = False,
+    flip_z: bool = False,
+) -> np.ndarray:
+    actions_gt = np.asarray(actions_gt, dtype=np.float32).copy()
+    R_map = np.array([[0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=np.float32)
+
+    head_slice = hdt.constants.OUTPUT_HEAD_EEF
+    lw_slice = hdt.constants.OUTPUT_LEFT_EEF
+    rw_slice = hdt.constants.OUTPUT_RIGHT_EEF
+
+    head_t = actions_gt[:, head_slice][:, 0:3]
+    lw_t = actions_gt[:, lw_slice][:, 0:3]
+    rw_t = actions_gt[:, rw_slice][:, 0:3]
+
+    lw_rel = ((lw_t - head_t) @ R_map.T) * float(scale)
+    rw_rel = ((rw_t - head_t) @ R_map.T) * float(scale)
+    if swap_lr:
+        lw_rel, rw_rel = rw_rel, lw_rel
+    if flip_x:
+        lw_rel[:, 0] *= -1.0
+        rw_rel[:, 0] *= -1.0
+    if flip_y:
+        lw_rel[:, 1] *= -1.0
+        rw_rel[:, 1] *= -1.0
+    if flip_z:
+        lw_rel[:, 2] *= -1.0
+        rw_rel[:, 2] *= -1.0
+
+    actions_gt[:, head_slice][:, 0:3] = 0.0
+    actions_gt[:, lw_slice][:, 0:3] = lw_rel
+    actions_gt[:, rw_slice][:, 0:3] = rw_rel
+
+    if pos_only:
+        ident6d = np.array([1.0, 0.0, 0.0, 0.0, 1.0, 0.0], dtype=np.float32)
+        actions_gt[:, head_slice][:, 3:9] = ident6d
+        actions_gt[:, lw_slice][:, 3:9] = ident6d
+        actions_gt[:, rw_slice][:, 3:9] = ident6d
+    else:
+        head_6d = actions_gt[:, head_slice][:, 3:9]
+        lw_6d = actions_gt[:, lw_slice][:, 3:9]
+        rw_6d = actions_gt[:, rw_slice][:, 3:9]
+
+        head_R = rotation_6d_to_matrix(torch.tensor(head_6d)).numpy()
+        lw_R = rotation_6d_to_matrix(torch.tensor(lw_6d)).numpy()
+        rw_R = rotation_6d_to_matrix(torch.tensor(rw_6d)).numpy()
+
+        head_R2 = (R_map @ head_R.transpose(0, 2, 1)).transpose(0, 2, 1)
+        lw_R2 = (R_map @ lw_R.transpose(0, 2, 1)).transpose(0, 2, 1)
+        rw_R2 = (R_map @ rw_R.transpose(0, 2, 1)).transpose(0, 2, 1)
+
+        actions_gt[:, head_slice][:, 3:9] = matrix_to_rotation_6d(torch.tensor(head_R2)).numpy()
+        actions_gt[:, lw_slice][:, 3:9] = matrix_to_rotation_6d(torch.tensor(lw_R2)).numpy()
+        actions_gt[:, rw_slice][:, 3:9] = matrix_to_rotation_6d(torch.tensor(rw_R2)).numpy()
+
+    return actions_gt
 
 def _load_hdf5(hdf5_path):
     """ Load hdf5 file """
     with h5py.File(hdf5_path, 'r') as data:
         actions_gt = np.array(data['action'])
-        left_imgs = np.array(data['observation.image.left'])
-        right_imgs = np.array(data['observation.image.right'])
+        if 'observation.image.left' in data and 'observation.image.right' in data:
+            left_imgs = np.array(data['observation.image.left'])
+            right_imgs = np.array(data['observation.image.right'])
+        elif 'observation.image.top' in data:
+            top_imgs = np.array(data['observation.image.top'])
+            left_imgs = top_imgs
+            right_imgs = top_imgs
+        else:
+            raise KeyError("HDF5 must contain observation.image.left/right or observation.image.top")
         states = np.array(data['observation.state'])
 
         if len(left_imgs.shape) == 2:
@@ -39,6 +111,11 @@ def _load_hdf5(hdf5_path):
             # BCHW format
             left_imgs = np.stack(left_img_list, axis=0)
             right_imgs = np.stack(right_img_list, axis=0)
+        elif len(left_imgs.shape) == 4:
+            # Raw images, could be BHWC or BCHW
+            if left_imgs.shape[-1] == 3:
+                left_imgs = left_imgs.transpose(0, 3, 1, 2)
+                right_imgs = right_imgs.transpose(0, 3, 1, 2)
 
         init_action = actions_gt[0]
         init_left_img = left_imgs[0]
@@ -75,6 +152,16 @@ def main(args, player, policy_rollout):
     
     # Load initial dataset and model
     actions_gt, left_imgs, right_imgs, states, init_action, init_left_img, init_right_img = _load_hdf5(args['hdf_file_path'])
+    if args.get("coord_fix", False):
+        actions_gt = _fix_action_for_mujoco(
+            actions_gt,
+            pos_only=args.get("pos_only", False),
+            scale=args.get("coord_scale", 1.0),
+            swap_lr=args.get("swap_lr", False),
+            flip_x=args.get("flip_x", False),
+            flip_y=args.get("flip_y", False),
+            flip_z=args.get("flip_z", False),
+        )
     if policy_rollout:
         norm_stats = get_norm_stats(args['norm_stats_path'], embodiment_name="h1_inspire_sim")
         policy, visual_preprocessor = load_policy(args['model_path'], args['policy_config_path'], device)
@@ -106,7 +193,7 @@ def main(args, player, policy_rollout):
     
     # Launch simulator viewer
     with mj.viewer.launch_passive(player.model, player.data) as viewer:
-        player.setup_viewer(viewer)
+        player.setup_viewer(viewer, preset=args.get("viewer_preset", "front"))
 
         end_time = states.shape[0] + INIT_FIRST_ACTION_LENGTH
         if policy_rollout:
@@ -194,6 +281,14 @@ if __name__ == '__main__':
     parser.add_argument('--plot', action='store_true')
     parser.add_argument('--tasktype', type=str, help='Scene setup', required=True, choices=['microwave', 'tap', 'pour', 'pickplace', 'wiping', 'pepsi', 'h1_only'])
     parser.add_argument('--device', type=str, help='Device', default="cuda")
+    parser.add_argument('--coord_fix', action='store_true')
+    parser.add_argument('--pos_only', action='store_true')
+    parser.add_argument('--coord_scale', type=float, default=1.0)
+    parser.add_argument('--swap_lr', action='store_true')
+    parser.add_argument('--flip_x', action='store_true')
+    parser.add_argument('--flip_y', action='store_true')
+    parser.add_argument('--flip_z', action='store_true')
+    parser.add_argument('--viewer_preset', type=str, default="front", choices=["default", "front", "side", "top"])
     args = vars(parser.parse_args())
 
     if args['model_path'] is not None:

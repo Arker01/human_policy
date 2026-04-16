@@ -1,4 +1,5 @@
 import re
+import csv
 import torch
 import numpy as np
 import os
@@ -16,6 +17,121 @@ from accelerate import Accelerator
 from data_utils_hdt import load_data # data functions
 from data_utils_hdt import compute_dict_mean, set_seed, detach_dict # helper functions
 from modeling.utils import make_visual_encoder
+
+def _to_float(x):
+    try:
+        if hasattr(x, "detach"):
+            return float(x.detach().cpu().item())
+        return float(x)
+    except Exception:
+        return None
+
+def _append_metrics_csv(csv_path, step, metrics: dict):
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+    row = {"step": int(step)}
+    for k, v in metrics.items():
+        fv = _to_float(v)
+        if fv is not None:
+            row[k] = fv
+    fieldnames = ["step"] + sorted([k for k in row.keys() if k != "step"])
+    file_exists = os.path.exists(csv_path)
+    if file_exists:
+        with open(csv_path, "r", newline="") as f:
+            reader = csv.DictReader(f)
+            existing = reader.fieldnames or []
+        fieldnames = sorted(set(existing).union(fieldnames), key=lambda x: (x != "step", x))
+    with open(csv_path, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(row)
+
+def _plot_metrics(csv_path, out_png_path, keys):
+    if not os.path.exists(csv_path):
+        return
+    with open(csv_path, "r", newline="") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+    if not rows:
+        return
+    steps = [int(r["step"]) for r in rows if r.get("step") not in (None, "")]
+    if not steps:
+        return
+    fig, ax = plt.subplots(figsize=(9, 5))
+    for k in keys:
+        ys = []
+        xs = []
+        for r in rows:
+            if r.get(k) is None or r.get(k) == "":
+                continue
+            try:
+                xs.append(int(r["step"]))
+                ys.append(float(r[k]))
+            except Exception:
+                continue
+        if xs:
+            ax.plot(xs, ys, label=k)
+    ax.set_xlabel("step")
+    ax.set_ylabel("value")
+    ax.legend(loc="best")
+    ax.grid(True, alpha=0.2)
+    fig.tight_layout()
+    os.makedirs(os.path.dirname(out_png_path), exist_ok=True)
+    fig.savefig(out_png_path, dpi=150)
+    plt.close(fig)
+
+def _iter_ckpt_weight_paths(ckpt_dir):
+    entries = []
+    if not os.path.isdir(ckpt_dir):
+        return []
+    for name in os.listdir(ckpt_dir):
+        m = re.search(r"policy_iter_(\d+)_seed_(\d+)", name)
+        if not m:
+            continue
+        step = int(m.group(1))
+        entries.append((step, os.path.join(ckpt_dir, name)))
+    entries.sort(key=lambda x: x[0])
+
+    results = []
+    for step, path in entries:
+        weights_path = os.path.join(path, "pytorch_model.bin")
+        if os.path.exists(weights_path):
+            results.append((step, weights_path))
+
+    last_path = os.path.join(ckpt_dir, "policy_last.ckpt")
+    if os.path.exists(last_path):
+        last_step = results[-1][0] + 1 if results else 0
+        results.append((last_step, last_path))
+    return results
+
+def eval_checkpoints(accelerator, val_dataloader, policy, ckpt_dir):
+    out_csv = os.path.join(ckpt_dir, "retro_metrics.csv")
+    out_png = os.path.join(ckpt_dir, "retro_metrics.png")
+
+    ckpts = _iter_ckpt_weight_paths(ckpt_dir)
+    if not ckpts:
+        raise RuntimeError(f"No checkpoints found under {ckpt_dir}")
+
+    device = next(policy.parameters()).device
+    for step, weights_path in ckpts:
+        state_dict = torch.load(weights_path, map_location=device, weights_only=True)
+        accelerator.unwrap_model(policy).load_state_dict(state_dict, strict=False)
+        with torch.no_grad():
+            policy.eval()
+            validation_dicts = []
+            for batch_idx, data in enumerate(val_dataloader):
+                forward_dict = forward_pass(data, policy)
+                validation_dicts.append(forward_dict)
+                if batch_idx > 20:
+                    break
+            validation_summary = compute_dict_mean(validation_dicts)
+            for k in list(validation_summary.keys()):
+                validation_summary[f"val/{k}"] = validation_summary.pop(k)
+        if accelerator.is_main_process:
+            _append_metrics_csv(out_csv, step, validation_summary)
+            _plot_metrics(out_csv, out_png, keys=["val/loss", "val/l1", "val/eef_loss", "val/kl"])
+            summary_string = " ".join([f"{k}: {_to_float(v):.6f}" for k, v in validation_summary.items() if _to_float(v) is not None])
+            print(f"[eval ckpt step={step}] {os.path.basename(weights_path)} {summary_string}")
 
 def make_policy(policy_class, policy_config, visual_encoder, USE_PRETRAINED=True):
     if policy_class == 'ACT':
@@ -158,13 +274,19 @@ def main(args, base_dir):
     if True:
         # NOTE(roger): disable wandb for public release
         mode = "disabled"
-    if accelerator.is_main_process:
-        wandb.init(project="human2robot", name=args['exptid'], group="RogerQiu",
-                   entity="RogerQiu", mode=mode, dir="../data/logs",
-                   id=args['exptid'], resume="allow")
-        # os.makedirs("./wandb", exist_ok=True)
-        # wandb.init(project="cross_embodiment", name=args['exptid'], mode=mode, dir="./wandb")
-        # wandb.config.update(config)
+    if accelerator.is_main_process and mode != "disabled":
+        wandb_id = re.sub(r"[^A-Za-z0-9_.-]", "_", str(args["exptid"]))
+        wandb_name = str(args["exptid"]).split("/")[-1]
+        wandb.init(
+            project="human2robot",
+            name=wandb_name,
+            group="RogerQiu",
+            entity="RogerQiu",
+            mode=mode,
+            dir="../data/logs",
+            id=wandb_id,
+            resume="allow",
+        )
         wandb.config.update(config)
     
     visual_encoder, visual_preprocessor = make_visual_encoder(policy_class, policy_config)
@@ -181,6 +303,11 @@ def main(args, base_dir):
                                                         visual_preprocessor,
                                                         args['cond_mask_prob'],
                                                         args['human_slow_down_factor'])
+
+    if args.get("eval_ckpts", False):
+        val_dataloader, policy = accelerator.prepare(val_dataloader, policy)
+        eval_checkpoints(accelerator, val_dataloader, policy, ckpt_dir)
+        return
 
     # save dataset stats
     if accelerator.is_main_process:
@@ -248,6 +375,8 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
     num_epochs = config['num_epochs']
     ckpt_dir = config['ckpt_dir']
     seed = config['seed']
+    metrics_csv = os.path.join(ckpt_dir, "metrics.csv")
+    metrics_png = os.path.join(ckpt_dir, "metrics.png")
 
     state = accelerate.state.AcceleratorState()
     process_idx = state.process_index
@@ -284,7 +413,19 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
     train_from_iter, max_ckpt_name = maybe_load_ckpt(ckpt_dir, seed, train_from_iter)
     if train_from_iter > 0:
         print(f"Resuming from iter {train_from_iter}")
-        accelerator.load_state(os.path.join(ckpt_dir, max_ckpt_name))
+        ckpt_path = os.path.join(ckpt_dir, max_ckpt_name)
+        try:
+            accelerator.load_state(ckpt_path)
+        except Exception as e:
+            print(f"Failed to load full checkpoint state from {ckpt_path}: {e}")
+            weights_path = os.path.join(ckpt_path, "pytorch_model.bin")
+            print(f"Falling back to loading model weights only from {weights_path}")
+            state_dict = torch.load(
+                weights_path,
+                map_location=next(policy.parameters()).device,
+                weights_only=True,
+            )
+            accelerator.unwrap_model(policy).load_state_dict(state_dict, strict=False)
 
     policy.train()
     cur_iter = train_from_iter
@@ -313,7 +454,14 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
                     for k in list(validation_summary.keys()):
                         validation_summary[f'val/{k}'] = validation_summary.pop(k)     
 
-                    wandb.log(validation_summary, step=cur_iter)
+                    if wandb.run is not None:
+                        wandb.log(validation_summary, step=cur_iter)
+                    _append_metrics_csv(metrics_csv, cur_iter, validation_summary)
+                    _plot_metrics(
+                        metrics_csv,
+                        metrics_png,
+                        keys=["val/loss", "val/l1", "val/eef_loss", "val/kl", "train/loss", "train/l1", "train/eef_loss", "train/kl"],
+                    )
                     print(f'Val loss:   {epoch_val_loss:.5f}')
                     summary_string = ''
                     for k, v in validation_summary.items():
@@ -344,7 +492,11 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
                 for k, v in epoch_summary.items():
                     summary_string += f'{k}: {v.item():.3f} '
                 # print(summary_string)
-                wandb.log(epoch_summary, step=cur_iter)
+                train_log = {f"train/{k}": v for k, v in epoch_summary.items() if k != "lr"}
+                train_log["lr"] = epoch_summary["lr"]
+                if wandb.run is not None:
+                    wandb.log(train_log, step=cur_iter)
+                _append_metrics_csv(metrics_csv, cur_iter, train_log)
 
                 #! save ckpt
                 if cur_iter % 10000 == 0 and cur_iter != 0:
@@ -431,6 +583,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_cfg_path', type=str, help='path to model cfg yaml', required=True)
     parser.add_argument('--human_slow_down_factor', type=int, default=4, help='human demonstrations slow_down_factor', required=False)
     parser.add_argument('--load_pretrained_path', type=str, help='path to load pretrained model', required=False)
+    parser.add_argument('--eval_ckpts', action='store_true', help='evaluate all checkpoints under ckpt_dir and write retro_metrics.csv/png')
     args = vars(parser.parse_args())
 
     base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../data/recordings/processed')

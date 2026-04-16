@@ -47,7 +47,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
         self.SIMPLIFY_VISUAL = True
         # h5py is pretty efficient. This works only marginally for machines with fast disks (~5% improvement)
         # for NFS-based storage, this is a huge improvement
-        self.load_hdf_to_cpu = True
+        self.load_hdf_to_cpu = False
 
         self.cond_mask_prob = cond_mask_prob
         self.cumulative_len = np.cumsum(self.episode_len_list)
@@ -259,6 +259,10 @@ class EpisodicDataset(torch.utils.data.Dataset):
                     assert image_dict[cam_name].shape == (self.data_config["image_resolution_hw"][0], self.data_config["image_resolution_hw"][1], 3)
                     # Images are in RGB (verified by plt.imshow) and HWC in this case
                     image_dict[cam_name] = image_dict[cam_name].transpose(2, 0, 1)  # CHW
+                elif len(image_dict[cam_name].shape) == 3:
+                    # Raw HWC images need to be resized and transposed to CHW
+                    image_dict[cam_name] = cv2.resize(image_dict[cam_name], (self.data_config["image_resolution_hw"][1], self.data_config["image_resolution_hw"][0]))
+                    image_dict[cam_name] = image_dict[cam_name].transpose(2, 0, 1)  # CHW
             else:
                 image_dict[cam_name] = np.zeros((3, self.data_config["image_resolution_hw"][0], self.data_config["image_resolution_hw"][1]), dtype=np.uint8)
         all_time_action = root[self.action_str][start_ts:start_ts+self.chunk_size]
@@ -316,7 +320,9 @@ class EpisodicDataset(torch.utils.data.Dataset):
             lang_instruction = ''
         
         if lang_instruction in self.cached_lang_embedding_dict:
-            selected_embedding = self.cached_lang_embedding_dict[lang_instruction].float()
+            selected_embedding = self.cached_lang_embedding_dict[lang_instruction]
+            if selected_embedding is not None:
+                selected_embedding = selected_embedding.float()
         else:
             selected_embedding = None
 

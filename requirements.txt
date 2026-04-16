@@ -18,7 +18,7 @@ diffusers
 timm
 wandb
 pytransform3d
-git+https://github.com/facebookresearch/pytorch3d.git@stable
+# git+https://github.com/facebookresearch/pytorch3d.git@stable
 git+https://github.com/RogerQi/maskclip_onnx
 pytest
 opentv
