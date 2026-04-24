@@ -221,6 +221,16 @@ def _make_act_policy(model_yaml: Path, ckpt_path: Path, *, device: str) -> tuple
     policy.to(device)
     return policy, {"camera_names": list(cameras), "use_language_conditioning": bool(model.get("use_language_conditioning", False))}
 
+def _check_camera_in_file(f: h5py.File, camera_names: list[str]) -> bool:
+    """Check if at least one camera is available in the HDF5 file."""
+    for cam in camera_names:
+        key = f"observation.image.{cam}"
+        if key in f:
+            return True
+    if 'observation.image.left' in f or 'observation.image.right' in f:
+        return True
+    return False
+
 def _predict_actions_for_episode(
     policy,
     episode_path: Path,
@@ -233,6 +243,9 @@ def _predict_actions_for_episode(
     import torch
 
     with h5py.File(episode_path, "r") as f:
+        if not _check_camera_in_file(f, camera_names):
+            raise ValueError(f"No camera data available in {episode_path}")
+        
         states = f["observation.state"][()]
         T = int(states.shape[0])
         if max_steps is not None:
@@ -249,7 +262,16 @@ def _predict_actions_for_episode(
             for cam in camera_names:
                 key = f"observation.image.{cam}"
                 if key not in f:
-                    raise KeyError(f"Missing {key} in {episode_path}")
+                    # Fallback to left or right camera if top is not available
+                    if cam == 'top':
+                        if 'observation.image.left' in f:
+                            key = 'observation.image.left'
+                        elif 'observation.image.right' in f:
+                            key = 'observation.image.right'
+                        else:
+                            raise KeyError(f"Missing {cam} and no fallback cameras available in {episode_path}")
+                    else:
+                        raise KeyError(f"Missing {key} in {episode_path}")
                 img = _read_image_frame(f[key], t)
                 imgs.append(img)
             imgs = np.stack(imgs, axis=0)  # (num_cam, H, W, 3)
@@ -333,14 +355,21 @@ def main() -> None:
                     emb = emb.decode()
                 emb = str(emb) if emb is not None else None
             stats = _load_norm_stats(stats_path, emb)
-            pred_actions = _predict_actions_for_episode(
-                policy,
-                gt_path,
-                stats=stats,
-                camera_names=camera_names,
-                device=args.device,
-                max_steps=args.max_steps,
-            )
+            try:
+                pred_actions = _predict_actions_for_episode(
+                    policy,
+                    gt_path,
+                    stats=stats,
+                    camera_names=camera_names,
+                    device=args.device,
+                    max_steps=args.max_steps,
+                )
+            except ValueError as e:
+                if "No camera data available" in str(e):
+                    print(f"Skipping {gt_path.name} - {e}")
+                    skipped.append(gt_path.name)
+                    continue
+                raise
             with h5py.File(gt_path, "r") as f_gt:
                 gt_actions = f_gt["action"][()]
             metrics = eval_arrays_mpjpe(gt_actions, pred_actions)

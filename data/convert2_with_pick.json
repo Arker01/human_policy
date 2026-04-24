@@ -1,0 +1,4 @@
+{
+    "train": ["convert2", "110-picking-dynamixel-human_2024-11-13_17-34-13", "111-picking-colorful-toycube_2024-11-13_20-25-34", "112-picking-brownbox-human_2024-11-13_20-42-14", "113-picking-blackcube-human_2024-11-13_22-09-05"],
+    "val": ["convert2_val"]
+}

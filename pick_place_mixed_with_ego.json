@@ -1,0 +1,86 @@
+{
+  "train": [
+    {
+      "dataset_path": "processed/106-grasping-zedbox-human_2024-11-13_15-27-43",
+      "type": "human"
+    },
+    {
+      "dataset_path": "processed/107-grasping-chocolate-human_2024-11-13_15-15-09",
+      "type": "human"
+    },
+    {
+      "dataset_path": "processed/108-grasping-water-human _2024-11-13_15-00-20",
+      "type": "human"
+    },
+    {
+      "dataset_path": "processed/109-grasping-mtn-human_2024-11-13_14-40-07",
+      "type": "human"
+    },
+    {
+      "dataset_path": "processed/110-picking-dynamixel-human_2024-11-13_17-34-13",
+      "type": "human"
+    },
+    {
+      "dataset_path": "processed/112-picking-brownbox-human_2024-11-13_20-42-14",
+      "type": "human"
+    },
+    {
+      "dataset_path": "processed/113-picking-blackcube-human_2024-11-13_22-09-05",
+      "type": "human"
+    },
+    {
+      "dataset_path": "processed/1403-human_pick_color_pad_left_2025-01-13_13-05-06",
+      "type": "human"
+    },
+    {
+      "dataset_path": "processed/402-pick_on_color_pad_right-2025_01_09-16_36_15",
+      "type": "human"
+    },
+    {
+      "dataset_path": "processed/104-lars-grasping_2024-11-08_15-23-40",
+      "type": "robot"
+    },
+    {
+      "dataset_path": "processed/105_lars-grasping_2024-11-08_15-47-04",
+      "type": "robot"
+    },
+    {
+      "dataset_path": "processed/111-picking-colorful-toycube_2024-11-13_20-25-34",
+      "type": "robot"
+    },
+    {
+      "dataset_path": "processed/302-grasp_coke_random-2024_12_09-21_39_30",
+      "type": "robot"
+    },
+    {
+      "dataset_path": "processed/303-grasp_coke_random-2024_12_12-19_13_53",
+      "type": "robot"
+    },
+    {
+      "dataset_path": "processed/304-grasp_coke_random-2024_12_12-19_58_36",
+      "type": "robot"
+    },
+    {
+      "dataset_path": "processed/1401_grasping_three_items_2025-01-23_19-24-05",
+      "type": "robot"
+    },
+    {
+      "dataset_path": "convert_ego/task1",
+      "type": "human",
+      "start_idx": 0,
+      "end_idx": 1800
+    }
+  ],
+  "val": [
+    {
+      "dataset_path": "processed/903-picking-val-2024_11_18-18_58_16",
+      "type": "mixed"
+    },
+    {
+      "dataset_path": "convert_ego/task1",
+      "type": "human",
+      "start_idx": 1800,
+      "end_idx": 2000
+    }
+  ]
+}

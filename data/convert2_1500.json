@@ -1,0 +1,4 @@
+{
+    "train": ["convert2_1500"],
+    "val": ["convert2_val"]
+}

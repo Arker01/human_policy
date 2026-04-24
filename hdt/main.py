@@ -196,7 +196,7 @@ def make_optimizer(policy_class, policy):
         raise NotImplementedError
     return optimizer
 
-def main(args, base_dir):
+def main(args, base_dir, processed_dir=None):
     set_seed(1)
     with open(args["model_cfg_path"], "r") as fp:
         trainer_config = yaml.safe_load(fp)
@@ -302,7 +302,8 @@ def main(args, base_dir):
                                                         batch_size_val, 
                                                         visual_preprocessor,
                                                         args['cond_mask_prob'],
-                                                        args['human_slow_down_factor'])
+                                                        args['human_slow_down_factor'],
+                                                        [processed_dir] if processed_dir else None)
 
     if args.get("eval_ckpts", False):
         val_dataloader, policy = accelerator.prepare(val_dataloader, policy)
@@ -584,9 +585,16 @@ if __name__ == '__main__':
     parser.add_argument('--human_slow_down_factor', type=int, default=4, help='human demonstrations slow_down_factor', required=False)
     parser.add_argument('--load_pretrained_path', type=str, help='path to load pretrained model', required=False)
     parser.add_argument('--eval_ckpts', action='store_true', help='evaluate all checkpoints under ckpt_dir and write retro_metrics.csv/png')
+    parser.add_argument('--base_dir', type=str, help='base directory for data', required=False)
+    parser.add_argument('--processed_dir', type=str, help='additional base directory for processed data', required=False)
     args = vars(parser.parse_args())
 
-    base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../data/recordings/processed')
+    if args.get('base_dir'):
+        base_dir = args['base_dir']
+    else:
+        base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../data/recordings/processed')
     assert os.path.exists(base_dir)
 
-    main(args, base_dir)
+    processed_dir = args.get('processed_dir')
+
+    main(args, base_dir, processed_dir)

@@ -293,7 +293,7 @@ class HumanDiffusionTransformer(nn.Module):
             valid_pred = pred[~is_pad]
             valid_target = target[~is_pad]
 
-            LOSS_BALANCING = False
+            LOSS_BALANCING = True
 
             if LOSS_BALANCING:
                 # Separate loss for hand and finger keypoints
@@ -303,7 +303,8 @@ class HumanDiffusionTransformer(nn.Module):
                 left_kpts_loss = F.l1_loss(valid_pred[:, hdt.constants.OUTPUT_LEFT_KEYPOINTS], valid_target[:, hdt.constants.OUTPUT_LEFT_KEYPOINTS])
                 right_kpts_loss = F.l1_loss(valid_pred[:, hdt.constants.OUTPUT_RIGHT_KEYPOINTS], valid_target[:, hdt.constants.OUTPUT_RIGHT_KEYPOINTS])
                 head_kpts_loss = F.l1_loss(valid_pred[:, hdt.constants.OUTPUT_HEAD_EEF], valid_target[:, hdt.constants.OUTPUT_HEAD_EEF])
-                loss_dict['loss'] = left_eef_loss + right_eef_loss + head_kpts_loss + 0.5 * (left_kpts_loss + right_kpts_loss)
+                # Increase head loss weight
+                loss_dict['loss'] = left_eef_loss + right_eef_loss + 1.2 * head_kpts_loss + 0.5 * (left_kpts_loss + right_kpts_loss)
             else:
                 # Compute loss against the entire trajectory
                 loss_dict['l2'] = F.mse_loss(valid_pred, valid_target)

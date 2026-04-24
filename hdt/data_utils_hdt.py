@@ -74,7 +74,16 @@ class EpisodicDataset(torch.utils.data.Dataset):
                     with h5py.File(single_hdf_path, 'r') as root:
                         self.cached_hdf_dict[single_hdf_path]['observation.state'] = root['observation.state'][()]
                         for cam_name in self.camera_names:
-                            self.cached_hdf_dict[single_hdf_path][f'observation.image.{cam_name}'] = root[f'observation.image.{cam_name}'][()]
+                            # If cam_name doesn't exist, try fallback cameras
+                            actual_cam_name = cam_name
+                            if f'observation.image.{cam_name}' not in root:
+                                if 'observation.image.left' in root:
+                                    actual_cam_name = 'left'
+                                elif 'observation.image.right' in root:
+                                    actual_cam_name = 'right'
+                                else:
+                                    raise KeyError(f"None of the expected cameras (top, left, right) found in {single_hdf_path}")
+                            self.cached_hdf_dict[single_hdf_path][f'observation.image.{cam_name}'] = root[f'observation.image.{actual_cam_name}'][()]
                         self.cached_hdf_dict[single_hdf_path][self.action_str] =  root[self.action_str][()]
                         self.cached_hdf_dict[single_hdf_path]['attrs'] = {k: v for k, v in root.attrs.items()}
         
@@ -88,7 +97,10 @@ class EpisodicDataset(torch.utils.data.Dataset):
         SAMPLER_TYPE = 'norm_by_embodiment_and_task'
         self.episode_sampling_prob = self.get_episode_sampling_prob(SAMPLER_TYPE)
 
-        empty_lang_embedding = torch.load("empty_lang_embed.pt").float()
+        # Load empty language embedding from the correct path
+        import os
+        empty_lang_embed_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "empty_lang_embed.pt")
+        empty_lang_embedding = torch.load(empty_lang_embed_path, weights_only=True).float()
         self.cached_lang_embedding_dict[''] = empty_lang_embedding
     
     def get_episode_sampling_prob(self, sampler_type):
@@ -99,20 +111,18 @@ class EpisodicDataset(torch.utils.data.Dataset):
             P_HUMAN = 1 - P_ROBOT
             human_idx_list = []
             robot_idx_list = []
-            cur_idx = 0
-            for task_idx in range(len(self.task_episode_cnt)):
-                task_episode_cnt = self.task_episode_cnt[task_idx]
-                cur_embodiment = self.embodiment_list[cur_idx]
-                assert self.embodiment_list[cur_idx:cur_idx + task_episode_cnt] == [cur_embodiment] * task_episode_cnt
-                if "human" in cur_embodiment:
-                    human_idx_list.extend(list(range(cur_idx, cur_idx + task_episode_cnt)))
+            # Directly iterate through all episodes to collect human and robot indices
+            for idx, embodiment in enumerate(self.embodiment_list):
+                if "human" in embodiment:
+                    human_idx_list.append(idx)
                 else:
-                    robot_idx_list.extend(list(range(cur_idx, cur_idx + task_episode_cnt)))
-                cur_idx += task_episode_cnt
+                    robot_idx_list.append(idx)
             assert len(self.embodiment_list) == len(self.episode_len_list)
             prob_arr = np.ones(len(self.episode_len_list)) / len(self.episode_len_list)
-            prob_arr[human_idx_list] = P_HUMAN / len(human_idx_list)
-            prob_arr[robot_idx_list] = P_ROBOT / len(robot_idx_list)
+            if human_idx_list:
+                prob_arr[human_idx_list] = P_HUMAN / len(human_idx_list)
+            if robot_idx_list:
+                prob_arr[robot_idx_list] = P_ROBOT / len(robot_idx_list)
             if not np.isclose(np.sum(prob_arr), 1):
                 print("=========")
                 print(f"Warning: sum of prob_arr is not 1: {np.sum(prob_arr)}. Is only one embodiment available?")
@@ -121,24 +131,20 @@ class EpisodicDataset(torch.utils.data.Dataset):
         elif sampler_type == 'norm_by_embodiment_and_task':
             P_ROBOT = 0.5
             P_HUMAN = 1 - P_ROBOT
-            human_task_idx_group = []
-            robot_task_idx_group = []
-            cur_idx = 0
-            for task_idx in range(len(self.task_episode_cnt)):
-                task_episode_cnt = self.task_episode_cnt[task_idx]
-                cur_embodiment = self.embodiment_list[cur_idx]
-                assert self.embodiment_list[cur_idx:cur_idx + task_episode_cnt] == [cur_embodiment] * task_episode_cnt
-                if "human" in cur_embodiment:
-                    human_task_idx_group.append(list(range(cur_idx, cur_idx + task_episode_cnt)))
+            human_idx_list = []
+            robot_idx_list = []
+            # Directly iterate through all episodes to collect human and robot indices
+            for idx, embodiment in enumerate(self.embodiment_list):
+                if "human" in embodiment:
+                    human_idx_list.append(idx)
                 else:
-                    robot_task_idx_group.append(list(range(cur_idx, cur_idx + task_episode_cnt)))
-                cur_idx += task_episode_cnt
+                    robot_idx_list.append(idx)
             assert len(self.embodiment_list) == len(self.episode_len_list)
             prob_arr = np.ones(len(self.episode_len_list)) / len(self.episode_len_list)
-            for task_idx_list in human_task_idx_group:
-                prob_arr[task_idx_list] = P_HUMAN / (len(task_idx_list) * len(human_task_idx_group))
-            for task_idx_list in robot_task_idx_group:
-                prob_arr[task_idx_list] = P_ROBOT / (len(task_idx_list) * len(robot_task_idx_group))
+            if human_idx_list:
+                prob_arr[human_idx_list] = P_HUMAN / len(human_idx_list)
+            if robot_idx_list:
+                prob_arr[robot_idx_list] = P_ROBOT / len(robot_idx_list)
             if not np.isclose(np.sum(prob_arr), 1):
                 print("=========")
                 print(f"Warning: sum of prob_arr is not 1: {np.sum(prob_arr)}. Is only one embodiment available?")
@@ -156,19 +162,24 @@ class EpisodicDataset(torch.utils.data.Dataset):
         # First, gather types of embodiments
         for single_hdf_path in self.dataset_paths:
             with h5py.File(single_hdf_path, 'r') as root:
-                norm_stats_dict[root.attrs['embodiment']] = {
-                    "actions": [],
-                    "states": []
-                }
-                embodiment_list.append(root.attrs['embodiment'])
+                # Use default embodiment if not present
+                embodiment = root.attrs.get('embodiment', 'default')
+                if embodiment not in norm_stats_dict:
+                    norm_stats_dict[embodiment] = {
+                        "actions": [],
+                        "states": []
+                    }
+                embodiment_list.append(embodiment)
         print(f"Found embodiments: {norm_stats_dict.keys()}")
 
         for hdf_path in self.dataset_paths:
             with h5py.File(hdf_path, 'r') as root:
                 state = root['observation.state'][()]
                 action = root['action'][()]
-                norm_stats_dict[root.attrs['embodiment']]["actions"].append(torch.from_numpy(action))
-                norm_stats_dict[root.attrs['embodiment']]["states"].append(torch.from_numpy(state))
+                # Use default embodiment if not present
+                embodiment = root.attrs.get('embodiment', 'default')
+                norm_stats_dict[embodiment]["actions"].append(torch.from_numpy(action))
+                norm_stats_dict[embodiment]["states"].append(torch.from_numpy(state))
         
         SAME_NORMALIZATION = False
         if SAME_NORMALIZATION:
@@ -251,7 +262,18 @@ class EpisodicDataset(torch.utils.data.Dataset):
         image_dict = dict()
         for cam_name in self.camera_names:
             if self.SIMPLIFY_VISUAL or random.random() > self.cond_mask_prob:
-                image_dict[cam_name] = root[f'observation.image.{cam_name}'][start_ts]
+                # If cam_name doesn't exist, try fallback cameras
+                actual_cam_name = cam_name
+                if f'observation.image.{cam_name}' not in root:
+                    # Try 'left' first, then 'right'
+                    if 'observation.image.left' in root:
+                        actual_cam_name = 'left'
+                    elif 'observation.image.right' in root:
+                        actual_cam_name = 'right'
+                    else:
+                        raise KeyError(f"None of the expected cameras (top, left, right) found in {single_hdf_path}")
+                
+                image_dict[cam_name] = root[f'observation.image.{actual_cam_name}'][start_ts]
                 if len(image_dict[cam_name].shape) == 1:
                     # Compressed JPEG format images are represented as (N,) uint8 array. N is different for every image.
                     image_dict[cam_name] = cv2.imdecode(image_dict[cam_name], cv2.IMREAD_COLOR)
@@ -334,36 +356,105 @@ class EpisodicDataset(torch.utils.data.Dataset):
         return image_data, qpos_data, action_data, is_pad, conditioning_dict
     
     def __getitem__(self, _idx):
-        episode_idx = np.random.choice(len(self.episode_len_list), p=self.episode_sampling_prob)
-        ts_index = np.random.randint(self.sum_dataset_len_l[episode_idx], self.sum_dataset_len_l[episode_idx + 1])
+        max_retries = 10
+        for _ in range(max_retries):
+            episode_idx = np.random.choice(len(self.episode_len_list), p=self.episode_sampling_prob)
+            ts_index = np.random.randint(self.sum_dataset_len_l[episode_idx], self.sum_dataset_len_l[episode_idx + 1])
 
-        # index: index of the selected episode ID, start_ts: start timestep within the episode
-        index, start_ts = self._locate_transition(ts_index)
-        return self.read_one(index, start_ts)
+            index, start_ts = self._locate_transition(ts_index)
+            try:
+                return self.read_one(index, start_ts)
+            except (KeyError, OSError) as e:
+                error_msg = str(e)
+                if 'observation.image' in error_msg or 'None of the expected cameras' in error_msg:
+                    continue
+                raise
+        raise KeyError(f"Failed to get valid sample after {max_retries} retries")
 
-def gather_hdf_paths(base_dir, task_names):
+def gather_hdf_paths(base_dir, task_names, camera_names=None, extra_base_dirs=None):
     all_hdf_paths = []
     task_episode_cnt = []
-    for task_name in task_names:
-        task_dir = os.path.join(base_dir, task_name)
-        print(f"Task dir: {task_dir}")
-        assert os.path.exists(task_dir) and os.path.isdir(task_dir)
-        cur_task_cnt = 0
-        for fn in sorted(os.listdir(task_dir)):
-            if fn.endswith('.hdf5'):
-                all_hdf_paths.append(os.path.join(task_dir, fn))
-                cur_task_cnt += 1
-        task_episode_cnt.append(cur_task_cnt)
+    for task_item in task_names:
+        found = False
+        # 处理任务项，支持字符串或字典格式
+        if isinstance(task_item, dict):
+            task_name = task_item.get('dataset_path')
+            start_idx = task_item.get('start_idx', 0)
+            end_idx = task_item.get('end_idx', None)
+        else:
+            task_name = task_item
+            start_idx = 0
+            end_idx = None
+        
+        # 处理特殊任务名，如 convert2_1500, convert2_1000, data1_legacy_140, data1_legacy_10
+        limit = None
+        original_task_name = task_name
+        if (task_name.startswith('convert2_') or task_name.startswith('data1_legacy_')) and task_name != 'convert2_val':
+            parts = task_name.split('_')
+            if len(parts) > 1 and parts[-1].isdigit():
+                limit = int(parts[-1])
+                original_task_name = '_'.join(parts[:-1])
+        
+        for cur_base_dir in [base_dir] + (extra_base_dirs or []):
+            task_dir = os.path.join(cur_base_dir, original_task_name)
+            if os.path.exists(task_dir) and os.path.isdir(task_dir):
+                print(f"Task dir: {task_dir}")
+                cur_task_cnt = 0
+                hdf_files = []
+                for fn in sorted(os.listdir(task_dir)):
+                    if fn.endswith('.hdf5'):
+                        hdf_path = os.path.join(task_dir, fn)
+                        if camera_names is not None:
+                            with h5py.File(hdf_path, 'r') as root:
+                                has_camera = False
+                                for cam_name in camera_names:
+                                    if f'observation.image.{cam_name}' in root:
+                                        has_camera = True
+                                        break
+                                    if 'observation.image.left' in root or 'observation.image.right' in root:
+                                        has_camera = True
+                                        break
+                                if not has_camera:
+                                    print(f"Skipping {hdf_path} - no camera data")
+                                    continue
+                        hdf_files.append(hdf_path)
+                
+                # 应用限制
+                if limit:
+                    hdf_files = hdf_files[:limit]
+                
+                # 应用索引范围
+                hdf_files = hdf_files[start_idx:end_idx]
+                
+                all_hdf_paths.extend(hdf_files)
+                cur_task_cnt = len(hdf_files)
+                task_episode_cnt.append(cur_task_cnt)
+                found = True
+                break
+        if not found:
+            print(f"Warning: Task {task_name} not found in any base directory")
+            task_episode_cnt.append(0)
     return all_hdf_paths, task_episode_cnt
 
-def gather_lang_embeds_paths(base_dir, task_names):
+def gather_lang_embeds_paths(base_dir, task_names, extra_base_dirs=None):
     lang_embeds_paths = []
-    for task_name in task_names:
-        fn = f"{task_name}.pkl"
-        if os.path.exists(os.path.join(base_dir, fn)):
-            lang_embeds_paths.append(os.path.join(base_dir, fn))
+    for task_item in task_names:
+        # 处理任务项，支持字符串或字典格式
+        if isinstance(task_item, dict):
+            task_name = task_item.get('dataset_path')
         else:
-            print(f"Warning: {fn} does not exist in {base_dir}")
+            task_name = task_item
+        
+        fn = f"{task_name}.pkl"
+        found = False
+        for cur_base_dir in [base_dir] + (extra_base_dirs or []):
+            path = os.path.join(cur_base_dir, fn)
+            if os.path.exists(path):
+                lang_embeds_paths.append(path)
+                found = True
+                break
+        if not found:
+            print(f"Warning: {fn} does not exist in any base directory")
             lang_embeds_paths.append(None)
     
     return lang_embeds_paths
@@ -419,7 +510,8 @@ def load_data(base_dir,
               batch_size_val, 
               visual_preprocessor,
               cond_mask_prob,
-              slow_down_factor=4):
+              slow_down_factor=4,
+              extra_base_dirs=None):
     
     
     assert os.path.exists(dataset_json_path)
@@ -432,10 +524,14 @@ def load_data(base_dir,
     for split in dataset_config:
         assert split in ['train', 'val'], "Only train and val splits now supported, you gave {}".format(split)
         task_names = dataset_config[split]
-        task_names = sorted(task_names)
-        hdf_path_list, task_episode_cnt = gather_hdf_paths(base_dir, task_names)
-        assert hdf_path_list == sorted(hdf_path_list)
-        lang_embeds_paths = gather_lang_embeds_paths(base_dir, task_names)
+        # 对任务列表进行排序，支持字典和字符串格式
+        if task_names and isinstance(task_names[0], dict):
+            task_names = sorted(task_names, key=lambda x: x.get('dataset_path', ''))
+        else:
+            task_names = sorted(task_names)
+        hdf_path_list, task_episode_cnt = gather_hdf_paths(base_dir, task_names, camera_names, extra_base_dirs)
+        hdf_path_list = sorted(hdf_path_list)
+        lang_embeds_paths = gather_lang_embeds_paths(base_dir, task_names, extra_base_dirs)
 
         print("Total {} episodes for {} split".format(len(hdf_path_list), split))
         all_episode_len = get_all_episode_len(hdf_path_list)

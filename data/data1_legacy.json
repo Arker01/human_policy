@@ -1,0 +1,4 @@
+{
+    "train": ["data1_legacy_140"],
+    "val": ["data1_legacy_10"]
+}
