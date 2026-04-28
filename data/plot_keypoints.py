@@ -533,10 +533,9 @@ def _save_html(fig, out_path):
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     pio.write_html(fig, out_path, auto_open=False, include_plotlyjs="cdn")
 
-def _save_mp4(fig, out_path, *, fps=20, width=960, height=720):
+def _save_mp4(fig, out_path, *, fps=20, width=960, height=720, frames=None):
     import subprocess
     import tempfile
-    import plotly.io as pio
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
 
@@ -544,6 +543,12 @@ def _save_mp4(fig, out_path, *, fps=20, width=960, height=720):
     if ffmpeg.returncode != 0:
         raise RuntimeError("ffmpeg not found in PATH. Please install ffmpeg to export mp4.")
 
+    if frames is not None:
+        _save_mp4_matplotlib(frames, out_path, fps=fps, width=width, height=height)
+        return
+
+    # Fallback: kaleido-based rendering (slow)
+    import plotly.io as pio
     try:
         _ = pio.kaleido.scope
     except Exception as e:
@@ -559,6 +564,71 @@ def _save_mp4(fig, out_path, *, fps=20, width=960, height=720):
 
         cmd = (
             f"ffmpeg -y -framerate {int(fps)} -i {os.path.join(tmpdir, 'frame_%06d.png')} "
+            f"-c:v libx264 -pix_fmt yuv420p {out_path}"
+        )
+        proc = subprocess.run(["bash", "-lc", cmd], capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise RuntimeError(f"ffmpeg failed: {proc.stderr.strip()}")
+
+
+def _save_mp4_matplotlib(frames, out_path, *, fps=20, width=960, height=720):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+    import subprocess
+    import tempfile
+
+    dpi = 100
+    fig_w = width / dpi
+    fig_h = height / dpi
+
+    colors = {'head': 'blue', 'right_wrist': 'red', 'left_wrist': 'green'}
+    axis_colors = ['red', 'green', 'blue']
+
+    all_pts = np.concatenate(
+        [np.stack([f['positions'][p] for p in ('head', 'right_wrist', 'left_wrist')])
+         for f in frames], axis=0
+    )
+    margin = 0.3
+    xlim = (all_pts[:, 0].min() - margin, all_pts[:, 0].max() + margin)
+    ylim = (all_pts[:, 1].min() - margin, all_pts[:, 1].max() + margin)
+    zlim = (all_pts[:, 2].min() - margin, all_pts[:, 2].max() + margin)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        from tqdm import tqdm
+        for i, frame in enumerate(tqdm(frames, desc="Rendering frames", unit="frame")):
+            fig_m = plt.figure(figsize=(fig_w, fig_h), dpi=dpi)
+            ax = fig_m.add_subplot(111, projection='3d')
+            ax.set_xlim(*xlim)
+            ax.set_ylim(*ylim)
+            ax.set_zlim(*zlim)
+            ax.set_xlabel('X'); ax.set_ylabel('Y'); ax.set_zlabel('Z')
+            ax.set_title(f"Frame {i}")
+
+            for part in ('head', 'right_wrist', 'left_wrist'):
+                pos = frame['positions'][part]
+                axes_ends = frame['axes'][part]
+                c = colors[part]
+                ax.scatter(*pos, color=c, s=60, zorder=5, label=f"{part} position")
+                for axis_end, ac, ax_name in zip(axes_ends, axis_colors, ('x', 'y', 'z')):
+                    ax.plot([pos[0], axis_end[0]], [pos[1], axis_end[1]], [pos[2], axis_end[2]],
+                            color=ac, linewidth=2, label=f"{part}_{ax_name}_axis")
+
+            for side, c in (('right', colors['right_wrist']), ('left', colors['left_wrist'])):
+                pts = frame['fingers'][side]
+                ax.scatter(pts[:, 0], pts[:, 1], pts[:, 2], color=c, s=15, alpha=0.7,
+                           label=f"{side}_fingers")
+
+            ax.legend(loc='upper left', fontsize=6, markerscale=0.8)
+
+            frame_path = os.path.join(tmpdir, f"frame_{i:06d}.png")
+            fig_m.savefig(frame_path, dpi=dpi)
+            plt.close(fig_m)
+
+        cmd = (
+            f"ffmpeg -y -framerate {int(fps)} -i {os.path.join(tmpdir, 'frame_%06d.png')} "
+            f"-vf \"scale=trunc(iw/2)*2:trunc(ih/2)*2\" "
             f"-c:v libx264 -pix_fmt yuv420p {out_path}"
         )
         proc = subprocess.run(["bash", "-lc", cmd], capture_output=True, text=True)
@@ -607,7 +677,7 @@ if __name__ == "__main__":
             max_steps=args.max_steps,
             device=args.device,
         )
-        fig, _ = main(args.out, full_hand=args.full_hand)
+        fig, frames = main(args.out, full_hand=args.full_hand)
         if args.eval_mpjpe:
             gt_file = args.gt_file if args.gt_file is not None else args.predict_episode
             metrics = evaluate_mpjpe(gt_file, args.out, save_json_path=args.metrics_out)
@@ -615,7 +685,7 @@ if __name__ == "__main__":
             for k, v in metrics.items():
                 print(f"{k}: {v}")
     else:
-        fig, _ = main(args.file, full_hand=args.full_hand)
+        fig, frames = main(args.file, full_hand=args.full_hand)
         if args.eval_mpjpe:
             if args.gt_file is None:
                 raise ValueError("--gt_file is required when using --eval_mpjpe without --predict_episode")
@@ -627,7 +697,7 @@ if __name__ == "__main__":
     if args.save_html is not None:
         _save_html(fig, args.save_html)
     if args.save_mp4 is not None:
-        _save_mp4(fig, args.save_mp4, fps=args.fps, width=args.width, height=args.height)
+        _save_mp4(fig, args.save_mp4, fps=args.fps, width=args.width, height=args.height, frames=frames)
 
     if args.save_html is None and args.save_mp4 is None:
         fig.show()

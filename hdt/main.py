@@ -134,7 +134,10 @@ def eval_checkpoints(accelerator, val_dataloader, policy, ckpt_dir):
             print(f"[eval ckpt step={step}] {os.path.basename(weights_path)} {summary_string}")
 
 def make_policy(policy_class, policy_config, visual_encoder, USE_PRETRAINED=True):
-    if policy_class == 'ACT':
+    if policy_class == 'ACT_FM':
+        from modeling.modeling_act_flow import ACTFlowPolicy
+        policy = ACTFlowPolicy(policy_config)
+    elif policy_class == 'ACT':
         from policy import ACTPolicy
         policy = ACTPolicy(policy_config)
     elif policy_class == 'CNNMLP':
@@ -179,6 +182,8 @@ def make_policy(policy_class, policy_config, visual_encoder, USE_PRETRAINED=True
 def make_optimizer(policy_class, policy):
     if policy_class == 'ACT':
         optimizer = policy.configure_optimizers()
+    elif policy_class == 'ACT_FM':
+        optimizer = policy.configure_optimizers()
     elif policy_class == 'CNNMLP':
         optimizer = policy.configure_optimizers()
     elif policy_class == 'RDT' or policy_class == 'DP':
@@ -216,7 +221,27 @@ def main(args, base_dir, processed_dir=None):
     # TODO(roger): consolidate these to just loading from yaml
     state_dim = 128
     action_dim = 128
-    if policy_class == 'ACT':
+    if policy_class == 'ACT_FM':
+        policy_config = {
+            'lr': args['lr'],
+            'chunk_size': args['chunk_size'],
+            'hidden_dim': trainer_config['model']['hidden_dim'],
+            'dim_feedforward': trainer_config['model']['dim_feedforward'],
+            'lr_backbone': float(trainer_config['model']['lr_backbone']),
+            'backbone': trainer_config['model']['backbone'],
+            'enc_layers': trainer_config['model']['enc_layers'],
+            'fm_layers': trainer_config['model']['fm_layers'],
+            'nheads': trainer_config['model']['nheads'],
+            'camera_names': camera_names,
+            'state_dim': state_dim,
+            'action_dim': action_dim,
+            'image_feature_strategy': trainer_config['model']['image_feature_strategy'],
+            'use_language_conditioning': trainer_config['model']['use_language_conditioning'],
+            'num_flow_steps': trainer_config['model']['num_flow_steps'],
+            'hand_eef_weight': trainer_config['model'].get('hand_eef_weight', 2.0),
+            'head_eef_weight': trainer_config['model'].get('head_eef_weight', 0.0),
+        }
+    elif policy_class == 'ACT':
         policy_config = {'lr': args['lr'],
                          'num_queries': args['chunk_size'],
                          'kl_weight': trainer_config['model']['kl_weight'],
@@ -461,7 +486,7 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
                     _plot_metrics(
                         metrics_csv,
                         metrics_png,
-                        keys=["val/loss", "val/l1", "val/eef_loss", "val/kl", "train/loss", "train/l1", "train/eef_loss", "train/kl"],
+                        keys=["val/loss", "val/l1", "val/fm", "val/hand_eef_loss", "val/head_eef_loss", "val/kl", "train/loss", "train/l1", "train/fm", "train/hand_eef_loss", "train/head_eef_loss", "train/kl"],
                     )
                     print(f'Val loss:   {epoch_val_loss:.5f}')
                     summary_string = ''
