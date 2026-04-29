@@ -404,10 +404,11 @@ def main(input_file, *, full_hand=False):
         scene=dict(
             aspectmode='data',
             camera=dict(
-                up=dict(x=0, y=1, z=0),
+                up=dict(x=0, y=0, z=1),
                 center=dict(x=0, y=0, z=0),
-                eye=dict(x=1.5, y=1.5, z=1.5)
+                eye=dict(x=1.73, y=1.0, z=0.5)
             ),
+            yaxis=dict(autorange='reversed'),
             # xaxis=dict(range=[-0.3, 0.3]),
             # yaxis=dict(range=[0, 1.4]),
             # zaxis=dict(range=[-0.5, 0.1]),
@@ -604,6 +605,8 @@ def _save_mp4_matplotlib(frames, out_path, *, fps=20, width=960, height=720):
             ax.set_ylim(*ylim)
             ax.set_zlim(*zlim)
             ax.set_xlabel('X'); ax.set_ylabel('Y'); ax.set_zlabel('Z')
+            ax.view_init(elev=15, azim=30)  # 30° from x-axis toward +y
+            ax.invert_yaxis()              # put y+ on left, y- on right
             ax.set_title(f"Frame {i}")
 
             for part in ('head', 'right_wrist', 'left_wrist'):
