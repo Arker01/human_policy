@@ -3,6 +3,7 @@
 Backbone modules.
 """
 from collections import OrderedDict
+import os
 
 import torch
 import torch.nn.functional as F
@@ -98,7 +99,11 @@ class Backbone(BackboneBase):
 class DINOv2BackBone(nn.Module):
     def __init__(self, model_name: str='dinov2_vits14', image_feature_strategy: str='ACT_linear') -> None:
         super().__init__()
-        self.body = torch.hub.load('facebookresearch/dinov2', model_name)
+        dinov2_cache = os.path.join(torch.hub.get_dir(), 'facebookresearch_dinov2_main')
+        if os.path.isdir(dinov2_cache):
+            self.body = torch.hub.load(dinov2_cache, model_name, source='local')
+        else:
+            self.body = torch.hub.load('facebookresearch/dinov2', model_name)
         self.body.eval()
         # This follows depth estimation indices used in
         # https://dl.fbaipublicfiles.com/dinov2/dinov2_vits14/dinov2_vits14_nyu_linear4_config.py

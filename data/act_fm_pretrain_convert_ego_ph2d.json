@@ -1,0 +1,54 @@
+{
+  "train": [
+    {
+      "dataset_path": "human_policy/convert_ego",
+      "type": "human",
+      "start_idx": 0,
+      "end_idx": 1800
+    },
+    {
+      "dataset_path": "PH2D/111-picking-colorful-toycube_2024-11-13_20-25-34",
+      "type": "human"
+    },
+    {
+      "dataset_path": "PH2D/112-picking-brownbox-human_2024-11-13_20-42-14",
+      "type": "human"
+    },
+    {
+      "dataset_path": "PH2D/113-picking-blackcube-human_2024-11-13_22-09-05",
+      "type": "human"
+    },
+    {
+      "dataset_path": "PH2D/402-pick_on_color_pad_right-2025_01_09-16_36_15",
+      "type": "robot"
+    },
+    {
+      "dataset_path": "PH2D/403-pick_on_color_pad_left-2025_01_09-16_58_04",
+      "type": "robot"
+    },
+    {
+      "dataset_path": "PH2D/404-pick_on_color_pad_right_far-2025_01_12-20_20_57",
+      "type": "robot"
+    },
+    {
+      "dataset_path": "PH2D/405-pick_on_color_pad_right_far_far-2025_01_13-19_29_04",
+      "type": "robot"
+    }
+  ],
+  "val": [
+    {
+      "dataset_path": "human_policy/convert_ego",
+      "type": "human",
+      "start_idx": 1800,
+      "end_idx": 2002
+    },
+    {
+      "dataset_path": "PH2D/401-picking-2024_11_12-22_39_57",
+      "type": "robot"
+    },
+    {
+      "dataset_path": "PH2D/903-picking-val-2024_11_18-18_58_16",
+      "type": "mixed"
+    }
+  ]
+}

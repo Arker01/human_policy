@@ -50,8 +50,8 @@ class MaskclipBackbone(nn.Module):
             return features
 
 def make_visual_encoder(policy_class, policy_config):
-    if policy_class == 'ACT':
-        # ACT from OpenTV builds its own visual encoder
+    if policy_class in ['ACT', 'ACT_FM']:
+        # ACT-style policies build their own visual encoder inside the policy.
         visual_encoder = None
         def visual_preprocessor(image_nchw):
             # Input: NCHW images. N is the number of cameras. np.uint8, [0, 255].

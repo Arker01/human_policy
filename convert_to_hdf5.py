@@ -32,22 +32,25 @@ from scipy.spatial.transform import Rotation as R
 from glob import glob
 
 # ── args ───────────────────────────────────────────────────────────────────────
-_BASE = "/home/ubuntu/DATA1/shengyin/humanoid/DATASETS/UnifoLM_WBT"
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+_BASE = os.path.join(_PROJECT_ROOT, "DATASETS", "UnifoLM_WBT")
 _DEFAULT_DATASET = os.path.join(_BASE, "G1_WBT_Brainco_Collect_Plates_Into_Dishwasher")
 
 parser = argparse.ArgumentParser(description="Convert episodes to HDF5")
 parser.add_argument("--dataset",      default=_DEFAULT_DATASET,
                     help="path to the LeRobot dataset folder")
-parser.add_argument("--head-dir",     default=os.path.join(_BASE, "head_pose_track"),
-                    help="folder with ep_XXXX.pkl head-pose files")
-parser.add_argument("--finger-dir",   default=os.path.join(_BASE, "finger_keypoints"),
+parser.add_argument("--head-dir",     default=None,
+                    help="folder with ep_XXXX.pkl head-pose files (default: <dataset>/head_pose_track)")
+parser.add_argument("--finger-dir",   default=None,
                     help="folder with ep_XXXX.pkl finger-keypoint files")
+parser.add_argument("--finger-frame", default="auto", choices=["auto", "head", "world", "wrist"],
+                    help="coordinate frame of finger pkl values (default: read pkl['finger_frame']; old pkls default to head in real/rel mode)")
 parser.add_argument("--out-dir",      default=None,
                     help="output folder (default: <dataset>/../human_policy_<mode>)")
 parser.add_argument("--mode",         default="global", choices=["global", "rel", "real"],
                     help="'global': ee_state in world frame; 'rel': ee_state in head frame; "
                          "'real': wrist pos/rot from PKL body_pos_w (L/R_hand_base_link + wrist_yaw_link)")
-parser.add_argument("--pkl-dir",      default="/home/ubuntu/qingyaoxu/TWIST/data/track_dataset/unifolm_wbt_pkl",
+parser.add_argument("--pkl-dir",      default="/root/shengyin/DATASETS/XQY_PKL",
                     help="folder with per-episode PKL files (used for --mode real)")
 parser.add_argument("--max-episodes", type=int, default=None,
                     help="limit number of episodes (default: all)")
@@ -56,9 +59,17 @@ parser.add_argument("--jpeg-quality", type=int, default=50,
 args = parser.parse_args()
 
 # ── paths ──────────────────────────────────────────────────────────────────────
-DATASET     = args.dataset
-HEAD_DIR    = args.head_dir
-FINGER_DIR  = args.finger_dir
+def resolve_path(path: str) -> str:
+    path_abs = os.path.abspath(path)
+    if os.path.exists(path_abs) or os.path.isabs(path):
+        return path_abs
+    return os.path.join(_PROJECT_ROOT, path)
+
+DATASET     = resolve_path(args.dataset)
+HEAD_DIR    = resolve_path(args.head_dir) if args.head_dir else os.path.join(DATASET, "head_pose_track")
+FINGER_DIR  = resolve_path(args.finger_dir) if args.finger_dir else os.path.join(DATASET, "finger_keypoints")
+if not os.path.isdir(FINGER_DIR):
+    FINGER_DIR = os.path.join(_BASE, "finger_keypoints")
 DATA_DIR    = os.path.join(DATASET, "data")
 VIDEO_L_DIR = os.path.join(DATASET, "videos/observation.images.head_stereo_left/chunk-000")
 VIDEO_R_DIR = os.path.join(DATASET, "videos/observation.images.head_stereo_right/chunk-000")
@@ -69,6 +80,7 @@ MAX_EPISODES = args.max_episodes
 JPEG_QUALITY = args.jpeg_quality
 PKL_DIR      = args.pkl_dir
 PKL_PREFIX   = os.path.basename(DATASET.rstrip("/"))
+FINGER_FRAME_ARG = args.finger_frame
 
 OUT_DIR = args.out_dir or os.path.join(
     os.path.dirname(DATASET.rstrip("/")), f"human_policy_{MODE}")
@@ -131,9 +143,15 @@ def tips_in_wrist_frame(tips_world: np.ndarray, wrist_mat4: np.ndarray) -> np.nd
         out[i + 1] = (R_lw @ delta).astype(np.float32)
     return out
 
+def pack_wrist_tips(tips_wrist: np.ndarray) -> np.ndarray:
+    """tips_wrist (5,3) -> (6,3), row0 is the palm/base origin."""
+    out = np.zeros((6, 3), dtype=np.float32)
+    out[1:] = tips_wrist.astype(np.float32)
+    return out
+
 def build_vec(head_pos, head_quat_xyzw,
               left_pos, left_euler, right_pos, right_euler,
-              left_tips_world, right_tips_world) -> np.ndarray:
+              left_tips, right_tips, finger_frame: str) -> np.ndarray:
     vec = np.zeros(VEC_SIZE, dtype=np.float32)
 
     vec[IDX_HEAD_EEF]  = np.concatenate([head_pos.astype(np.float32),
@@ -145,8 +163,12 @@ def build_vec(head_pos, head_quat_xyzw,
 
     left_mat  = euler_xyz_to_mat4(left_pos,  left_euler)
     right_mat = euler_xyz_to_mat4(right_pos, right_euler)
-    vec[IDX_LEFT_KPTS]  = tips_in_wrist_frame(left_tips_world,  left_mat).reshape(-1)
-    vec[IDX_RIGHT_KPTS] = tips_in_wrist_frame(right_tips_world, right_mat).reshape(-1)
+    if finger_frame == "wrist":
+        vec[IDX_LEFT_KPTS] = pack_wrist_tips(left_tips).reshape(-1)
+        vec[IDX_RIGHT_KPTS] = pack_wrist_tips(right_tips).reshape(-1)
+    else:
+        vec[IDX_LEFT_KPTS]  = tips_in_wrist_frame(left_tips,  left_mat).reshape(-1)
+        vec[IDX_RIGHT_KPTS] = tips_in_wrist_frame(right_tips, right_mat).reshape(-1)
     # [100:126] stays zero per user instruction
     return vec
 
@@ -226,6 +248,13 @@ for ep_idx in episode_ids:
     head_quat_w  = head_data["head_quat_w"]   # (T, 4) xyzw
     tips_left    = finger_data["finger_pos_left"]   # (T, 5, 3) world
     tips_right   = finger_data["finger_pos_right"]  # (T, 5, 3) world
+    if FINGER_FRAME_ARG == "auto":
+        finger_frame = finger_data.get("finger_frame")
+        if finger_frame is None:
+            finger_frame = "head" if MODE in ("real", "rel") else "world"
+    else:
+        finger_frame = FINGER_FRAME_ARG
+    print(f"  ep {ep_idx:04d}: finger_frame={finger_frame}")
 
     # ── load body PKL for "real" mode ──
     if MODE == "real":
@@ -249,31 +278,43 @@ for ep_idx in episode_ids:
             right_pos   = body_pos_w[t, rhb_idx].astype(np.float32)
             left_euler  = R.from_quat(body_quat_w[t, lwy_idx]).as_euler("xyz").astype(np.float32)
             right_euler = R.from_quat(body_quat_w[t, rwy_idx]).as_euler("xyz").astype(np.float32)
-            # finger_pos_left/right 是 head-relative，需转到世界坐标系
-            R_head = R.from_quat(head_quat_w[t]).as_matrix()
-            tips_left_t  = (R_head @ tips_left[t].T).T  + head_pos_w[t]
-            tips_right_t = (R_head @ tips_right[t].T).T + head_pos_w[t]
+            if finger_frame == "head":
+                R_head = R.from_quat(head_quat_w[t]).as_matrix()
+                tips_left_t  = (R_head @ tips_left[t].T).T  + head_pos_w[t]
+                tips_right_t = (R_head @ tips_right[t].T).T + head_pos_w[t]
+                tips_frame_t = "world"
+            else:
+                tips_left_t = tips_left[t]
+                tips_right_t = tips_right[t]
+                tips_frame_t = finger_frame
         elif MODE == "rel":
             left_pos,  left_euler  = eef_head_rel_to_world(
                 ee[0:3], ee[3:6], head_pos_w[t], head_quat_w[t])
             right_pos, right_euler = eef_head_rel_to_world(
                 ee[6:9], ee[9:12], head_pos_w[t], head_quat_w[t])
-            # rel 模式 wrist 已转到世界坐标，finger 同样需要转换
-            R_head = R.from_quat(head_quat_w[t]).as_matrix()
-            tips_left_t  = (R_head @ tips_left[t].T).T  + head_pos_w[t]
-            tips_right_t = (R_head @ tips_right[t].T).T + head_pos_w[t]
+            if finger_frame == "head":
+                R_head = R.from_quat(head_quat_w[t]).as_matrix()
+                tips_left_t  = (R_head @ tips_left[t].T).T  + head_pos_w[t]
+                tips_right_t = (R_head @ tips_right[t].T).T + head_pos_w[t]
+                tips_frame_t = "world"
+            else:
+                tips_left_t = tips_left[t]
+                tips_right_t = tips_right[t]
+                tips_frame_t = finger_frame
         else:  # global
             left_pos,  left_euler  = ee[0:3], ee[3:6]
             right_pos, right_euler = ee[6:9], ee[9:12]
             tips_left_t  = tips_left[t]
             tips_right_t = tips_right[t]
+            tips_frame_t = finger_frame
         states[t] = build_vec(
             head_pos=head_pos_w[t],
             head_quat_xyzw=head_quat_w[t],
             left_pos=left_pos,  left_euler=left_euler,
             right_pos=right_pos, right_euler=right_euler,
-            left_tips_world=tips_left_t,
-            right_tips_world=tips_right_t,
+            left_tips=tips_left_t,
+            right_tips=tips_right_t,
+            finger_frame=tips_frame_t,
         )
 
     # action[t] = state[t+1]; last frame copies itself

@@ -1,0 +1,18 @@
+{
+  "train": [
+    {
+      "dataset_path": "human_policy/convert_whole",
+      "type": "human",
+      "start_idx": 0,
+      "end_idx": 120
+    }
+  ],
+  "val": [
+    {
+      "dataset_path": "human_policy/convert_whole",
+      "type": "human",
+      "start_idx": 120,
+      "end_idx": 150
+    }
+  ]
+}

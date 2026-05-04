@@ -1,0 +1,22 @@
+common:
+  policy_class: ACT_FM
+  state_dim: 128
+  action_dim: 128
+  camera_names: ['top']
+
+model:
+  enc_layers: 4
+  fm_layers: 4
+  nheads: 8
+  hidden_dim: 512
+  dim_feedforward: 3200
+  lr_backbone: 0
+  backbone: dinov2_vits14
+  image_feature_strategy: linear
+  use_language_conditioning: False
+  num_flow_steps: 20
+  hand_eef_weight: 2.0
+  head_eef_weight: 2.0
+
+data:
+  image_resolution_hw: [240, 320]

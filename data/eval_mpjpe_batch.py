@@ -185,39 +185,72 @@ def _load_norm_stats(stats_path: Path, embodiment: str | None) -> dict:
             return {k: _to_numpy(v) for k, v in first.items()}
     raise ValueError(f"Unsupported stats format: {type(stats)}")
 
-def _make_act_policy(model_yaml: Path, ckpt_path: Path, *, device: str) -> tuple[object, dict]:
+def _make_policy(model_yaml: Path, ckpt_path: Path, *, device: str) -> tuple[object, dict]:
     import torch
-    from hdt.policy import ACTPolicy
 
     cfg = _load_yaml(model_yaml)
     common = cfg.get("common", {})
     model = cfg.get("model", {})
+    policy_class = common.get("policy_class", "ACT")
 
     cameras = common.get("camera_names", [])
-    args_override = dict(
-        lr=1e-4,
-        weight_decay=1e-4,
-        lr_backbone=float(model.get("lr_backbone", 0.0)),
-        backbone=str(model.get("backbone", "resnet18")),
-        camera_names=list(cameras),
-        enc_layers=int(model.get("enc_layers", 4)),
-        dec_layers=int(model.get("dec_layers", 7)),
-        nheads=int(model.get("nheads", 8)),
-        hidden_dim=int(model.get("hidden_dim", 512)),
-        dim_feedforward=int(model.get("dim_feedforward", 3200)),
-        num_queries=int(common.get("action_chunk_size", 100)),
-        kl_weight=float(model.get("kl_weight", 10.0)),
-        state_dim=int(common.get("state_dim", 128)),
-        action_dim=int(common.get("action_dim", 128)),
-        image_feature_strategy=str(model.get("image_feature_strategy", "ACT_linear")),
-        use_language_conditioning=bool(model.get("use_language_conditioning", False)),
-    )
+    chunk_size = int(common.get("action_chunk_size", model.get("chunk_size", 100)))
 
-    policy = ACTPolicy(args_override)
+    if policy_class == "ACT":
+        from hdt.policy import ACTPolicy
+
+        args_override = dict(
+            lr=1e-4,
+            weight_decay=1e-4,
+            lr_backbone=float(model.get("lr_backbone", 0.0)),
+            backbone=str(model.get("backbone", "resnet18")),
+            camera_names=list(cameras),
+            enc_layers=int(model.get("enc_layers", 4)),
+            dec_layers=int(model.get("dec_layers", 7)),
+            nheads=int(model.get("nheads", 8)),
+            hidden_dim=int(model.get("hidden_dim", 512)),
+            dim_feedforward=int(model.get("dim_feedforward", 3200)),
+            num_queries=chunk_size,
+            chunk_size=chunk_size,
+            kl_weight=float(model.get("kl_weight", 10.0)),
+            state_dim=int(common.get("state_dim", 128)),
+            action_dim=int(common.get("action_dim", 128)),
+            image_feature_strategy=str(model.get("image_feature_strategy", "ACT_linear")),
+            use_language_conditioning=bool(model.get("use_language_conditioning", False)),
+        )
+        policy = ACTPolicy(args_override)
+    elif policy_class == "ACT_FM":
+        from hdt.modeling.modeling_act_flow import ACTFlowPolicy
+
+        args_override = dict(
+            lr=1e-4,
+            lr_backbone=float(model.get("lr_backbone", 0.0)),
+            backbone=str(model.get("backbone", "resnet18")),
+            camera_names=list(cameras),
+            enc_layers=int(model.get("enc_layers", 4)),
+            fm_layers=int(model.get("fm_layers", 4)),
+            nheads=int(model.get("nheads", 8)),
+            hidden_dim=int(model.get("hidden_dim", 512)),
+            dim_feedforward=int(model.get("dim_feedforward", 3200)),
+            chunk_size=chunk_size,
+            state_dim=int(common.get("state_dim", 128)),
+            action_dim=int(common.get("action_dim", 128)),
+            image_feature_strategy=str(model.get("image_feature_strategy", "ACT_linear")),
+            use_language_conditioning=bool(model.get("use_language_conditioning", False)),
+            num_flow_steps=int(model.get("num_flow_steps", 10)),
+            hand_eef_weight=float(model.get("hand_eef_weight", 2.0)),
+            head_eef_weight=float(model.get("head_eef_weight", 0.0)),
+        )
+        policy = ACTFlowPolicy(args_override)
+    else:
+        raise ValueError(f"Unsupported policy_class for policy eval: {policy_class}")
+
     policy.eval()
 
     state_dict = torch.load(str(ckpt_path), map_location="cpu", weights_only=True)
-    policy.load_state_dict(state_dict, strict=False)
+    missing, unexpected = policy.load_state_dict(state_dict, strict=False)
+    if missing or unexpected:
+        print(f"Warning: checkpoint load had {len(missing)} missing and {len(unexpected)} unexpected keys")
     policy.to(device)
     return policy, {"camera_names": list(cameras), "use_language_conditioning": bool(model.get("use_language_conditioning", False))}
 
@@ -239,6 +272,9 @@ def _predict_actions_for_episode(
     camera_names: list[str],
     device: str,
     max_steps: int | None,
+    eval_mode: str,
+    chunk_stride: int,
+    temporal_decay: float,
 ) -> np.ndarray:
     import torch
 
@@ -255,9 +291,9 @@ def _predict_actions_for_episode(
         qpos_std = stats["qpos_std"].reshape(1, -1)
         act_mean = stats["action_mean"].reshape(1, -1)
         act_std = stats["action_std"].reshape(1, -1)
+        action_dim = int(act_mean.shape[1])
 
-        pred = np.zeros((T, states.shape[1]), dtype=np.float32)
-        for t in range(T):
+        def infer_chunk(t: int) -> np.ndarray:
             imgs = []
             for cam in camera_names:
                 key = f"observation.image.{cam}"
@@ -283,10 +319,45 @@ def _predict_actions_for_episode(
             qpos_t = torch.from_numpy(qpos_n).to(device=device, dtype=torch.float32)
 
             conditioning_dict = {}
-            a_hat = policy(imgs_t, qpos_t, conditioning_dict=conditioning_dict)
-            a0 = a_hat[0, 0].detach().float().cpu().numpy().astype(np.float32)
-            a0 = a0 * act_std.reshape(-1) + act_mean.reshape(-1)
-            pred[t] = a0
+            with torch.no_grad():
+                a_hat = policy(imgs_t, qpos_t, conditioning_dict=conditioning_dict)
+            chunk = a_hat[0].detach().float().cpu().numpy().astype(np.float32)
+            return chunk * act_std.reshape(1, -1) + act_mean.reshape(1, -1)
+
+        if eval_mode == "chunk_rollout":
+            pred = np.zeros((T, action_dim), dtype=np.float32)
+            filled = np.zeros((T,), dtype=bool)
+            stride = max(1, int(chunk_stride))
+            for t in range(0, T, stride):
+                chunk = infer_chunk(t)
+                horizon = min(stride, int(chunk.shape[0]), T - t)
+                pred[t : t + horizon] = chunk[:horizon]
+                filled[t : t + horizon] = True
+            if not np.all(filled):
+                raise RuntimeError("Internal error: chunk_rollout left unfilled timesteps")
+            return pred
+
+        if eval_mode == "temporal_agg":
+            pred_sum = np.zeros((T, action_dim), dtype=np.float64)
+            weight_sum = np.zeros((T, 1), dtype=np.float64)
+            for t in range(T):
+                chunk = infer_chunk(t)
+                horizon = min(int(chunk.shape[0]), T - t)
+                offsets = np.arange(horizon, dtype=np.float64)
+                weights = np.exp(-float(temporal_decay) * offsets).reshape(-1, 1)
+                pred_sum[t : t + horizon] += chunk[:horizon].astype(np.float64) * weights
+                weight_sum[t : t + horizon] += weights
+            valid = weight_sum[:, 0] > 0
+            if not np.all(valid):
+                raise RuntimeError("Internal error: temporal_agg left unfilled timesteps")
+            return (pred_sum / weight_sum).astype(np.float32)
+
+        if eval_mode != "first_token":
+            raise ValueError(f"Unsupported eval_mode: {eval_mode}")
+
+        pred = np.zeros((T, action_dim), dtype=np.float32)
+        for t in range(T):
+            pred[t] = infer_chunk(t)[0]
 
     return pred
 
@@ -308,6 +379,15 @@ def main() -> None:
     parser.add_argument("--norm-stats", type=str, default=None, help="归一化统计量 pkl（例如 dataset_stats.pkl）")
     parser.add_argument("--device", type=str, default="cuda", help="推理设备（ACT 默认需要 cuda）")
     parser.add_argument("--max-steps", type=int, default=None, help="每个 episode 最多评估多少步（默认全部）")
+    parser.add_argument("--seed", type=int, default=0, help="随机种子，用于随机采样式 policy 的可复现评估")
+    parser.add_argument(
+        "--eval-mode",
+        choices=["first_token", "chunk_rollout", "temporal_agg"],
+        default="first_token",
+        help="policy 推理模式：first_token=每帧只取 chunk 第 0 个；chunk_rollout=每隔 chunk-stride 推理并使用前 chunk-stride 个；temporal_agg=重叠 chunk 加权平均",
+    )
+    parser.add_argument("--chunk-stride", type=int, default=10, help="chunk_rollout 模式每次执行多少个预测 action")
+    parser.add_argument("--temporal-decay", type=float, default=0.01, help="temporal_agg 模式的 offset 指数衰减系数")
     parser.add_argument(
         "--out-json",
         type=str,
@@ -315,6 +395,15 @@ def main() -> None:
         help="可选：保存批量评估结果 JSON 路径",
     )
     args = parser.parse_args()
+    np.random.seed(args.seed)
+    try:
+        import torch
+
+        torch.manual_seed(args.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(args.seed)
+    except Exception:
+        pass
 
     gt_dir = Path(args.gt_dir)
     if not gt_dir.exists():
@@ -329,7 +418,7 @@ def main() -> None:
         gt_files = sorted(gt_dir.glob(args.glob))
         if not gt_files:
             raise RuntimeError(f"No files matched in gt-dir: {gt_dir} with glob={args.glob}")
-        policy, pol_info = _make_act_policy(Path(args.policy_config_yaml), Path(args.policy_ckpt), device=args.device)
+        policy, pol_info = _make_policy(Path(args.policy_config_yaml), Path(args.policy_ckpt), device=args.device)
         camera_names = pol_info["camera_names"]
         if not camera_names:
             raise ValueError("camera_names is empty in policy config")
@@ -363,6 +452,9 @@ def main() -> None:
                     camera_names=camera_names,
                     device=args.device,
                     max_steps=args.max_steps,
+                    eval_mode=args.eval_mode,
+                    chunk_stride=args.chunk_stride,
+                    temporal_decay=args.temporal_decay,
                 )
             except ValueError as e:
                 if "No camera data available" in str(e):

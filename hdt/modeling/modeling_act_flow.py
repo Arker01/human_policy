@@ -81,11 +81,13 @@ class FlowMatchingHead(nn.Module):
         num_layers: int,
         nheads: int,
         dim_feedforward: int,
+        chunk_size: int,
         dropout: float = 0.1,
     ):
         super().__init__()
         self.action_proj = nn.Linear(action_dim, hidden_dim)
         self.time_emb = TimestepEmbedding(hidden_dim)
+        self.action_query_embed = nn.Embedding(chunk_size, hidden_dim)
 
         decoder_layer = TransformerDecoderLayer(
             hidden_dim, nheads, dim_feedforward, dropout,
@@ -112,8 +114,9 @@ class FlowMatchingHead(nn.Module):
         # TransformerDecoder convention: (seq, batch, dim)
         x   = x.permute(1, 0, 2)              # (T, B, hidden_dim)
         ctx = context.permute(1, 0, 2)        # (N_ctx, B, hidden_dim)
+        query_pos = self.action_query_embed.weight[:T].unsqueeze(1).repeat(1, B, 1)
 
-        out = self.decoder(x, ctx)             # (1, T, B, hidden_dim) with return_intermediate=False
+        out = self.decoder(x, ctx, query_pos=query_pos)  # (1, T, B, hidden_dim)
         out = out[0].permute(1, 0, 2)         # (B, T, hidden_dim)
 
         return self.action_head(out)           # (B, T, action_dim)
@@ -187,6 +190,7 @@ class ACTFlowMatching(nn.Module):
             num_layers=fm_layers,
             nheads=nheads,
             dim_feedforward=dim_feedforward,
+            chunk_size=chunk_size,
         )
 
     # ------------------------------------------------------------------

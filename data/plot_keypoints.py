@@ -406,15 +406,15 @@ def main(input_file, *, full_hand=False):
             camera=dict(
                 up=dict(x=0, y=0, z=1),
                 center=dict(x=0, y=0, z=0),
-                eye=dict(x=1.73, y=1.0, z=0.5)
+                eye=dict(x=-1.73, y=1.0, z=0.5)
             ),
-            yaxis=dict(autorange='reversed'),
             # xaxis=dict(range=[-0.3, 0.3]),
             # yaxis=dict(range=[0, 1.4]),
             # zaxis=dict(range=[-0.5, 0.1]),
             aspectratio=dict(x=1, y=1, z=1)
         ),
         title="3D Transformation Visualization",
+        margin=dict(l=0, r=0, t=36, b=0),
         showlegend=True,
         updatemenus=[{
             'buttons': [
@@ -591,7 +591,7 @@ def _save_mp4_matplotlib(frames, out_path, *, fps=20, width=960, height=720):
         [np.stack([f['positions'][p] for p in ('head', 'right_wrist', 'left_wrist')])
          for f in frames], axis=0
     )
-    margin = 0.3
+    margin = 0.1
     xlim = (all_pts[:, 0].min() - margin, all_pts[:, 0].max() + margin)
     ylim = (all_pts[:, 1].min() - margin, all_pts[:, 1].max() + margin)
     zlim = (all_pts[:, 2].min() - margin, all_pts[:, 2].max() + margin)
@@ -605,9 +605,9 @@ def _save_mp4_matplotlib(frames, out_path, *, fps=20, width=960, height=720):
             ax.set_ylim(*ylim)
             ax.set_zlim(*zlim)
             ax.set_xlabel('X'); ax.set_ylabel('Y'); ax.set_zlabel('Z')
-            ax.view_init(elev=15, azim=30)  # 30° from x-axis toward +y
-            ax.invert_yaxis()              # put y+ on left, y- on right
+            ax.view_init(elev=15, azim=210)  # View from -x with y+ on the left.
             ax.set_title(f"Frame {i}")
+            fig_m.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=0.95)
 
             for part in ('head', 'right_wrist', 'left_wrist'):
                 pos = frame['positions'][part]

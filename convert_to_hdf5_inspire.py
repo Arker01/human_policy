@@ -22,7 +22,7 @@ from scipy.spatial.transform import Rotation as R
 from glob import glob
 
 # ── paths ──────────────────────────────────────────────────────────────────────
-DATASET = "/home/ubuntu/DATA1/shengyin/humanoid/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/G1_WB_Dex5_Collect_Clothes"
+DATASET = "DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/G1_WB_Dex5_Collect_Clothes"
 HEAD_DIR   = os.path.join(DATASET, "head_pose_track")
 FINGER_DIR = os.path.join(DATASET, "finger_keypoints")
 DATA_DIR   = os.path.join(DATASET, "data")
@@ -33,10 +33,10 @@ META_EP     = os.path.join(DATASET, "meta/episodes")
 # ── mode: "global" | "rel" | "real" ───────────────────────────────────────────
 # "real": wrist pos from L/R_hand_base_link, wrist rot from left/right_wrist_yaw_link (PKL)
 MODE       = "global"
-PKL_DIR    = "/home/ubuntu/qingyaoxu/TWIST/data/track_dataset/unifolm_wbt_pkl"
+PKL_DIR    = "/root/shengyin/DATASETS/XQY_PKL"
 PKL_PREFIX = os.path.basename(DATASET.rstrip("/"))   # G1_WB_Dex5_Collect_Clothes
 
-OUT_DIR = "/home/ubuntu/DATA1/shengyin/humanoid/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/human_policy"
+OUT_DIR = "DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/human_policy"
 os.makedirs(OUT_DIR, exist_ok=True)
 
 JPEG_QUALITY = 50
@@ -85,9 +85,15 @@ def tips_in_wrist_frame(tips_world: np.ndarray, wrist_mat4: np.ndarray) -> np.nd
         out[i + 1] = (inv_w @ hom)[:3]
     return out
 
+def pack_wrist_tips(tips_wrist: np.ndarray) -> np.ndarray:
+    """tips_wrist (5,3) -> (6,3), row0 is the palm/base origin."""
+    out = np.zeros((6, 3), dtype=np.float32)
+    out[1:] = tips_wrist.astype(np.float32)
+    return out
+
 def build_vec(head_pos, head_quat_xyzw,
               left_pos, left_euler, right_pos, right_euler,
-              left_tips_world, right_tips_world) -> np.ndarray:
+              left_tips, right_tips, finger_frame: str) -> np.ndarray:
     vec = np.zeros(VEC_SIZE, dtype=np.float32)
     vec[IDX_HEAD_EEF]   = np.concatenate([head_pos.astype(np.float32),
                                            quat_xyzw_to_rot6d(head_quat_xyzw)])
@@ -97,8 +103,12 @@ def build_vec(head_pos, head_quat_xyzw,
                                            euler_xyz_to_rot6d(right_euler)])
     left_mat  = euler_xyz_to_mat4(left_pos,  left_euler)
     right_mat = euler_xyz_to_mat4(right_pos, right_euler)
-    vec[IDX_LEFT_KPTS]  = tips_in_wrist_frame(left_tips_world,  left_mat).reshape(-1)
-    vec[IDX_RIGHT_KPTS] = tips_in_wrist_frame(right_tips_world, right_mat).reshape(-1)
+    if finger_frame == "wrist":
+        vec[IDX_LEFT_KPTS] = pack_wrist_tips(left_tips).reshape(-1)
+        vec[IDX_RIGHT_KPTS] = pack_wrist_tips(right_tips).reshape(-1)
+    else:
+        vec[IDX_LEFT_KPTS]  = tips_in_wrist_frame(left_tips,  left_mat).reshape(-1)
+        vec[IDX_RIGHT_KPTS] = tips_in_wrist_frame(right_tips, right_mat).reshape(-1)
     return vec
 
 def extract_frames(video_path: str, from_ts: float, n_frames: int) -> list:
@@ -161,6 +171,8 @@ for ep_idx in episode_ids:
     head_quat_w = head_data["head_quat_w"]   # (T, 4) xyzw
     tips_left   = finger_data["finger_pos_left"]   # (T, 5, 3)
     tips_right  = finger_data["finger_pos_right"]  # (T, 5, 3)
+    finger_frame = finger_data.get("finger_frame", "world")
+    print(f"  ep {ep_idx:04d}: finger_frame={finger_frame}")
 
     # load body PKL for "real" mode
     if MODE == "real":
@@ -184,20 +196,27 @@ for ep_idx in episode_ids:
             right_pos   = body_pos_w[t, rhb_idx].astype(np.float32)
             left_euler  = R.from_quat(body_quat_w[t, lwy_idx]).as_euler("xyz").astype(np.float32)
             right_euler = R.from_quat(body_quat_w[t, rwy_idx]).as_euler("xyz").astype(np.float32)
-            # finger_pos 是 head-relative，转到世界坐标系
-            R_head = R.from_quat(head_quat_w[t]).as_matrix()
-            tips_left_t  = (R_head @ tips_left[t].T).T  + head_pos_w[t]
-            tips_right_t = (R_head @ tips_right[t].T).T + head_pos_w[t]
+            if finger_frame == "head":
+                R_head = R.from_quat(head_quat_w[t]).as_matrix()
+                tips_left_t  = (R_head @ tips_left[t].T).T  + head_pos_w[t]
+                tips_right_t = (R_head @ tips_right[t].T).T + head_pos_w[t]
+                tips_frame_t = "world"
+            else:
+                tips_left_t = tips_left[t]
+                tips_right_t = tips_right[t]
+                tips_frame_t = finger_frame
         else:  # global
             left_pos,  left_euler  = ee[0:3], ee[3:6]
             right_pos, right_euler = ee[6:9], ee[9:12]
             tips_left_t  = tips_left[t]
             tips_right_t = tips_right[t]
+            tips_frame_t = finger_frame
         states[t] = build_vec(
             head_pos=head_pos_w[t],        head_quat_xyzw=head_quat_w[t],
             left_pos=left_pos,             left_euler=left_euler,
             right_pos=right_pos,           right_euler=right_euler,
-            left_tips_world=tips_left_t,   right_tips_world=tips_right_t,
+            left_tips=tips_left_t,         right_tips=tips_right_t,
+            finger_frame=tips_frame_t,
         )
 
     actions = np.zeros_like(states)
