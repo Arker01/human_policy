@@ -382,6 +382,19 @@ CUDA_VISIBLE_DEVICES=0 /root/miniconda3/envs/twist/bin/python twist_hand_gmt_bri
   --out-actions /root/shengyin/human_policy/outputs/twist_hand_gmt_act_resnet_actions.npz
 ```
 
+### magic-4090
+CUDA_VISIBLE_DEVICES=0 python twist_hand_gmt_bridge.py \
+  --gt-dir /media/magic-4090/DATA1/shengyin/DATASETS/PH2D/903-picking-val-2024_11_18-18_58_16 \
+  --policy-ckpt /media/magic-4090/DATA1/shengyin/human_policy/ruili-result/0506/policy_last.ckpt \
+  --policy-config-yaml /media/magic-4090/DATA1/shengyin/human_policy/ruili-result/0506/act_resnet.yaml \
+  --norm-stats /media/magic-4090/DATA1/shengyin/human_policy/ruili-result/0506/dataset_stats.pkl \
+  --device cuda:0 \
+  --eval-mode first_token \
+  --hand-gmt-ckpt /media/magic-4090/DATA1/shengyin/human_policy/hand_GMT/dexhand_mimic_direct_newkpkd_model_50000.pt \
+  --gmt-device cuda:0 \
+  --viewer \
+  --out-actions /media/magic-4090/DATA1/shengyin/human_policy/ruili-result/0506/eval-result/twist_hand_gmt_act_resnet_actions.npz
+
 viewer 一阶段：
 
 ```bash

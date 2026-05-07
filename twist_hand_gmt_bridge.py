@@ -6,6 +6,9 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+# isaacgym must be imported before any torch import, so do it here at the top.
+import isaacgym  # noqa: F401
+
 import numpy as np
 
 _HP_ROOT = Path(__file__).resolve().parent
@@ -114,6 +117,27 @@ def _rot6d_to_mat_np(rot6d: np.ndarray) -> np.ndarray:
     b2 = _normalize(a2 - np.dot(b1, a2) * b1)
     b3 = np.cross(b1, b2)
     return np.stack([b1, b2, b3], axis=1).astype(np.float32)
+
+
+# Isaac Gym add_lines has no line-width param; draw each segment with tiny
+# perpendicular offsets to simulate thickness.
+_LINE_OFFSETS = np.array([
+    [ 0.000,  0.000, 0.000],
+    [ 0.003,  0.000, 0.000],
+    [ 0.000,  0.003, 0.000],
+    [ 0.000,  0.000, 0.003],
+    [-0.003,  0.000, 0.000],
+    [ 0.000, -0.003, 0.000],
+], dtype=np.float32)
+
+
+def _build_skeleton_lines(rh_w, lh_w, rh_tips, lh_tips):
+    """Return (verts, colors) for add_lines: wrist→5 fingertips, both hands, with thickness."""
+    base_segs = [(rh_w, tip) for tip in rh_tips] + [(lh_w, tip) for tip in lh_tips]
+    all_segs = [[p0 + d, p1 + d] for d in _LINE_OFFSETS for (p0, p1) in base_segs]
+    verts = np.array(all_segs, dtype=np.float32).reshape(-1, 3)
+    colors = np.tile(np.array([[0., 1., 0.]], dtype=np.float32), (verts.shape[0], 1))
+    return len(all_segs), verts, colors
 
 
 class HumanPolicyHandMotionLib:
@@ -386,7 +410,99 @@ def _load_hand_policy(env, train_cfg, twist_args, args):
     return policy, normalizer
 
 
+def _run_gt_only(args, env, refs, rh_wrist_seq, lh_wrist_seq,
+                 rh_tips_seq, lh_tips_seq, rh_rot_seq, lh_rot_seq,
+                 actions_128, has_viewer, env_ptr):
+    """Visualize and optionally record the GT reference skeleton without the dexhand."""
+    import time as _time
+    import imageio
+    import os
+    import torch
+    from isaacgym import gymapi, gymtorch
+    import hdt.constants as C
+
+    total_steps = len(rh_wrist_seq)
+
+    # Hide both inspire hands by moving them far below the scene.
+    with torch.no_grad():
+        far = torch.tensor([0., 0., -200.], device=env.device)
+        env.rh_root_states[:, :3] = far
+        env.lh_root_states[:, :3] = far
+        eids = torch.arange(env.num_envs, device=env.device)
+        ids = torch.cat([env.rh_env_ids[eids].flatten(),
+                         env.lh_env_ids[eids].flatten()]).to(torch.int32)
+        env.gym.set_actor_root_state_tensor_indexed(
+            env.sim, gymtorch.unwrap_tensor(env.root_states),
+            gymtorch.unwrap_tensor(ids), len(ids))
+    env.gym.simulate(env.sim)
+    env.gym.fetch_results(env.sim, True)
+
+    # Position viewer camera: head is origin [0,0,0].
+    # Camera at (-0.1, 0, 0.25), looking at mean hand position.
+    if has_viewer:
+        mean_hand = ((rh_wrist_seq.mean(0) + lh_wrist_seq.mean(0)) / 2).astype(np.float32)
+        cam_pos = gymapi.Vec3(-0.1, 0.0, 0.25)
+        cam_target = gymapi.Vec3(float(mean_hand[0]),
+                                 float(mean_hand[1]),
+                                 float(mean_hand[2]))
+        env.gym.viewer_camera_look_at(env.viewer, None, cam_pos, cam_target)
+        print(f"[gt_only] camera pos=[-0.1, 0.0, 0.25]  "
+              f"target={list(np.round([cam_target.x, cam_target.y, cam_target.z], 3))}")
+
+    # Video writer via viewer screenshot.
+    writer = None
+    tmp_png = None
+    if args.out_gt_video:
+        out_path = Path(args.out_gt_video)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        writer = imageio.get_writer(str(out_path), fps=int(args.ref_fps))
+        tmp_png = str(out_path.parent / "_gt_tmp_frame.png")
+        print(f"[gt_only] recording {total_steps} frames → {out_path}")
+
+    for step_i in range(total_steps):
+        if step_i % 20 == 0:
+            rh_q = rh_rot_seq[step_i]   # xyzw, from refs (6D→mat→quat, no extra transform)
+            lh_q = lh_rot_seq[step_i]
+            print(f"[step {step_i:4d}] rh_wrist_pos={np.round(rh_wrist_seq[step_i], 4)}  "
+                  f"lh_wrist_pos={np.round(lh_wrist_seq[step_i], 4)}")
+            print(f"           rh_rot refs(xyzw)={np.round(rh_q, 4)}")
+            print(f"           lh_rot refs(xyzw)={np.round(lh_q, 4)}")
+            if actions_128 is not None and step_i < len(actions_128):
+                rh_6d_raw = actions_128[step_i, C.OUTPUT_RIGHT_EEF[3:]]  # raw 6D from HDF5
+                lh_6d_raw = actions_128[step_i, C.OUTPUT_LEFT_EEF[3:]]
+                rh_q_raw  = _mat_to_quat_xyzw(_rot6d_to_mat_np(rh_6d_raw))
+                lh_q_raw  = _mat_to_quat_xyzw(_rot6d_to_mat_np(lh_6d_raw))
+                print(f"           rh_6d  HDF5 raw ={np.round(rh_6d_raw, 4)}  -> quat={np.round(rh_q_raw, 4)}")
+                print(f"           lh_6d  HDF5 raw ={np.round(lh_6d_raw, 4)}  -> quat={np.round(lh_q_raw, 4)}")
+
+        if has_viewer:
+            env.gym.clear_lines(env.viewer)
+            n, verts, colors = _build_skeleton_lines(
+                rh_wrist_seq[step_i], lh_wrist_seq[step_i],
+                rh_tips_seq[step_i],  lh_tips_seq[step_i],
+            )
+            env.gym.add_lines(env.viewer, env_ptr, n, verts, colors)
+            env.gym.step_graphics(env.sim)
+            env.gym.draw_viewer(env.viewer, env.sim, True)
+
+            if writer is not None:
+                env.gym.write_viewer_image_to_file(env.viewer, tmp_png)
+                img = imageio.imread(tmp_png)
+                writer.append_data(img[:, :, :3] if img.shape[-1] == 4 else img)
+
+        if args.step_delay > 0:
+            _time.sleep(args.step_delay)
+
+    if writer is not None:
+        writer.close()
+        if tmp_png and os.path.exists(tmp_png):
+            os.unlink(tmp_png)
+        print(f"[gt_only] saved: {args.out_gt_video}")
+
+
 def run(args) -> None:
+    if args.gt_only:
+        args.use_gt_actions = True  # gt-only always uses GT, never runs policy
     if args.ref_npz:
         refs = _load_refs_npz(args.ref_npz)
         actions_128 = np.zeros((0, 128), dtype=np.float32)
@@ -404,7 +520,6 @@ def run(args) -> None:
         while shadow_path in sys.path:
             sys.path.remove(shadow_path)
 
-    import isaacgym  # noqa: F401
     import torch
     import imageio
 
@@ -437,6 +552,14 @@ def run(args) -> None:
         env_cfg.domain_rand.push_robots = False
         env_cfg.domain_rand.action_delay = False
         env_cfg.env.record_video = args.record_video
+        # Our motion lib returns zeros_dof (no real joint angles from human policy),
+        # so the physics-simulated finger tips won't match the reference at init.
+        # Disable pose_termination to avoid immediate termination from this mismatch.
+        env_cfg.env.pose_termination = False
+        # Use a simple plane instead of trimesh to skip the 5s ground-mesh build
+        # and remove the table-like terrain surface in the viewer.
+        if not args.show_table:
+            env_cfg.terrain.mesh_type = None  # no ground at all, avoids finger-ground collisions
 
         env, _ = task_registry.make_env(name="dexhand_mimic_direct", args=twist_args, env_cfg=env_cfg)
         env.reset_idx(torch.arange(env.num_envs, device=env.device), torch.zeros(env.num_envs, device=env.device, dtype=torch.long))
@@ -448,6 +571,8 @@ def run(args) -> None:
         if total_steps is None:
             total_steps = int(float(refs["length_s"]) / env.dt)
         total_steps = min(total_steps, int(env.max_episode_length))
+        print(f"[rollout] motion_length={refs['length_s']:.2f}s  dt={env.dt:.4f}s  "
+              f"max_episode_length={int(env.max_episode_length)}  planned_steps={total_steps}")
 
         writer = None
         if args.record_video:
@@ -455,20 +580,105 @@ def run(args) -> None:
             out_video.parent.mkdir(parents=True, exist_ok=True)
             writer = imageio.get_writer(str(out_video), fps=args.video_fps)
 
+        # Pre-compute per-step ref wrist positions and tip world positions for viz.
+        ref_t = np.arange(total_steps, dtype=np.float32) / float(refs["fps"])
+        ref_frame_f = ref_t * float(refs["fps"])
+        rh_wrist_seq = _interp_np(refs["rh_root_pos"], ref_frame_f)            # (T,3)
+        lh_wrist_seq = _interp_np(refs["lh_root_pos"], ref_frame_f)            # (T,3)
+        rh_tips_seq  = _interp_np(refs["rh_tip_world"], ref_frame_f)           # (T,5,3)
+        lh_tips_seq  = _interp_np(refs["lh_tip_world"], ref_frame_f)           # (T,5,3)
+        rh_rot_seq   = _sample_quat_nearest(refs["rh_root_rot"], ref_frame_f)  # (T,4) xyzw
+        lh_rot_seq   = _sample_quat_nearest(refs["lh_root_rot"], ref_frame_f)  # (T,4) xyzw
+
+        # Print frame-0 ref vs env wrist to check coordinate alignment.
+        print(f"[ref frame0] rh_wrist_pos={rh_wrist_seq[0]}  lh_wrist_pos={lh_wrist_seq[0]}")
+        print(f"[env frame0] rh_root_pos ={env.rh_root_states[0, :3].cpu().numpy()}  "
+              f"lh_root_pos={env.lh_root_states[0, :3].cpu().numpy()}")
+
+        has_viewer = args.viewer and env.viewer is not None
+        _env_ptr = env.envs[0]
+
+        def _draw_ref_skeleton(step_i: int) -> None:
+            if not has_viewer:
+                return
+            env.gym.clear_lines(env.viewer)
+            n, verts, colors = _build_skeleton_lines(
+                rh_wrist_seq[step_i], lh_wrist_seq[step_i],
+                rh_tips_seq[step_i], lh_tips_seq[step_i],
+            )
+            env.gym.add_lines(env.viewer, _env_ptr, n, verts, colors)
+
+        import time as _time
+
+        # ── GT-only mode: hide the dexhands, record from head-position camera ──
+        if args.gt_only:
+            _run_gt_only(args, env, refs, rh_wrist_seq, lh_wrist_seq,
+                         rh_tips_seq, lh_tips_seq, rh_rot_seq, lh_rot_seq,
+                         actions_128 if len(actions_128) > 0 else None,
+                         has_viewer, _env_ptr)
+            return
+
         action_log = []
         for step_i in range(total_steps):
+            _draw_ref_skeleton(step_i)
+
+            # Periodic ref vs env wrist position print for coordinate-frame debugging.
+            if step_i % 20 == 0:
+                print(f"[step {step_i:4d}] ref rh_wrist={rh_wrist_seq[step_i]}  "
+                      f"env rh_root={env.rh_root_states[0, :3].cpu().numpy()}")
+                print(f"           ref lh_wrist={lh_wrist_seq[step_i]}  "
+                      f"env lh_root={env.lh_root_states[0, :3].cpu().numpy()}")
+
             with torch.no_grad():
                 pol_obs = normalizer.normalize(obs.detach()) if normalizer is not None else obs.detach()
                 gmt_action = policy(pol_obs, hist_encoding=True)
             action_log.append(gmt_action.detach().cpu().numpy()[0].astype(np.float32))
             obs, _, _, done, _ = env.step(gmt_action.detach())
 
+            if args.step_delay > 0:
+                _time.sleep(args.step_delay)
+
             if writer is not None and step_i % args.video_stride == 0:
                 imgs = env.render_record(mode="rgb_array")
                 if imgs is not None and len(imgs) > 0:
                     writer.append_data(imgs[0])
             if bool(done[0].item()) and step_i > 1:
+                # diagnose termination reason
+                reasons = []
+                rh_vel = torch.norm(env.rh_root_states[0, 7:10]).item()
+                lh_vel = torch.norm(env.lh_root_states[0, 7:10]).item()
+                if rh_vel > 5.0:
+                    reasons.append(f"rh_vel_too_large={rh_vel:.2f}")
+                if lh_vel > 5.0:
+                    reasons.append(f"lh_vel_too_large={lh_vel:.2f}")
+                if bool(env.time_out_buf[0].item()):
+                    reasons.append("timeout/motion_end")
+                if hasattr(env, '_pose_termination') and env._pose_termination:
+                    # check finger tip distances if available
+                    try:
+                        rh_body_pos = env.rh_body_states[0, :, 0:3] - env.rh_body_states[0, 0:1, 0:3]
+                        tar_rh = env._ref_rh_body_pos[0] - env._ref_rh_root_pos[0:1]
+                        dists = torch.norm(tar_rh - rh_body_pos, dim=-1)
+                        tip_ids = {
+                            'thumb': env._thumb_tip_id,
+                            'index': env._index_tip_id,
+                            'middle': env._middle_tip_id,
+                            'ring': env._ring_tip_id,
+                            'pinky': env._pinky_tip_id,
+                        }
+                        for name, tid in tip_ids.items():
+                            d = dists[tid].item()
+                            thresh = getattr(env, f'_{name}_termination_dist', None)
+                            if thresh is not None and d > thresh:
+                                reasons.append(f"{name}_tip_dist={d:.3f}>{thresh:.3f}")
+                    except Exception:
+                        reasons.append("pose_termination(details unavailable)")
+                if not reasons:
+                    reasons.append("unknown")
+                print(f"[rollout] done at step {step_i}/{total_steps}  reason: {', '.join(reasons)}")
                 break
+        else:
+            print(f"[rollout] completed all {total_steps} steps normally")
 
         if writer is not None:
             writer.close()
@@ -518,6 +728,10 @@ def main() -> None:
     p.add_argument("--rollout-steps", type=int, default=None)
     p.add_argument("--record-video", action="store_true")
     p.add_argument("--viewer", action="store_true", help="Run Isaac Gym with viewer/graphics device. Requires a display or virtual display.")
+    p.add_argument("--step-delay", type=float, default=0.0, help="Seconds to sleep after each rollout step (e.g. 0.3 to slow down viewer).")
+    p.add_argument("--show-table", action="store_true", help="Keep the trimesh terrain (table surface). Default: no ground.")
+    p.add_argument("--gt-only", action="store_true", help="Visualize GT reference skeleton only; skip inspire hand and GMT policy.")
+    p.add_argument("--out-gt-video", type=str, default=None, help="Path to save GT-only skeleton video (requires --viewer).")
     p.add_argument("--out-video", type=str, default=str(_HP_ROOT / "outputs" / "twist_hand_gmt_bridge.mp4"))
     p.add_argument("--video-fps", type=int, default=30)
     p.add_argument("--video-stride", type=int, default=8)
