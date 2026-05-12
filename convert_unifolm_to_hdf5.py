@@ -13,14 +13,23 @@ Inputs:
   * stereo videos from the dataset metadata.
 
 Wrist modes:
-  EE:   wrist position from ee_state, converted from head-relative to world;
+  EE:   wrist position from L/R_hand_base_link;
         wrist rotation from ee_state global Euler.
+  EE_V1: EE plus pure 90-degree global left/right wrist corrections.
+  EE_V2: EE plus simple non-right-angle global left/right wrist corrections.
+  real-EE: wrist position/rotation from root-frame ee_state composed with
+        global root pose from robot_q_current[:7].
+  real-EE-rot: wrist position from L/R_hand_base_link; wrist rotation from
+        root-frame ee_state composed with global root pose from robot_q_current[:7].
   XQY1: wrist position from L/R_hand_base_link;
         wrist rotation from left/right_wrist_yaw_link.
   XQY2: wrist position from L/R_hand_base_link;
         wrist rotation assembled from wrist roll/pitch/yaw links.
   XQY3: wrist position from explicit pkl wrist pos fields when present,
         otherwise L/R_hand_base_link; wrist rotation from left/right_wrist_rot.
+  XQY4: XQY3 plus fixed global left/right wrist corrections tuned for
+        eval_hand_orientation.py constraints.
+  XQY5: XQY3 plus fixed wrist correction from the 2-4s average target pose.
 """
 
 import argparse
@@ -89,6 +98,16 @@ XQY3_WRIST_ROT_TO_YAW_LINK = {
     ),
 }
 
+EE_V1_GLOBAL_WRIST_CORRECTION = {
+    "left": R.from_euler("x", -90.0, degrees=True),
+    "right": R.from_euler("xyz", [90.0, 0.0, 90.0], degrees=True),
+}
+
+EE_V2_GLOBAL_WRIST_CORRECTION = {
+    "left": R.from_euler("x", -115.0, degrees=True),
+    "right": R.from_euler("xyz", [90.0, 0.0, 15.0], degrees=True),
+}
+
 PH2D_ALIGNED_FINGER_LOCAL_ROT = {
     "left": np.array(
         [
@@ -105,6 +124,52 @@ PH2D_ALIGNED_FINGER_LOCAL_ROT = {
             [-0.30658075, 0.64494078, 0.70004260],
         ],
         dtype=np.float64,
+    ),
+}
+
+XQY4_GLOBAL_WRIST_CORRECTION = {
+    "left": R.from_matrix(
+        np.array(
+            [
+                [0.35315283, 0.90723094, 0.22850624],
+                [0.93375502, -0.32660624, -0.14638965],
+                [-0.05817765, 0.26506677, -0.96247336],
+            ],
+            dtype=np.float64,
+        )
+    ),
+    "right": R.from_matrix(
+        np.array(
+            [
+                [0.83197672, 0.25265322, -0.49394442],
+                [0.49413602, -0.74226346, 0.45263070],
+                [-0.25227830, -0.62065393, -0.74239097],
+            ],
+            dtype=np.float64,
+        )
+    ),
+}
+
+XQY5_GLOBAL_WRIST_CORRECTION = {
+    "left": R.from_matrix(
+        np.array(
+            [
+                [0.618539106, -0.753752436, -0.221960896],
+                [-0.240563371, -0.450574035, 0.859716409],
+                [-0.748023154, -0.478372557, -0.460022888],
+            ],
+            dtype=np.float64,
+        )
+    ),
+    "right": R.from_matrix(
+        np.array(
+            [
+                [-0.058804956, 0.152483234, 0.986555037],
+                [0.988745050, -0.127293627, 0.078610164],
+                [0.137568900, 0.980074077, -0.143281547],
+            ],
+            dtype=np.float64,
+        )
     ),
 }
 
@@ -348,12 +413,61 @@ class XQYAccess:
 
 def ee_wrist_pose(
     ee: np.ndarray,
+    xqy: XQYAccess,
+    t: int,
+    mode: str,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    left_pos = ee[0:3].astype(np.float64)
-    right_pos = ee[6:9].astype(np.float64)
-    left_quat = R.from_euler("xyz", ee[3:6]).as_quat()
-    right_quat = R.from_euler("xyz", ee[9:12]).as_quat()
+    left_pos = xqy.hand_base_pos(t, "left")
+    right_pos = xqy.hand_base_pos(t, "right")
+    left_rot = R.from_euler("xyz", ee[3:6])
+    right_rot = R.from_euler("xyz", ee[9:12])
+    if mode == "EE_V1":
+        left_rot = EE_V1_GLOBAL_WRIST_CORRECTION["left"] * left_rot
+        right_rot = EE_V1_GLOBAL_WRIST_CORRECTION["right"] * right_rot
+    elif mode == "EE_V2":
+        left_rot = EE_V2_GLOBAL_WRIST_CORRECTION["left"] * left_rot
+        right_rot = EE_V2_GLOBAL_WRIST_CORRECTION["right"] * right_rot
+    elif mode != "EE":
+        raise ValueError(mode)
+    left_quat = left_rot.as_quat()
+    right_quat = right_rot.as_quat()
     return left_pos, left_quat, right_pos, right_quat
+
+
+def root_pose_from_robot_q(robot_q: np.ndarray) -> tuple[np.ndarray, R]:
+    robot_q = np.asarray(robot_q, dtype=np.float64)
+    if robot_q.shape[0] < 7:
+        raise ValueError(f"robot_q_current must have at least 7 values, got {robot_q.shape}")
+    root_pos = robot_q[0:3]
+    quat_wxyz = robot_q[3:7]
+    root_rot = R.from_quat([quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]])
+    return root_pos, root_rot
+
+
+def real_ee_wrist_pose(
+    ee: np.ndarray,
+    robot_q: np.ndarray,
+    xqy: XQYAccess,
+    t: int,
+    mode: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    root_pos, root_rot = root_pose_from_robot_q(robot_q)
+
+    left_local_pos = ee[0:3].astype(np.float64)
+    right_local_pos = ee[6:9].astype(np.float64)
+    left_rot = root_rot * R.from_euler("xyz", ee[3:6])
+    right_rot = root_rot * R.from_euler("xyz", ee[9:12])
+
+    if mode == "real-EE":
+        left_pos = root_pos + root_rot.apply(left_local_pos)
+        right_pos = root_pos + root_rot.apply(right_local_pos)
+    elif mode == "real-EE-rot":
+        left_pos = xqy.hand_base_pos(t, "left")
+        right_pos = xqy.hand_base_pos(t, "right")
+    else:
+        raise ValueError(mode)
+
+    return left_pos, left_rot.as_quat(), right_pos, right_rot.as_quat()
 
 
 def xqy_wrist_pose(xqy: XQYAccess, mode: str, t: int, xqy3_wrist_rot_frame: str):
@@ -373,6 +487,20 @@ def xqy_wrist_pose(xqy: XQYAccess, mode: str, t: int, xqy3_wrist_rot_frame: str)
         right_pos = xqy.direct_wrist_pos(t, "right")
         left_quat = xqy.direct_wrist_quat(t, "left", xqy3_wrist_rot_frame)
         right_quat = xqy.direct_wrist_quat(t, "right", xqy3_wrist_rot_frame)
+    elif mode == "XQY4":
+        left_pos = xqy.direct_wrist_pos(t, "left")
+        right_pos = xqy.direct_wrist_pos(t, "right")
+        left_base = R.from_quat(xqy.direct_wrist_quat(t, "left", xqy3_wrist_rot_frame))
+        right_base = R.from_quat(xqy.direct_wrist_quat(t, "right", xqy3_wrist_rot_frame))
+        left_quat = (XQY4_GLOBAL_WRIST_CORRECTION["left"] * left_base).as_quat()
+        right_quat = (XQY4_GLOBAL_WRIST_CORRECTION["right"] * right_base).as_quat()
+    elif mode == "XQY5":
+        left_pos = xqy.direct_wrist_pos(t, "left")
+        right_pos = xqy.direct_wrist_pos(t, "right")
+        left_base = R.from_quat(xqy.direct_wrist_quat(t, "left", xqy3_wrist_rot_frame))
+        right_base = R.from_quat(xqy.direct_wrist_quat(t, "right", xqy3_wrist_rot_frame))
+        left_quat = (XQY5_GLOBAL_WRIST_CORRECTION["left"] * left_base).as_quat()
+        right_quat = (XQY5_GLOBAL_WRIST_CORRECTION["right"] * right_base).as_quat()
     else:
         raise ValueError(mode)
     return left_pos, left_quat, right_pos, right_quat
@@ -454,6 +582,29 @@ def transform_finger_tips(
     return (wrist_rot.T @ desired_world.T).T.astype(np.float32)
 
 
+def align_finger_tips_to_target_wrist(
+    tips_source_wrist: np.ndarray,
+    source_pos: np.ndarray,
+    source_quat: np.ndarray,
+    target_pos: np.ndarray,
+    target_quat: np.ndarray,
+) -> np.ndarray:
+    source_rot = R.from_quat(source_quat)
+    target_rot = R.from_quat(target_quat)
+    tips_world = source_pos[None, :] + source_rot.apply(np.asarray(tips_source_wrist, dtype=np.float64))
+    tips_target = target_rot.inv().apply(tips_world - target_pos[None, :])
+    return tips_target.astype(np.float32)
+
+
+def world_finger_tips_to_wrist_local(
+    tips_world: np.ndarray,
+    wrist_pos: np.ndarray,
+    wrist_quat: np.ndarray,
+) -> np.ndarray:
+    wrist_rot = R.from_quat(wrist_quat)
+    return wrist_rot.inv().apply(np.asarray(tips_world, dtype=np.float64) - wrist_pos[None, :]).astype(np.float32)
+
+
 def task_description(ep_meta: pd.Series) -> str:
     tasks = ep_meta.get("tasks", "")
     if isinstance(tasks, np.ndarray):
@@ -466,7 +617,23 @@ def task_description(ep_meta: pd.Series) -> str:
 def parse_args():
     parser = argparse.ArgumentParser(description="Convert UnifoLM WBT data to human_policy HDF5.")
     parser.add_argument("--dataset", default=DEFAULT_DATASET, help="LeRobot dataset folder")
-    parser.add_argument("--mode", required=True, choices=["EE", "XQY1", "XQY2", "XQY3", "XQY_PH2D"])
+    parser.add_argument(
+        "--mode",
+        required=True,
+        choices=[
+            "EE",
+            "EE_V1",
+            "EE_V2",
+            "real-EE",
+            "real-EE-rot",
+            "XQY1",
+            "XQY2",
+            "XQY3",
+            "XQY4",
+            "XQY5",
+            "XQY_PH2D",
+        ],
+    )
     parser.add_argument("--finger-dir", default=None, help="default: <dataset>/finger_keypoints")
     parser.add_argument("--xqy-dir", default=DEFAULT_XQY_DIR)
     parser.add_argument("--xqy-prefix", default=None, help="default: basename(dataset)")
@@ -486,6 +653,15 @@ def parse_args():
     parser.add_argument("--xqy3-wrist-rot-frame", default="raw",
                         choices=["yaw_link_aligned", "raw"],
                         help="how to interpret left/right_wrist_rot in XQY3 (default: raw hand-base-aligned quaternion)")
+    parser.add_argument(
+        "--align-finger-frame",
+        default="none",
+        choices=["none", "xqy3_raw"],
+        help=(
+            "optionally reinterpret FK fingertips from an explicit source wrist frame "
+            "into the current mode wrist frame before packing them"
+        ),
+    )
     parser.add_argument("--no-images", action="store_true", help="write zero image placeholders")
     parser.add_argument("--image-height", type=int, default=None)
     parser.add_argument("--image-width", type=int, default=None)
@@ -529,8 +705,16 @@ def main():
     print(f"finger_dir: {finger_dir}")
     print(f"xqy_prefix: {xqy_prefix}")
     print(f"head_link: {args.head_link}")
-    if args.mode == "EE":
-        print("ee_position_frame: world")
+    print(f"align_finger_frame: {args.align_finger_frame}")
+    if args.mode in ("EE", "EE_V1", "EE_V2"):
+        print("ee_wrist_position_source: L/R_hand_base_link")
+        print("ee_wrist_rotation_source: observation.state.ee_state")
+    elif args.mode == "real-EE":
+        print("ee_wrist_position_source: robot_q_current_root * observation.state.ee_state")
+        print("ee_wrist_rotation_source: robot_q_current_root * observation.state.ee_state")
+    elif args.mode == "real-EE-rot":
+        print("ee_wrist_position_source: L/R_hand_base_link")
+        print("ee_wrist_rotation_source: robot_q_current_root * observation.state.ee_state")
     print(f"out_dir: {out_dir}")
     print(f"video keys: {left_video_key}, {right_video_key}")
     print(f"episodes: {len(episode_ids)}")
@@ -548,8 +732,9 @@ def main():
 
         with open(os.path.join(finger_dir, f"ep_{ep_idx:04d}.pkl"), "rb") as f:
             finger = pickle.load(f)
-        if finger.get("finger_frame") != "wrist":
-            raise ValueError(f"Expected finger_frame='wrist' for ep {ep_idx}, got {finger.get('finger_frame')!r}")
+        finger_frame = finger.get("finger_frame")
+        if finger_frame not in ("wrist", "world"):
+            raise ValueError(f"Expected finger_frame='wrist' or 'world' for ep {ep_idx}, got {finger_frame!r}")
 
         with open(xqy_path_for_episode(xqy_dir, xqy_prefix, ep_idx), "rb") as f:
             xqy_data = pickle.load(f)
@@ -560,22 +745,28 @@ def main():
         for t in range(t_count):
             head_pos, head_quat = xqy.head(t)
             ee = np.asarray(ep_df.at[t, "observation.state.ee_state"], dtype=np.float64)
-            if args.mode == "EE":
-                left_pos, left_quat, right_pos, right_quat = ee_wrist_pose(ee)
+            robot_q_raw = np.asarray(ep_df.at[t, "observation.state.robot_q_current"], dtype=np.float64)
+            if args.mode in ("EE", "EE_V1", "EE_V2"):
+                left_pos, left_quat, right_pos, right_quat = ee_wrist_pose(ee, xqy, t, args.mode)
+            elif args.mode in ("real-EE", "real-EE-rot"):
+                left_pos, left_quat, right_pos, right_quat = real_ee_wrist_pose(
+                    ee, robot_q_raw, xqy, t, args.mode
+                )
             else:
                 left_pos, left_quat, right_pos, right_quat = xqy_wrist_pose(
                     xqy, args.mode, t, args.xqy3_wrist_rot_frame
                 )
 
-            robot_q = None if args.no_qpos else ep_df.at[t, "observation.state.robot_q_current"]
-            states[t] = build_state(
-                head_pos=head_pos,
-                head_quat=head_quat,
-                left_pos=left_pos,
-                left_quat=left_quat,
-                right_pos=right_pos,
-                right_quat=right_quat,
-                left_tips_wrist=transform_finger_tips(
+            robot_q = None if args.no_qpos else robot_q_raw
+            if finger_frame == "world":
+                left_tips_wrist = world_finger_tips_to_wrist_local(
+                    finger["finger_pos_left"][t], left_pos, left_quat
+                )
+                right_tips_wrist = world_finger_tips_to_wrist_local(
+                    finger["finger_pos_right"][t], right_pos, right_quat
+                )
+            else:
+                left_tips_wrist = transform_finger_tips(
                     finger["finger_pos_left"][t],
                     "left",
                     args.mode,
@@ -583,8 +774,8 @@ def main():
                     t,
                     t_count,
                     args.ph2d_reference,
-                ),
-                right_tips_wrist=transform_finger_tips(
+                )
+                right_tips_wrist = transform_finger_tips(
                     finger["finger_pos_right"][t],
                     "right",
                     args.mode,
@@ -592,7 +783,27 @@ def main():
                     t,
                     t_count,
                     args.ph2d_reference,
-                ),
+                )
+            if args.align_finger_frame == "xqy3_raw":
+                left_source_pos = xqy.direct_wrist_pos(t, "left")
+                right_source_pos = xqy.direct_wrist_pos(t, "right")
+                left_source_quat = xqy.direct_wrist_quat(t, "left", "raw")
+                right_source_quat = xqy.direct_wrist_quat(t, "right", "raw")
+                left_tips_wrist = align_finger_tips_to_target_wrist(
+                    left_tips_wrist, left_source_pos, left_source_quat, left_pos, left_quat
+                )
+                right_tips_wrist = align_finger_tips_to_target_wrist(
+                    right_tips_wrist, right_source_pos, right_source_quat, right_pos, right_quat
+                )
+            states[t] = build_state(
+                head_pos=head_pos,
+                head_quat=head_quat,
+                left_pos=left_pos,
+                left_quat=left_quat,
+                right_pos=right_pos,
+                right_quat=right_quat,
+                left_tips_wrist=left_tips_wrist,
+                right_tips_wrist=right_tips_wrist,
                 robot_q=robot_q,
             )
 
@@ -614,6 +825,22 @@ def main():
             write_jpeg_dataset(hf, "observation.image.right", right_frames, args.jpeg_quality)
             hf.attrs["sim"] = np.bool_(False)
             hf.attrs["embodiment"] = f"human_mocap_{args.mode.lower()}"
+            hf.attrs["wrist_mode"] = args.mode
+            hf.attrs["xqy3_wrist_rot_frame"] = args.xqy3_wrist_rot_frame
+            hf.attrs["align_finger_frame"] = args.align_finger_frame
+            hf.attrs["input_finger_frame"] = finger_frame
+            if args.mode == "XQY4":
+                hf.attrs["wrist_correction"] = "fixed_eval_hand_orientation_left_multiply"
+            elif args.mode == "XQY5":
+                hf.attrs["wrist_correction"] = "fixed_2_to_4s_average_target_left_multiply"
+            elif args.mode == "EE_V1":
+                hf.attrs["wrist_correction"] = "ee_v1_pure_90deg_left_multiply"
+            elif args.mode == "EE_V2":
+                hf.attrs["wrist_correction"] = "ee_v2_simple_left_multiply"
+            elif args.mode == "real-EE":
+                hf.attrs["wrist_correction"] = "root_pose_composed_ee_position_and_rotation"
+            elif args.mode == "real-EE-rot":
+                hf.attrs["wrist_correction"] = "root_pose_composed_ee_rotation_only"
             hf.attrs["description"] = task_description(ep_meta)
 
         print(f"  ep {ep_idx:04d}: T={t_count} -> {out_path}")

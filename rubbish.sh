@@ -1,23 +1,233 @@
+/root/miniconda3/envs/human_policy/bin/python \
+    /root/shengyin/human_policy/compute_finger_keypoints.py \
+    --dataset /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/G1_WB_Dex5_Collect_Clothes \
+    --max-episodes 5
+
+rsync -avz --progress -e "ssh -p 9481" \
+  /home/ubuntu/DATA1/shengyin/humanoid/Maniptrans_YS/maniptrans_envs/assets/inspire_hand \
+  root@111.2.199.31:/root/shengyin/DATASETS/assets/
+
+### 0505 重新开始！
+
+/root/miniconda3/envs/human_policy/bin/python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_XQY3/0.hdf5 --max_seconds 5 --fps 20 --full_hand --save_html /root/shengyin/hand_vis_XQY4_first5s.html
+
+
+## 0510
+
+### 0510 Inspire批量跑
+# 最终推荐两步：
+# 1) hand_state -> wrist-local fingertip pkl
+#    Inspire 使用 reverse + thumb swap:
+#      [thumb_open_close, thumb_lateral_tilt] -> [thumb_yaw, thumb_pitch]
+# 2) XQY3 raw wrist pose + wrist-local fingertips -> human_policy hdf5
+
+PY=/root/miniconda3/envs/human_policy/bin/python
+
+INSPIRE_DATASETS=(
+  /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/G1_WB_Dex5_Collect_Clothes
+  /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Pickup_Pillow_MainCamOnly/G1_WB_Dex5_Pickup_Pillow
+  /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Put_Clothes_Into_Basket
+  /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Put_Clothes_into_Washing_Machine
+  /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Put_Clothes_into_Washing_Machine_MainCamOnly/G1_WB_Dex5_Put_Clothes_into_Washing_Machine
+)
+
+for DATASET in "${INSPIRE_DATASETS[@]}"; do
+  FINGER_DIR="${DATASET}/finger_keypoints_reverse_thumb_swap"
+  HDF5_DIR="${DATASET}/hdf5_XQY3_reverse_thumb_swap"
+
+  "$PY" /root/shengyin/human_policy/compute_finger_keypoints.py \
+    --dataset "$DATASET" \
+    --hand-type inspire \
+    --reverse \
+    --inspire-reverse-mode fingers_thumb \
+    --inspire-thumb-mode swap \
+    --inspire-thumb-yaw-sign normal \
+    --out-dir "$FINGER_DIR"
+
+  "$PY" /root/shengyin/human_policy/convert_unifolm_to_hdf5.py \
+    --dataset "$DATASET" \
+    --mode XQY3 \
+    --xqy3-wrist-rot-frame raw \
+    --align-finger-frame none \
+    --finger-dir "$FINGER_DIR" \
+    --out-dir "$HDF5_DIR" \
+    --overwrite
+done
+
+### 0510 Brainco批量跑
+# 最终推荐两步：
+# 1) hand_state -> wrist-local fingertip pkl
+#    Brainco/Revo2 standalone URDF 需要 local frame correction:
+#      brainco_rx90_ry180
+# 2) XQY3 raw wrist pose + corrected wrist-local fingertips -> human_policy hdf5
+
+BRAINCO_DATASETS=(
+  /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher
+  /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Make_The_Bed
+  /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Pickup_Pillow
+)
+
+for DATASET in "${BRAINCO_DATASETS[@]}"; do
+  FINGER_DIR="${DATASET}/finger_keypoints_rx90_ry180"
+  HDF5_DIR="${DATASET}/hdf5_XQY3_rx90_ry180"
+
+  "$PY" /root/shengyin/human_policy/compute_finger_keypoints.py \
+    --dataset "$DATASET" \
+    --hand-type brainco \
+    --local-frame-correction brainco_rx90_ry180 \
+    --out-dir "$FINGER_DIR"
+
+  "$PY" /root/shengyin/human_policy/convert_unifolm_to_hdf5.py \
+    --dataset "$DATASET" \
+    --mode XQY3 \
+    --xqy3-wrist-rot-frame raw \
+    --align-finger-frame none \
+    --finger-dir "$FINGER_DIR" \
+    --out-dir "$HDF5_DIR" \
+    --overwrite
+done
+
+
+
+
+python3 human_policy/compute_finger_keypoints.py \
+  --dataset DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/G1_WB_Dex5_Collect_Clothes \
+  --hand-type inspire \
+  --zero-hand \
+  --out-dir DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/G1_WB_Dex5_Collect_Clothes/finger_keypoints_zero
+
+
+/root/miniconda3/envs/human_policy/bin/python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/G1_WB_Dex5_Collect_Clothes/hdf5_XQY3_zero_hand/0.hdf5 --max_seconds 30 --fps 20 --full_hand --save_html /root/shengyin/hdf5_XQY3_zero_hand_first5s.html
+
+python3 human_policy/compute_finger_keypoints.py \
+  --dataset /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher \
+  --hand-type brainco \
+  --zero-hand \
+  --out-dir DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/finger_keypoints_zero
+
+python3 human_policy/convert_unifolm_to_hdf5.py \
+  --dataset /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher \
+  --mode XQY3 \
+  --xqy3-wrist-rot-frame raw \
+  --finger-dir DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/finger_keypoints_zero \
+  --out-dir DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_XQY3_zero_hand \
+  --max-episodes 1 
+
+
+/root/miniconda3/envs/human_policy/bin/python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_XQY3_zero_hand/0.hdf5 --max_seconds 30 --fps 20 --full_hand --save_html /root/shengyin/hdf5_XQY3_zero_brainco_hand_first5s.html
+
+## EE（手腕位置XQY + 旋转EE-state）
+
+/root/miniconda3/envs/human_policy/bin/python human_policy/convert_unifolm_to_hdf5.py     --dataset /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher     --mode EE     --max-episodes 1 --overwrite
+
+/root/miniconda3/envs/human_policy/bin/python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_EE/0.hdf5 --max_seconds 15 --fps 20 --full_hand --save_html /root/shengyin/hand_vis_EE_first15s.html
+
+# inspire + DEX5
+/root/miniconda3/envs/human_policy/bin/python \
+    /root/shengyin/human_policy/compute_finger_keypoints.py \
+    --dataset /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/G1_WB_Dex5_Collect_Clothes \
+    --hand-type inspire \
+    --out-dir /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/G1_WB_Dex5_Collect_Clothes/finger_keypoints_reverse \
+    --max-episodes 1 \
+    -reverse
+
+  /root/miniconda3/envs/human_policy/bin/python \
+    /root/shengyin/human_policy/convert_unifolm_to_hdf5.py \
+    --dataset /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/G1_WB_Dex5_Collect_Clothes \
+    --finger-dir /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/G1_WB_Dex5_Collect_Clothes/finger_keypoints_reverse \
+    --mode EE \
+    --max-episodes 1 \
+    --out-dir /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/G1_WB_Dex5_Collect_Clothes/hdf5_EE_reverse \
+    --overwrite
+
+  /root/miniconda3/envs/human_policy/bin/python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/G1_WB_Dex5_Collect_Clothes/hdf5_EE_reverse/0.hdf5 --max_seconds 15 --fps 20 --full_hand --save_html /root/shengyin/reverse_inspire_hand_vis_EE_first15s.html
+
+/root/miniconda3/envs/human_policy/bin/python human_policy/convert_unifolm_to_hdf5.py     --dataset /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/G1_WB_Dex5_Collect_Clothes     --mode EE     --max-episodes 1 --overwrite
+
+/root/miniconda3/envs/human_policy/bin/python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/G1_WB_Dex5_Collect_Clothes/hdf5_EE/0.hdf5 --max_seconds 15 --fps 20 --full_hand --save_html /root/shengyin/inspire_hand_vis_EE_first15s.html
+
+# inspire
+
+/root/miniconda3/envs/human_policy/bin/python \
+    /root/shengyin/human_policy/compute_finger_keypoints.py \
+    --dataset /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Put_Clothes_Into_Basket \
+    --hand-type inspire \
+    --out-dir /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Put_Clothes_Into_Basket/finger_keypoints_reverse \
+    --max-episodes 1 \
+    -reverse
+
+  /root/miniconda3/envs/human_policy/bin/python \
+    /root/shengyin/human_policy/convert_unifolm_to_hdf5.py \
+    --dataset /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Put_Clothes_Into_Basket \
+    --finger-dir /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Put_Clothes_Into_Basket/finger_keypoints_reverse \
+    --mode EE \
+    --max-episodes 1 \
+    --out-dir /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Put_Clothes_Into_Basket/hdf5_EE_reverse \
+    --overwrite
+
+  /root/miniconda3/envs/human_policy/bin/python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Put_Clothes_Into_Basket/hdf5_EE_reverse/0.hdf5 --max_seconds 15 --fps 20 --full_hand --save_html /root/shengyin/reverse_real_inspire_hand_vis_EE_first15s.html
+
+/root/miniconda3/envs/human_policy/bin/python \
+    /root/shengyin/human_policy/compute_finger_keypoints.py \
+    --dataset /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Put_Clothes_Into_Basket \
+    --max-episodes 5
+
+## Brainco Make Bed
+
+/root/miniconda3/envs/human_policy/bin/python \
+    /root/shengyin/human_policy/compute_finger_keypoints.py \
+    --dataset /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Make_The_Bed \
+    --out-dir /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Make_The_Bed/finger_keypoints_reverse \
+    --max-episodes 1 \
+    -reverse
+
+  /root/miniconda3/envs/human_policy/bin/python \
+    /root/shengyin/human_policy/convert_unifolm_to_hdf5.py \
+    --dataset /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Make_The_Bed \
+    --finger-dir /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Make_The_Bed/finger_keypoints_reverse \
+    --mode EE \
+    --max-episodes 1 \
+    --out-dir /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Make_The_Bed/hdf5_EE_reverse \
+    --overwrite
+
+  /root/miniconda3/envs/human_policy/bin/python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Make_The_Bed/hdf5_EE_reverse/0.hdf5 --max_seconds 15 --fps 20 --full_hand --save_html /root/shengyin/reverse_real_bRAINCO_make_bed_hand_vis_EE_first15s.html
+
+/root/miniconda3/envs/human_policy/bin/python human_policy/convert_unifolm_to_hdf5.py     --dataset /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Make_The_Bed     --mode EE     --max-episodes 1 --overwrite
+
+/root/miniconda3/envs/human_policy/bin/python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Put_Clothes_Into_Basket/hdf5_EE/0.hdf5 --max_seconds 15 --fps 20 --save_html /root/shengyin/real_inspire_hand_vis_EE_first15s.html
+
+## 临时的验证
+/root/miniconda3/envs/human_policy/bin/python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_EE_V1_eval_tmp/0.hdf5 --max_seconds 15 --fps 20 --full_hand --save_html /root/shengyin/inspire_hand_vis_EEV1_first15s.html
+
+/root/miniconda3/envs/human_policy/bin/python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_EE_V2_eval_tmp/0.hdf5 --max_seconds 15 --fps 20 --full_hand --save_html /root/shengyin/inspire_hand_vis_EEV2_first15s.html
+
+
 python data/plot_keypoints.py     --file DATASETS/UnifoLM_WBT/human_policy_rel/0.hdf5 --full_hand     --save_mp4 out_unitree_rel00.mp4
 python data/plot_keypoints.py     --file DATASETS/UnifoLM_WBT/human_policy_rel/10.hdf5 --full_hand     --save_mp4 out_unitree_rel10.mp4
 
+python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/PH2D/903-picking-val-2024_11_18-18_58_16/processed_episode_9.hdf5 --full_hand --save_mp4 out_unitree_EE_V1.mp4
 
+python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_EE/0.hdf5 --full_hand --save_mp4 out_unitree_EE_V1.mp4
 
-python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_EE/0.hdf5 --full_hand --save_mp4 out_unitree_EE_0.mp4
-
-python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_XQY1/0.hdf5 --full_hand --save_mp4 out_unitree_XQY1_0.mp4
+python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_XQY1/0.hdf5 --full_hand --save_mp4 out_unitree_XQY1_V1.mp4
 
 
 python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_XQY2/0.hdf5 --full_hand --save_mp4 out_unitree_XQY2_V1.mp4
 
-python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_XQY_PH2D/0.hdf5 --full_hand --save_mp4 out_unitree_XQY_PH2D.mp4
 
-python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_XQY3/0.hdf5 --full_hand --save_mp4 out_unitree_XQY3_0.mp4
+
+python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_XQY3/0.hdf5 --full_hand --save_mp4 out_unitree_XQY3_V1.mp4
+
+python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_XQY4/0.hdf5 --full_hand --save_mp4 out_unitree_XQY4_yaw_align.mp4 --max_seconds 5
+
+python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_XQY4/1.hdf5 --full_hand --save_mp4 out_unitree_XQY4_yaw_align.mp4 --max_seconds 5
 
 python /root/shengyin/human_policy/data/plot_keypoints.py     --file /root/shengyin/DATASETS/PH2D/402-pick_on_color_pad_right-2025_01_09-16_36_15/processed_episode_1.hdf5 --full_hand     --save_mp4 out_PH2D_new_axis.mp4
 
 python /root/shengyin/human_policy/convert_to_hdf5.py --mode real --max-episodes 13
 
+python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_XQY3/2.hdf5 --full_hand --save_mp4 out_unitree_XQY3_raw.mp4 --max_seconds 5
+python /root/shengyin/human_policy/data/plot_keypoints.py --file /root/shengyin/DATASETS/UnifoLM_WBT/G1_WBT_Brainco_Collect_Plates_Into_Dishwasher/hdf5_XQY3/3.hdf5 --full_hand --save_mp4 out_unitree_XQY3_yaw_link.mp4 --max_seconds 5
 
 
 python data/plot_keypoints.py     --file /DATASETS/UnifoLM_WBT/G1_WBT_Inspire_Collect_Clothes_MainCamOnly/human_policy/0.hdf5 --full_hand     --save_mp4 out_unitree_inspirw00.mp4

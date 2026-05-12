@@ -30,13 +30,16 @@ def _expand_hand_25_from_tips(hand_kpts_25: np.ndarray) -> np.ndarray:
     return out
 
 
-def load_cmd_tuple_hdf5(path, *, full_hand=False):
+def load_cmd_tuple_hdf5(path, *, full_hand=False, max_frames=None):
     data_list = []
 
     with h5py.File(path, 'r') as file:
         # Processed HDF5
         assert "/action" in file
-        for i in range(file["/action"].shape[0]):
+        frame_count = file["/action"].shape[0]
+        if max_frames is not None:
+            frame_count = min(frame_count, int(max_frames))
+        for i in range(frame_count):
             cur_cmd_dict = get_eef_kpts_from_prediction(file["/action"][i])
             # Format post-processed data to match expected structure
             head_mat = cur_cmd_dict['head_mat']
@@ -284,9 +287,9 @@ def evaluate_mpjpe(gt_hdf5_path: str, pred_hdf5_path: str, save_json_path: str |
 
     return metrics
 
-def main(input_file, *, full_hand=False):
+def main(input_file, *, full_hand=False, max_frames=None):
     # Processed HDF5
-    datas = load_cmd_tuple_hdf5(input_file, full_hand=full_hand)
+    datas = load_cmd_tuple_hdf5(input_file, full_hand=full_hand, max_frames=max_frames)
     
     # Prepare data for animation
     frames = []
@@ -660,12 +663,18 @@ if __name__ == "__main__":
     parser.add_argument('--save_html', type=str, default=None, help='If set, save the interactive visualization to an HTML file')
     parser.add_argument('--save_mp4', type=str, default=None, help='If set, export the animation to an MP4 file (requires kaleido + ffmpeg)')
     parser.add_argument('--fps', type=int, default=20, help='FPS for MP4 export')
+    parser.add_argument('--max_seconds', type=float, default=None, help='Limit visualization/export to the first N seconds, using --fps to convert seconds to frames')
     parser.add_argument('--width', type=int, default=960, help='Frame width for MP4 export')
     parser.add_argument('--height', type=int, default=720, help='Frame height for MP4 export')
     parser.add_argument('--eval_mpjpe', action='store_true', help='Evaluate MPJPE between prediction and ground-truth episode actions')
     parser.add_argument('--gt_file', type=str, default=None, help='Ground-truth episode file for MPJPE. Default: --predict_episode')
     parser.add_argument('--metrics_out', type=str, default=None, help='Optional output JSON path for metrics')
     args = parser.parse_args()
+    max_frames = None
+    if args.max_seconds is not None:
+        if args.max_seconds <= 0:
+            raise ValueError("--max_seconds must be positive")
+        max_frames = int(np.ceil(args.max_seconds * args.fps))
 
     if args.predict_episode is not None:
         if args.ckpt is None:
@@ -680,7 +689,7 @@ if __name__ == "__main__":
             max_steps=args.max_steps,
             device=args.device,
         )
-        fig, frames = main(args.out, full_hand=args.full_hand)
+        fig, frames = main(args.out, full_hand=args.full_hand, max_frames=max_frames)
         if args.eval_mpjpe:
             gt_file = args.gt_file if args.gt_file is not None else args.predict_episode
             metrics = evaluate_mpjpe(gt_file, args.out, save_json_path=args.metrics_out)
@@ -688,7 +697,7 @@ if __name__ == "__main__":
             for k, v in metrics.items():
                 print(f"{k}: {v}")
     else:
-        fig, frames = main(args.file, full_hand=args.full_hand)
+        fig, frames = main(args.file, full_hand=args.full_hand, max_frames=max_frames)
         if args.eval_mpjpe:
             if args.gt_file is None:
                 raise ValueError("--gt_file is required when using --eval_mpjpe without --predict_episode")
