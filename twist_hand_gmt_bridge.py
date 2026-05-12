@@ -15,10 +15,29 @@ _HP_ROOT = Path(__file__).resolve().parent
 _TWIST_ROOT = _HP_ROOT.parent / "TWIST"
 _HDT_DIR = _HP_ROOT / "hdt"
 _DETR_DIR = _HDT_DIR / "detr"
+_INSPIRE_ASSET_ROOT = _TWIST_ROOT / "assets" / "inspire_hand"
 
 for _p in (_HP_ROOT, _HDT_DIR, _DETR_DIR, _TWIST_ROOT / "legged_gym", _TWIST_ROOT / "rsl_rl", _TWIST_ROOT / "pose"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
+
+_INSPIRE_DOF_NAMES = [
+    "index_proximal_joint",
+    "index_intermediate_joint",
+    "middle_proximal_joint",
+    "middle_intermediate_joint",
+    "pinky_proximal_joint",
+    "pinky_intermediate_joint",
+    "ring_proximal_joint",
+    "ring_intermediate_joint",
+    "thumb_proximal_yaw_joint",
+    "thumb_proximal_pitch_joint",
+    "thumb_intermediate_joint",
+    "thumb_distal_joint",
+]
+_INSPIRE_TIP_NAMES = ["thumb_tip", "index_tip", "middle_tip", "ring_tip", "pinky_tip"]
+_INSPIRE_DOF_LOWER = np.array([0., 0., 0., 0., 0., 0., 0., 0., -0.1, 0., 0., 0.], dtype=np.float32)
+_INSPIRE_DOF_UPPER = np.array([1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.3, 0.5, 0.8, 1.2], dtype=np.float32)
 
 
 def _mat_to_quat_xyzw(mat: np.ndarray) -> np.ndarray:
@@ -45,6 +64,13 @@ def _quat_ang_vel_xyzw(quat: np.ndarray, fps: float) -> np.ndarray:
     rv = r.as_rotvec()
     vel = np.gradient(rv, 1.0 / fps, axis=0)
     return vel.astype(np.float32)
+
+
+def _gradient_or_zeros(values: np.ndarray, fps: float) -> np.ndarray:
+    values = np.asarray(values, dtype=np.float32)
+    if len(values) <= 1:
+        return np.zeros_like(values, dtype=np.float32)
+    return np.gradient(values, 1.0 / fps, axis=0).astype(np.float32)
 
 
 def _interp_np(values: np.ndarray, frame_f: np.ndarray) -> np.ndarray:
@@ -94,8 +120,8 @@ def _actions_to_hand_refs(actions: np.ndarray, fps: float) -> dict[str, np.ndarr
         "rh_root_pos": r_root_pos,
         "rh_root_rot": r_root_rot.astype(np.float32),
         "rh_tip_world": r_tip_world.astype(np.float32),
-        "lh_root_vel": np.gradient(l_root_pos, 1.0 / fps, axis=0).astype(np.float32),
-        "rh_root_vel": np.gradient(r_root_pos, 1.0 / fps, axis=0).astype(np.float32),
+        "lh_root_vel": _gradient_or_zeros(l_root_pos, fps),
+        "rh_root_vel": _gradient_or_zeros(r_root_pos, fps),
         "lh_root_ang_vel": _quat_ang_vel_xyzw(l_root_rot, fps),
         "rh_root_ang_vel": _quat_ang_vel_xyzw(r_root_rot, fps),
         "length_s": np.float32(max(actions.shape[0] - 1, 1) / fps),
@@ -117,6 +143,211 @@ def _rot6d_to_mat_np(rot6d: np.ndarray) -> np.ndarray:
     b2 = _normalize(a2 - np.dot(b1, a2) * b1)
     b3 = np.cross(b1, b2)
     return np.stack([b1, b2, b3], axis=1).astype(np.float32)
+
+
+def _inspire_urdf(side: str) -> Path:
+    if side == "rh":
+        return _INSPIRE_ASSET_ROOT / "inspire_hand_right.urdf"
+    if side == "lh":
+        return _INSPIRE_ASSET_ROOT / "inspire_hand_left.urdf"
+    raise ValueError(f"Unknown hand side: {side}")
+
+
+def _side_prefix(side: str) -> str:
+    return "R_" if side == "rh" else "L_"
+
+
+def _tips_world_to_local(root_pos: np.ndarray, root_rot_xyzw: np.ndarray, tips_world: np.ndarray) -> np.ndarray:
+    from scipy.spatial.transform import Rotation
+
+    root_m = Rotation.from_quat(root_rot_xyzw).as_matrix().astype(np.float32)
+    return np.einsum("tji,tkj->tki", root_m, tips_world - root_pos[:, None, :]).astype(np.float32)
+
+
+class _PytorchKinematicsInspireIK:
+    def __init__(self, side: str, *, device: str, lr: float, iters: int, smooth_w: float, reg_w: float):
+        import torch
+        import pytorch_kinematics as pk
+
+        self.torch = torch
+        self.side = side
+        self.prefix = _side_prefix(side)
+        self.device = torch.device(device if device.startswith("cuda") and torch.cuda.is_available() else "cpu")
+        self.lr = lr
+        self.iters = iters
+        self.smooth_w = smooth_w
+        self.reg_w = reg_w
+        self.chain = pk.build_chain_from_urdf(_inspire_urdf(side).read_text())
+        self.chain = self.chain.to(dtype=torch.float32, device=self.device)
+        pk_names = [n.split("_", 1)[1] for n in self.chain.get_joint_parameter_names()]
+        self.twist_to_pk = torch.tensor([_INSPIRE_DOF_NAMES.index(n) for n in pk_names], device=self.device, dtype=torch.long)
+        self.lower = torch.as_tensor(_INSPIRE_DOF_LOWER, device=self.device, dtype=torch.float32)
+        self.upper = torch.as_tensor(_INSPIRE_DOF_UPPER, device=self.device, dtype=torch.float32)
+        self.tip_names = [self.prefix + name for name in _INSPIRE_TIP_NAMES]
+
+    def _fk_tips(self, q_twist):
+        q_pk = q_twist[:, self.twist_to_pk]
+        ret = self.chain.forward_kinematics(q_pk)
+        return self.torch.stack([ret[name].get_matrix()[:, :3, 3] for name in self.tip_names], dim=1)
+
+    def solve(self, target_local: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        torch = self.torch
+        target = torch.as_tensor(target_local, device=self.device, dtype=torch.float32)
+        q_prev = torch.zeros((1, len(_INSPIRE_DOF_NAMES)), device=self.device, dtype=torch.float32)
+        out = []
+        errs = []
+        for t in range(target.shape[0]):
+            q = q_prev.detach().clone().requires_grad_(True)
+            opt = torch.optim.Adam([q], lr=self.lr)
+            q_ref = q_prev.detach()
+            for _ in range(self.iters):
+                q_clamped = torch.max(torch.min(q, self.upper), self.lower)
+                pred = self._fk_tips(q_clamped)
+                tip_loss = torch.mean(torch.linalg.norm(pred[0] - target[t], dim=-1))
+                smooth_loss = torch.mean((q_clamped - q_ref) ** 2)
+                reg_loss = torch.mean(q_clamped ** 2)
+                loss = tip_loss + self.smooth_w * smooth_loss + self.reg_w * reg_loss
+                opt.zero_grad()
+                loss.backward()
+                opt.step()
+                with torch.no_grad():
+                    q.clamp_(self.lower, self.upper)
+            q_prev = torch.max(torch.min(q.detach(), self.upper), self.lower)
+            err = torch.mean(torch.linalg.norm(self._fk_tips(q_prev)[0] - target[t], dim=-1))
+            out.append(q_prev[0].detach().cpu().numpy().astype(np.float32))
+            errs.append(float(err.detach().cpu()))
+        return np.stack(out, axis=0), np.asarray(errs, dtype=np.float32)
+
+
+class _PinocchioInspireIK:
+    def __init__(self, side: str, *, iters: int, damping: float, step: float, smooth_w: float, reg_w: float):
+        import pinocchio as pin
+
+        self.pin = pin
+        self.side = side
+        self.prefix = _side_prefix(side)
+        self.iters = iters
+        self.damping = damping
+        self.step = step
+        self.smooth_w = smooth_w
+        self.reg_w = reg_w
+        self.model = pin.buildModelFromUrdf(str(_inspire_urdf(side)))
+        self.data = self.model.createData()
+        self.tip_ids = [self.model.getFrameId(self.prefix + name) for name in _INSPIRE_TIP_NAMES]
+        self.lower = _INSPIRE_DOF_LOWER.astype(np.float64)
+        self.upper = _INSPIRE_DOF_UPPER.astype(np.float64)
+
+    def _fk_tips(self, q: np.ndarray) -> np.ndarray:
+        pin = self.pin
+        pin.framesForwardKinematics(self.model, self.data, q)
+        tips = []
+        for fid in self.tip_ids:
+            tips.append(self.data.oMf[fid].translation.copy())
+        return np.stack(tips, axis=0)
+
+    def _jacobian(self, q: np.ndarray) -> np.ndarray:
+        pin = self.pin
+        pin.forwardKinematics(self.model, self.data, q)
+        pin.updateFramePlacements(self.model, self.data)
+        rows = []
+        for fid in self.tip_ids:
+            jac = pin.computeFrameJacobian(
+                self.model,
+                self.data,
+                q,
+                fid,
+                pin.ReferenceFrame.LOCAL_WORLD_ALIGNED,
+            )
+            rows.append(jac[:3, :])
+        return np.concatenate(rows, axis=0)
+
+    def solve(self, target_local: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        targets = np.asarray(target_local, dtype=np.float64)
+        q_prev = np.zeros((len(_INSPIRE_DOF_NAMES),), dtype=np.float64)
+        out = []
+        errs = []
+        eye = np.eye(len(_INSPIRE_DOF_NAMES), dtype=np.float64)
+        for target in targets:
+            q = q_prev.copy()
+            for _ in range(self.iters):
+                pred = self._fk_tips(q)
+                err = (target - pred).reshape(-1)
+                jac = self._jacobian(q)
+                lhs = jac.T @ jac + (self.damping ** 2 + self.smooth_w + self.reg_w) * eye
+                rhs = jac.T @ err - self.smooth_w * (q - q_prev) - self.reg_w * q
+                dq = np.linalg.solve(lhs, rhs)
+                q = np.clip(q + self.step * dq, self.lower, self.upper)
+                if np.mean(np.linalg.norm((target - self._fk_tips(q)), axis=-1)) < 1e-4:
+                    break
+            q_prev = q
+            out.append(q.astype(np.float32))
+            errs.append(float(np.mean(np.linalg.norm(target - self._fk_tips(q), axis=-1))))
+        return np.stack(out, axis=0), np.asarray(errs, dtype=np.float32)
+
+
+def _resolve_ik_backend(requested: str) -> str:
+    if requested != "auto":
+        return requested
+    try:
+        import pytorch_kinematics  # noqa: F401
+        return "pytorch"
+    except Exception:
+        pass
+    try:
+        import pinocchio  # noqa: F401
+        return "pinocchio"
+    except Exception:
+        pass
+    raise RuntimeError("No IK backend available. Install pytorch_kinematics or pinocchio, or pass --ik-backend none.")
+
+
+def _add_ik_refs(refs: dict[str, np.ndarray], args) -> dict[str, np.ndarray]:
+    if args.ik_backend == "none":
+        return refs
+    if all(k in refs for k in ("rh_dof_pos", "lh_dof_pos", "rh_dof_vel", "lh_dof_vel")) and not args.force_recompute_ik:
+        print("[ik] using cached rh/lh dof refs from input refs")
+        return refs
+
+    backend = _resolve_ik_backend(args.ik_backend)
+    print(f"[ik] solving Inspire hand IK with backend={backend}")
+
+    def solve_side(side: str, ref_prefix: str):
+        targets = _tips_world_to_local(
+            refs[f"{ref_prefix}_root_pos"],
+            refs[f"{ref_prefix}_root_rot"],
+            refs[f"{ref_prefix}_tip_world"],
+        )
+        if backend == "pytorch":
+            solver = _PytorchKinematicsInspireIK(
+                side,
+                device=args.ik_device,
+                lr=args.ik_lr,
+                iters=args.ik_iters,
+                smooth_w=args.ik_smooth_weight,
+                reg_w=args.ik_reg_weight,
+            )
+        elif backend == "pinocchio":
+            solver = _PinocchioInspireIK(
+                side,
+                iters=args.ik_iters,
+                damping=args.ik_damping,
+                step=args.ik_step,
+                smooth_w=args.ik_smooth_weight,
+                reg_w=args.ik_reg_weight,
+            )
+        else:
+            raise ValueError(f"Unsupported IK backend: {backend}")
+        q, err = solver.solve(targets)
+        print(f"[ik] {ref_prefix}: mean_tip_err={err.mean():.5f}m  max_tip_err={err.max():.5f}m")
+        return q
+
+    refs = dict(refs)
+    refs["rh_dof_pos"] = solve_side("rh", "rh").astype(np.float32)
+    refs["lh_dof_pos"] = solve_side("lh", "lh").astype(np.float32)
+    refs["rh_dof_vel"] = _gradient_or_zeros(refs["rh_dof_pos"], float(refs["fps"]))
+    refs["lh_dof_vel"] = _gradient_or_zeros(refs["lh_dof_pos"], float(refs["fps"]))
+    refs["ik_backend"] = np.asarray(backend)
+    return refs
 
 
 # Isaac Gym add_lines has no line-width param; draw each segment with tiny
@@ -192,6 +423,8 @@ class HumanPolicyHandMotionLib:
             root_rot = _sample_quat_nearest(self.refs[f"{prefix}_root_rot"], frame_f)
             root_vel = _interp_np(self.refs[f"{prefix}_root_vel"], frame_f)
             root_ang_vel = _interp_np(self.refs[f"{prefix}_root_ang_vel"], frame_f)
+            dof_pos = _interp_np(self.refs[f"{prefix}_dof_pos"], frame_f) if f"{prefix}_dof_pos" in self.refs else zeros_dof
+            dof_vel = _interp_np(self.refs[f"{prefix}_dof_vel"], frame_f) if f"{prefix}_dof_vel" in self.refs else zeros_dof
 
             body_pos = np.repeat(root_pos[:, None, :], self.env.rh_body_states.shape[1], axis=1)
             body_rot = np.repeat(root_rot[:, None, :], self.env.rh_body_states.shape[1], axis=1)
@@ -208,8 +441,8 @@ class HumanPolicyHandMotionLib:
                 root_rot,
                 root_vel,
                 root_ang_vel,
-                zeros_dof,
-                zeros_dof,
+                dof_pos.astype(np.float32),
+                dof_vel.astype(np.float32),
                 body_pos.astype(np.float32),
                 body_rot.astype(np.float32),
                 body_vel,
@@ -509,10 +742,15 @@ def run(args) -> None:
     else:
         actions_128 = _load_or_predict_actions(args)
         refs = _actions_to_hand_refs(actions_128, fps=args.ref_fps)
-        if args.dump_ref_npz:
-            _save_refs_npz(args.dump_ref_npz, refs)
-            if args.skip_gmt:
-                return
+
+    if not args.gt_only:
+        refs = _add_ik_refs(refs, args)
+        if args.hand_control_mode == "ik" and ("rh_dof_pos" not in refs or "lh_dof_pos" not in refs):
+            raise ValueError("--hand-control-mode ik needs IK refs; use --ik-backend auto/pytorch/pinocchio or a --ref-npz with rh/lh_dof_pos.")
+    if args.dump_ref_npz:
+        _save_refs_npz(args.dump_ref_npz, refs)
+        if args.skip_gmt:
+            return
 
     # TWIST should use dependencies from the active TWIST environment. In
     # particular, do not let human_policy/pytorch3d shadow official PyTorch3D.
@@ -533,12 +771,33 @@ def run(args) -> None:
     motion_lib = HumanPolicyHandMotionLib(refs, device=args.gmt_device)
 
     original_load_motions = dexhand_mimic_mod.DexHandMimic._load_motions
+    original_reset_dofs = dexhand_mimic_mod.DexHandMimic._reset_dofs
 
     def _load_human_policy_motion(self):
         self._motion_lib = motion_lib
         motion_lib.attach_env(self)
 
     dexhand_mimic_mod.DexHandMimic._load_motions = _load_human_policy_motion
+    if args.exact_ik_reset and "rh_dof_pos" in refs and "lh_dof_pos" in refs:
+        def _reset_dofs_exact_ik(self, env_ids):
+            from isaacgym import gymtorch
+            import torch
+
+            self.rh_dof_pos[env_ids] = self._ref_rh_dof_pos[env_ids]
+            self.rh_dof_vel[env_ids] = self._ref_rh_dof_vel[env_ids]
+            self.lh_dof_pos[env_ids] = self._ref_lh_dof_pos[env_ids]
+            self.lh_dof_vel[env_ids] = self._ref_lh_dof_vel[env_ids]
+            rh_env_ids_int32 = self.rh_env_ids[env_ids].to(dtype=torch.int32)
+            lh_env_ids_int32 = self.lh_env_ids[env_ids].to(dtype=torch.int32)
+            dexhand_multi_env_ids_int32 = torch.concat([rh_env_ids_int32.flatten(), lh_env_ids_int32.flatten()])
+            self.gym.set_dof_state_tensor_indexed(
+                self.sim,
+                gymtorch.unwrap_tensor(self.dof_state),
+                gymtorch.unwrap_tensor(dexhand_multi_env_ids_int32),
+                len(dexhand_multi_env_ids_int32),
+            )
+
+        dexhand_mimic_mod.DexHandMimic._reset_dofs = _reset_dofs_exact_ik
     try:
         twist_args = _twist_args(args)
         env_cfg, train_cfg = task_registry.get_cfgs(name="dexhand_mimic_direct")
@@ -565,7 +824,9 @@ def run(args) -> None:
         env.reset_idx(torch.arange(env.num_envs, device=env.device), torch.zeros(env.num_envs, device=env.device, dtype=torch.long))
         obs = env.get_observations()
 
-        policy, normalizer = _load_hand_policy(env, train_cfg, twist_args, args)
+        policy, normalizer = (None, None)
+        if args.hand_control_mode == "gmt":
+            policy, normalizer = _load_hand_policy(env, train_cfg, twist_args, args)
 
         total_steps = args.rollout_steps
         if total_steps is None:
@@ -594,6 +855,9 @@ def run(args) -> None:
         print(f"[ref frame0] rh_wrist_pos={rh_wrist_seq[0]}  lh_wrist_pos={lh_wrist_seq[0]}")
         print(f"[env frame0] rh_root_pos ={env.rh_root_states[0, :3].cpu().numpy()}  "
               f"lh_root_pos={env.lh_root_states[0, :3].cpu().numpy()}")
+        if "rh_dof_pos" in refs and "lh_dof_pos" in refs:
+            print(f"[ik frame0] rh_dof={np.round(refs['rh_dof_pos'][0], 4)}")
+            print(f"[ik frame0] lh_dof={np.round(refs['lh_dof_pos'][0], 4)}")
 
         has_viewer = args.viewer and env.viewer is not None
         _env_ptr = env.envs[0]
@@ -629,11 +893,21 @@ def run(args) -> None:
                 print(f"           ref lh_wrist={lh_wrist_seq[step_i]}  "
                       f"env lh_root={env.lh_root_states[0, :3].cpu().numpy()}")
 
-            with torch.no_grad():
-                pol_obs = normalizer.normalize(obs.detach()) if normalizer is not None else obs.detach()
-                gmt_action = policy(pol_obs, hist_encoding=True)
-            action_log.append(gmt_action.detach().cpu().numpy()[0].astype(np.float32))
-            obs, _, _, done, _ = env.step(gmt_action.detach())
+            if args.hand_control_mode == "gmt":
+                with torch.no_grad():
+                    pol_obs = normalizer.normalize(obs.detach()) if normalizer is not None else obs.detach()
+                    hand_action = policy(pol_obs, hist_encoding=True)
+            else:
+                frame_f = np.asarray([step_i * env.dt * float(refs["fps"])], dtype=np.float32)
+                rh_q = _interp_np(refs["rh_dof_pos"], frame_f)
+                lh_q = _interp_np(refs["lh_dof_pos"], frame_f)
+                q = np.concatenate([rh_q, lh_q], axis=-1)
+                default = torch.cat([env.default_rh_dof_pos, env.default_lh_dof_pos], dim=0).detach().cpu().numpy()[None]
+                action_np = (q - default) / float(env.cfg.control.action_scale)
+                hand_action = torch.as_tensor(action_np, device=env.device, dtype=torch.float32)
+
+            action_log.append(hand_action.detach().cpu().numpy()[0].astype(np.float32))
+            obs, _, _, done, _ = env.step(hand_action.detach())
 
             if args.step_delay > 0:
                 _time.sleep(args.step_delay)
@@ -687,15 +961,20 @@ def run(args) -> None:
         out_actions.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(
             out_actions,
-            gmt_actions=np.asarray(action_log, dtype=np.float32),
+            hand_actions=np.asarray(action_log, dtype=np.float32),
+            gmt_actions=np.asarray(action_log, dtype=np.float32) if args.hand_control_mode == "gmt" else np.zeros((0, 0), dtype=np.float32),
             human_policy_actions=actions_128.astype(np.float32),
+            rh_ik_dof_pos=refs.get("rh_dof_pos", np.zeros((0, len(_INSPIRE_DOF_NAMES)), dtype=np.float32)),
+            lh_ik_dof_pos=refs.get("lh_dof_pos", np.zeros((0, len(_INSPIRE_DOF_NAMES)), dtype=np.float32)),
+            hand_control_mode=np.asarray(args.hand_control_mode),
             ref_fps=np.asarray(args.ref_fps, dtype=np.float32),
         )
-        print(f"Saved GMT actions: {out_actions}")
+        print(f"Saved hand actions: {out_actions}")
         if args.record_video:
             print(f"Saved video: {args.out_video}")
     finally:
         dexhand_mimic_mod.DexHandMimic._load_motions = original_load_motions
+        dexhand_mimic_mod.DexHandMimic._reset_dofs = original_reset_dofs
 
 
 def main() -> None:
@@ -724,6 +1003,23 @@ def main() -> None:
     p.add_argument("--hand-gmt-ckpt", type=str, default=None, help="Direct path to a TWIST hand GMT model_*.pt checkpoint.")
     p.add_argument("--hand-gmt-checkpoint", type=int, default=-1)
     p.add_argument("--gmt-device", type=str, default="cuda:0")
+    p.add_argument("--hand-control-mode", choices=["gmt", "ik"], default="gmt",
+                   help="gmt: track references with the trained GMT policy. ik: directly send IK dof targets as actions.")
+    p.add_argument("--ik-backend", choices=["auto", "pytorch", "pinocchio", "none"], default="auto",
+                   help="IK solver backend. auto prefers pytorch_kinematics, then pinocchio.")
+    p.add_argument("--ik-device", type=str, default=None,
+                   help="Torch device for --ik-backend pytorch. Defaults to --gmt-device.")
+    p.add_argument("--ik-iters", type=int, default=120)
+    p.add_argument("--ik-lr", type=float, default=0.03)
+    p.add_argument("--ik-damping", type=float, default=1e-3)
+    p.add_argument("--ik-step", type=float, default=0.7)
+    p.add_argument("--ik-smooth-weight", type=float, default=1e-2)
+    p.add_argument("--ik-reg-weight", type=float, default=1e-4)
+    p.add_argument("--force-recompute-ik", action="store_true",
+                   help="Recompute IK even if rh/lh dof refs already exist in --ref-npz.")
+    p.add_argument("--no-exact-ik-reset", dest="exact_ik_reset", action="store_false",
+                   help="Keep TWIST's reset dof randomization instead of exactly setting frame-0 IK dofs.")
+    p.set_defaults(exact_ik_reset=True)
     p.add_argument("--ref-fps", type=float, default=30.0)
     p.add_argument("--rollout-steps", type=int, default=None)
     p.add_argument("--record-video", action="store_true")
@@ -737,6 +1033,8 @@ def main() -> None:
     p.add_argument("--video-stride", type=int, default=8)
     p.add_argument("--out-actions", type=str, default=str(_HP_ROOT / "outputs" / "twist_hand_gmt_bridge_actions.npz"))
     args = p.parse_args()
+    if args.ik_device is None:
+        args.ik_device = args.gmt_device
     run(args)
 
 
