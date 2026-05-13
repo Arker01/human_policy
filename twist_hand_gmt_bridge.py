@@ -97,8 +97,13 @@ def _actions_to_hand_refs(actions: np.ndarray, fps: float) -> dict[str, np.ndarr
 
     l_wrist = actions[:, C.OUTPUT_LEFT_EEF]
     r_wrist = actions[:, C.OUTPUT_RIGHT_EEF]
+    head = actions[:, C.OUTPUT_HEAD_EEF]
     l_local6 = actions[:, C.OUTPUT_LEFT_KEYPOINTS].reshape(actions.shape[0], 6, 3)
     r_local6 = actions[:, C.OUTPUT_RIGHT_KEYPOINTS].reshape(actions.shape[0], 6, 3)
+
+    head_pos = head[:, :3].astype(np.float32)
+    head_rot_m = np.stack([_rot6d_to_mat_np(x[3:9]) for x in head], axis=0)
+    head_rot = _quat_fix_sign(np.stack([_mat_to_quat_xyzw(m) for m in head_rot_m], axis=0))
 
     l_root_pos = l_wrist[:, :3].astype(np.float32)
     r_root_pos = r_wrist[:, :3].astype(np.float32)
@@ -112,14 +117,24 @@ def _actions_to_hand_refs(actions: np.ndarray, fps: float) -> dict[str, np.ndarr
     r_tip_local = r_local6[:, 1:6, :].astype(np.float32)
     l_tip_world = l_root_pos[:, None, :] + np.einsum("tij,tkj->tki", l_rot_m, l_tip_local)
     r_tip_world = r_root_pos[:, None, :] + np.einsum("tij,tkj->tki", r_rot_m, r_tip_local)
+    l_full_local = np.stack([_expand_hand_25_from_retarget6(x) for x in l_local6], axis=0)
+    r_full_local = np.stack([_expand_hand_25_from_retarget6(x) for x in r_local6], axis=0)
+    l_full_world = l_root_pos[:, None, :] + np.einsum("tij,tkj->tki", l_rot_m, l_full_local)
+    r_full_world = r_root_pos[:, None, :] + np.einsum("tij,tkj->tki", r_rot_m, r_full_local)
 
     return {
+        "head_pos": head_pos,
+        "head_rot": head_rot.astype(np.float32),
+        "head_forward": np.einsum("tij,j->ti", head_rot_m, np.array([1., 0., 0.], dtype=np.float32)).astype(np.float32),
+        "head_axes": (head_pos[:, None, :] + 0.1 * np.transpose(head_rot_m, (0, 2, 1))).astype(np.float32),
         "lh_root_pos": l_root_pos,
         "lh_root_rot": l_root_rot.astype(np.float32),
         "lh_tip_world": l_tip_world.astype(np.float32),
+        "lh_full_world": l_full_world.astype(np.float32),
         "rh_root_pos": r_root_pos,
         "rh_root_rot": r_root_rot.astype(np.float32),
         "rh_tip_world": r_tip_world.astype(np.float32),
+        "rh_full_world": r_full_world.astype(np.float32),
         "lh_root_vel": _gradient_or_zeros(l_root_pos, fps),
         "rh_root_vel": _gradient_or_zeros(r_root_pos, fps),
         "lh_root_ang_vel": _quat_ang_vel_xyzw(l_root_rot, fps),
@@ -142,7 +157,25 @@ def _rot6d_to_mat_np(rot6d: np.ndarray) -> np.ndarray:
     b1 = _normalize(a1)
     b2 = _normalize(a2 - np.dot(b1, a2) * b1)
     b3 = np.cross(b1, b2)
-    return np.stack([b1, b2, b3], axis=1).astype(np.float32)
+    # Match pytorch3d.transforms.rotation_6d_to_matrix used by hdt.
+    return np.stack([b1, b2, b3], axis=0).astype(np.float32)
+
+
+def _expand_hand_25_from_retarget6(local6: np.ndarray) -> np.ndarray:
+    """Approximate plot_keypoints full-hand mode from [palm, 5 fingertips]."""
+    local6 = np.asarray(local6, dtype=np.float32)
+    if local6.shape != (6, 3):
+        raise ValueError(f"Expected retarget hand keypoints shape (6,3), got {local6.shape}")
+    out = np.zeros((25, 3), dtype=np.float32)
+    palm = local6[0]
+    out[0] = palm
+    alphas = np.linspace(0.0, 1.0, 5, dtype=np.float32)
+    for finger in range(5):
+        tip = local6[finger + 1]
+        base = finger * 5
+        for joint_i, a in enumerate(alphas):
+            out[base + joint_i] = palm + a * (tip - palm)
+    return out
 
 
 def _inspire_urdf(side: str) -> Path:
@@ -369,6 +402,79 @@ def _build_skeleton_lines(rh_w, lh_w, rh_tips, lh_tips):
     verts = np.array(all_segs, dtype=np.float32).reshape(-1, 3)
     colors = np.tile(np.array([[0., 1., 0.]], dtype=np.float32), (verts.shape[0], 1))
     return len(all_segs), verts, colors
+
+
+def _point_cross_segments(point: np.ndarray, radius: float) -> list[tuple[np.ndarray, np.ndarray]]:
+    point = np.asarray(point, dtype=np.float32)
+    axes = np.eye(3, dtype=np.float32) * float(radius)
+    return [(point - axis, point + axis) for axis in axes]
+
+
+def _full_hand_segments(joints25: np.ndarray) -> list[tuple[np.ndarray, np.ndarray]]:
+    joints25 = np.asarray(joints25, dtype=np.float32)
+    segs = []
+    for finger in range(5):
+        base = finger * 5
+        for joint_i in range(4):
+            segs.append((joints25[base + joint_i], joints25[base + joint_i + 1]))
+    return segs
+
+
+def _build_gt_debug_lines(head_pos, rh_full, lh_full, cam_pos=None, viz_offset=None):
+    """Draw head point, camera Z+ line, and approximate full-hand finger chains."""
+    segs: list[tuple[np.ndarray, np.ndarray]] = []
+    cols: list[np.ndarray] = []
+    if viz_offset is None:
+        viz_offset = np.zeros(3, dtype=np.float32)
+    viz_offset = np.asarray(viz_offset, dtype=np.float32)
+    head_pos = np.asarray(head_pos, dtype=np.float32) + viz_offset
+    rh_full = np.asarray(rh_full, dtype=np.float32) + viz_offset
+    lh_full = np.asarray(lh_full, dtype=np.float32) + viz_offset
+
+    def add(seg, color):
+        segs.append((np.asarray(seg[0], dtype=np.float32), np.asarray(seg[1], dtype=np.float32)))
+        cols.append(np.asarray(color, dtype=np.float32))
+
+    for seg in _point_cross_segments(head_pos, 0.09):
+        add(seg, [0.1, 0.35, 1.])
+    for seg in _point_cross_segments(head_pos, 0.045):
+        add(seg, [1.0, 0.0, 0.0])
+
+    if cam_pos is not None:
+        cam_pos = np.asarray(cam_pos, dtype=np.float32)
+        add((cam_pos, cam_pos + np.array([0.0, 0.0, 0.25], dtype=np.float32)), [1.0, 1.0, 0.0])
+
+    for joints, color in ((rh_full, [0., 1., 0.]), (lh_full, [0., 0.85, 1.])):
+        for seg in _full_hand_segments(joints):
+            add(seg, color)
+        for joint in joints:
+            for seg in _point_cross_segments(joint, 0.007):
+                add(seg, color)
+
+    verts = np.array(segs, dtype=np.float32).reshape(-1, 3)
+    colors = np.repeat(np.array(cols, dtype=np.float32), 2, axis=0)
+    return len(segs), verts, colors
+
+
+def _lookat_from_head_wrists(head, left_wrist, right_wrist, distance_scale=2.5):
+    H = np.asarray(head, dtype=np.float32)
+    L = np.asarray(left_wrist, dtype=np.float32)
+    R = np.asarray(right_wrist, dtype=np.float32)
+
+    target = (H + L + R) / 3.0
+    left_axis = L - R
+    left_axis = left_axis / (np.linalg.norm(left_axis) + 1e-8)
+    wrist_mid = (L + R) / 2.0
+    up_axis = H - wrist_mid
+    up_axis = up_axis / (np.linalg.norm(up_axis) + 1e-8)
+    forward_axis = np.cross(left_axis, up_axis)
+    forward_axis = forward_axis / (np.linalg.norm(forward_axis) + 1e-8)
+
+    view_vec = -1.73 * forward_axis + 1.00 * left_axis + 0.50 * up_axis
+    view_vec = view_vec / (np.linalg.norm(view_vec) + 1e-8)
+    body_radius = max(np.linalg.norm(H - target), np.linalg.norm(L - target), np.linalg.norm(R - target))
+    eye = target + distance_scale * body_radius * view_vec
+    return eye.astype(np.float32), target.astype(np.float32)
 
 
 class HumanPolicyHandMotionLib:
@@ -643,8 +749,9 @@ def _load_hand_policy(env, train_cfg, twist_args, args):
     return policy, normalizer
 
 
-def _run_gt_only(args, env, refs, rh_wrist_seq, lh_wrist_seq,
-                 rh_tips_seq, lh_tips_seq, rh_rot_seq, lh_rot_seq,
+def _run_gt_only(args, env, refs, head_pos_seq,
+                 rh_wrist_seq, lh_wrist_seq, rh_tips_seq, lh_tips_seq,
+                 rh_full_seq, lh_full_seq, rh_rot_seq, lh_rot_seq,
                  actions_128, has_viewer, env_ptr):
     """Visualize and optionally record the GT reference skeleton without the dexhand."""
     import time as _time
@@ -655,6 +762,9 @@ def _run_gt_only(args, env, refs, rh_wrist_seq, lh_wrist_seq,
     import hdt.constants as C
 
     total_steps = len(rh_wrist_seq)
+    head_z_max = float(np.max(head_pos_seq[:, 2])) if len(head_pos_seq) else 0.0
+    viz_offset = np.array([0.0, 0.0, 0.0 if head_z_max > 0.5 else 1.0], dtype=np.float32)
+    print(f"[gt_only] head_z_max={head_z_max:.4f}; viz_offset={viz_offset.tolist()}")
 
     # Hide both inspire hands by moving them far below the scene.
     with torch.no_grad():
@@ -670,16 +780,24 @@ def _run_gt_only(args, env, refs, rh_wrist_seq, lh_wrist_seq,
     env.gym.simulate(env.sim)
     env.gym.fetch_results(env.sim, True)
 
-    # Position viewer camera: head is origin [0,0,0].
-    # Camera at (-0.1, 0, 0.25), looking at mean hand position.
     if has_viewer:
-        mean_hand = ((rh_wrist_seq.mean(0) + lh_wrist_seq.mean(0)) / 2).astype(np.float32)
-        cam_pos = gymapi.Vec3(-0.1, 0.0, 0.25)
-        cam_target = gymapi.Vec3(float(mean_hand[0]),
-                                 float(mean_hand[1]),
-                                 float(mean_hand[2]))
+        try:
+            env.gym.set_light_parameters(
+                env.sim, 0,
+                gymapi.Vec3(0.9, 0.9, 0.9),
+                gymapi.Vec3(0.35, 0.35, 0.35),
+                gymapi.Vec3(-0.3, 0.2, -1.0),
+            )
+        except Exception as exc:
+            print(f"Warning: failed to set Isaac Gym light: {exc}")
+        head_viz0 = head_pos_seq[0].astype(np.float32) + viz_offset
+        lh_wrist_viz0 = lh_wrist_seq[0].astype(np.float32) + viz_offset
+        rh_wrist_viz0 = rh_wrist_seq[0].astype(np.float32) + viz_offset
+        viewer_cam_pos0, cam_target0 = _lookat_from_head_wrists(head_viz0, lh_wrist_viz0, rh_wrist_viz0)
+        cam_pos = gymapi.Vec3(float(viewer_cam_pos0[0]), float(viewer_cam_pos0[1]), float(viewer_cam_pos0[2]))
+        cam_target = gymapi.Vec3(float(cam_target0[0]), float(cam_target0[1]), float(cam_target0[2]))
         env.gym.viewer_camera_look_at(env.viewer, None, cam_pos, cam_target)
-        print(f"[gt_only] camera pos=[-0.1, 0.0, 0.25]  "
+        print(f"[gt_only] camera pos={list(np.round(viewer_cam_pos0, 3))}  "
               f"target={list(np.round([cam_target.x, cam_target.y, cam_target.z], 3))}")
 
     # Video writer via viewer screenshot.
@@ -698,6 +816,7 @@ def _run_gt_only(args, env, refs, rh_wrist_seq, lh_wrist_seq,
             lh_q = lh_rot_seq[step_i]
             print(f"[step {step_i:4d}] rh_wrist_pos={np.round(rh_wrist_seq[step_i], 4)}  "
                   f"lh_wrist_pos={np.round(lh_wrist_seq[step_i], 4)}")
+            print(f"           rh_fingertips_xyz={np.round(rh_tips_seq[step_i], 4)}")
             print(f"           rh_rot refs(xyzw)={np.round(rh_q, 4)}")
             print(f"           lh_rot refs(xyzw)={np.round(lh_q, 4)}")
             if actions_128 is not None and step_i < len(actions_128):
@@ -709,10 +828,19 @@ def _run_gt_only(args, env, refs, rh_wrist_seq, lh_wrist_seq,
                 print(f"           lh_6d  HDF5 raw ={np.round(lh_6d_raw, 4)}  -> quat={np.round(lh_q_raw, 4)}")
 
         if has_viewer:
+            head_viz = head_pos_seq[step_i].astype(np.float32) + viz_offset
+            lh_wrist_viz = lh_wrist_seq[step_i].astype(np.float32) + viz_offset
+            rh_wrist_viz = rh_wrist_seq[step_i].astype(np.float32) + viz_offset
+            viewer_cam_pos, cam_target_np = _lookat_from_head_wrists(head_viz, lh_wrist_viz, rh_wrist_viz)
+            cam_pos = gymapi.Vec3(float(viewer_cam_pos[0]), float(viewer_cam_pos[1]), float(viewer_cam_pos[2]))
+            cam_target = gymapi.Vec3(float(cam_target_np[0]), float(cam_target_np[1]), float(cam_target_np[2]))
+            env.gym.viewer_camera_look_at(env.viewer, None, cam_pos, cam_target)
             env.gym.clear_lines(env.viewer)
-            n, verts, colors = _build_skeleton_lines(
-                rh_wrist_seq[step_i], lh_wrist_seq[step_i],
-                rh_tips_seq[step_i],  lh_tips_seq[step_i],
+            n, verts, colors = _build_gt_debug_lines(
+                head_pos_seq[step_i],
+                rh_full_seq[step_i], lh_full_seq[step_i],
+                cam_pos=viewer_cam_pos,
+                viz_offset=viz_offset,
             )
             env.gym.add_lines(env.viewer, env_ptr, n, verts, colors)
             env.gym.step_graphics(env.sim)
@@ -815,23 +943,23 @@ def run(args) -> None:
         # so the physics-simulated finger tips won't match the reference at init.
         # Disable pose_termination to avoid immediate termination from this mismatch.
         env_cfg.env.pose_termination = False
-        # Use a simple plane instead of trimesh to skip the 5s ground-mesh build
-        # and remove the table-like terrain surface in the viewer.
         if not args.show_table:
-            env_cfg.terrain.mesh_type = None  # no ground at all, avoids finger-ground collisions
+            env_cfg.terrain.mesh_type = "plane" if args.gt_only else None
 
         env, _ = task_registry.make_env(name="dexhand_mimic_direct", args=twist_args, env_cfg=env_cfg)
         env.reset_idx(torch.arange(env.num_envs, device=env.device), torch.zeros(env.num_envs, device=env.device, dtype=torch.long))
         obs = env.get_observations()
 
         policy, normalizer = (None, None)
-        if args.hand_control_mode == "gmt":
+        if not args.gt_only and args.hand_control_mode == "gmt":
             policy, normalizer = _load_hand_policy(env, train_cfg, twist_args, args)
 
         total_steps = args.rollout_steps
         if total_steps is None:
             total_steps = int(float(refs["length_s"]) / env.dt)
         total_steps = min(total_steps, int(env.max_episode_length))
+        if args.max_steps is not None:
+            total_steps = min(total_steps, int(args.max_steps))
         print(f"[rollout] motion_length={refs['length_s']:.2f}s  dt={env.dt:.4f}s  "
               f"max_episode_length={int(env.max_episode_length)}  planned_steps={total_steps}")
 
@@ -844,10 +972,13 @@ def run(args) -> None:
         # Pre-compute per-step ref wrist positions and tip world positions for viz.
         ref_t = np.arange(total_steps, dtype=np.float32) / float(refs["fps"])
         ref_frame_f = ref_t * float(refs["fps"])
+        head_pos_seq = _interp_np(refs["head_pos"], ref_frame_f) if "head_pos" in refs else np.zeros((total_steps, 3), dtype=np.float32)
         rh_wrist_seq = _interp_np(refs["rh_root_pos"], ref_frame_f)            # (T,3)
         lh_wrist_seq = _interp_np(refs["lh_root_pos"], ref_frame_f)            # (T,3)
         rh_tips_seq  = _interp_np(refs["rh_tip_world"], ref_frame_f)           # (T,5,3)
         lh_tips_seq  = _interp_np(refs["lh_tip_world"], ref_frame_f)           # (T,5,3)
+        rh_full_seq  = _interp_np(refs["rh_full_world"], ref_frame_f) if "rh_full_world" in refs else np.zeros((total_steps, 25, 3), dtype=np.float32)
+        lh_full_seq  = _interp_np(refs["lh_full_world"], ref_frame_f) if "lh_full_world" in refs else np.zeros((total_steps, 25, 3), dtype=np.float32)
         rh_rot_seq   = _sample_quat_nearest(refs["rh_root_rot"], ref_frame_f)  # (T,4) xyzw
         lh_rot_seq   = _sample_quat_nearest(refs["lh_root_rot"], ref_frame_f)  # (T,4) xyzw
 
@@ -876,8 +1007,9 @@ def run(args) -> None:
 
         # ── GT-only mode: hide the dexhands, record from head-position camera ──
         if args.gt_only:
-            _run_gt_only(args, env, refs, rh_wrist_seq, lh_wrist_seq,
-                         rh_tips_seq, lh_tips_seq, rh_rot_seq, lh_rot_seq,
+            _run_gt_only(args, env, refs, head_pos_seq,
+                         rh_wrist_seq, lh_wrist_seq, rh_tips_seq, lh_tips_seq,
+                         rh_full_seq, lh_full_seq, rh_rot_seq, lh_rot_seq,
                          actions_128 if len(actions_128) > 0 else None,
                          has_viewer, _env_ptr)
             return
