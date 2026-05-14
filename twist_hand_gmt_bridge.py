@@ -225,11 +225,14 @@ class _PytorchKinematicsInspireIK:
 
     def solve(self, target_local: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         torch = self.torch
+        from tqdm import tqdm
+
         target = torch.as_tensor(target_local, device=self.device, dtype=torch.float32)
         q_prev = torch.zeros((1, len(_INSPIRE_DOF_NAMES)), device=self.device, dtype=torch.float32)
         out = []
         errs = []
-        for t in range(target.shape[0]):
+        desc = f"[ik:{self.side}:pytorch:{self.device}]"
+        for t in tqdm(range(target.shape[0]), desc=desc, unit="frame"):
             q = q_prev.detach().clone().requires_grad_(True)
             opt = torch.optim.Adam([q], lr=self.lr)
             q_ref = q_prev.detach()
@@ -295,12 +298,15 @@ class _PinocchioInspireIK:
         return np.concatenate(rows, axis=0)
 
     def solve(self, target_local: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        from tqdm import tqdm
+
         targets = np.asarray(target_local, dtype=np.float64)
         q_prev = np.zeros((len(_INSPIRE_DOF_NAMES),), dtype=np.float64)
         out = []
         errs = []
         eye = np.eye(len(_INSPIRE_DOF_NAMES), dtype=np.float64)
-        for target in targets:
+        desc = f"[ik:{self.side}:pinocchio]"
+        for target in tqdm(targets, desc=desc, unit="frame"):
             q = q_prev.copy()
             for _ in range(self.iters):
                 pred = self._fk_tips(q)
@@ -337,12 +343,20 @@ def _resolve_ik_backend(requested: str) -> str:
 def _add_ik_refs(refs: dict[str, np.ndarray], args) -> dict[str, np.ndarray]:
     if args.ik_backend == "none":
         return refs
+    gmt_reset_only = (
+        args.hand_control_mode == "gmt"
+        and args.exact_ik_reset
+        and not args.full_ik_in_gmt
+    )
+    if args.hand_control_mode == "gmt" and not args.exact_ik_reset and not args.full_ik_in_gmt:
+        return refs
     if all(k in refs for k in ("rh_dof_pos", "lh_dof_pos", "rh_dof_vel", "lh_dof_vel")) and not args.force_recompute_ik:
         print("[ik] using cached rh/lh dof refs from input refs")
         return refs
 
     backend = _resolve_ik_backend(args.ik_backend)
-    print(f"[ik] solving Inspire hand IK with backend={backend}")
+    scope = "frame0 reset only" if gmt_reset_only else "full sequence"
+    print(f"[ik] solving Inspire hand IK with backend={backend} ({scope})")
 
     def solve_side(side: str, ref_prefix: str):
         targets = _tips_world_to_local(
@@ -350,6 +364,8 @@ def _add_ik_refs(refs: dict[str, np.ndarray], args) -> dict[str, np.ndarray]:
             refs[f"{ref_prefix}_root_rot"],
             refs[f"{ref_prefix}_tip_world"],
         )
+        if gmt_reset_only:
+            targets = targets[:1]
         if backend == "pytorch":
             solver = _PytorchKinematicsInspireIK(
                 side,
@@ -659,6 +675,57 @@ def _load_refs_npz(path: str) -> dict[str, np.ndarray]:
     return {k: data[k] for k in data.files}
 
 
+_WORLD_POINT_REF_KEYS = (
+    "head_pos",
+    "head_axes",
+    "lh_root_pos",
+    "rh_root_pos",
+    "lh_tip_world",
+    "rh_tip_world",
+    "lh_full_world",
+    "rh_full_world",
+)
+
+
+def _offset_world_refs(refs: dict[str, np.ndarray], offset: np.ndarray) -> dict[str, np.ndarray]:
+    offset = np.asarray(offset, dtype=np.float32)
+    if np.linalg.norm(offset) < 1e-8:
+        return refs
+    out = dict(refs)
+    for key in _WORLD_POINT_REF_KEYS:
+        if key not in out:
+            continue
+        arr = np.asarray(out[key])
+        if arr.ndim >= 1 and arr.shape[-1] == 3:
+            shape = (1,) * (arr.ndim - 1) + (3,)
+            out[key] = (arr.astype(np.float32) + offset.reshape(shape)).astype(np.float32)
+    return out
+
+
+def _world_ref_z_bounds(refs: dict[str, np.ndarray]) -> tuple[float, float]:
+    z_values = []
+    for key in _WORLD_POINT_REF_KEYS:
+        if key not in refs:
+            continue
+        arr = np.asarray(refs[key])
+        if arr.ndim >= 1 and arr.shape[-1] == 3 and arr.size:
+            z_values.append(arr[..., 2].reshape(-1))
+    if not z_values:
+        return 0.0, 0.0
+    z = np.concatenate(z_values)
+    return float(np.min(z)), float(np.max(z))
+
+
+def _world_height_viz_offset(refs: dict[str, np.ndarray]) -> tuple[np.ndarray, float, float]:
+    z_min, z_max = _world_ref_z_bounds(refs)
+    # Some human-policy / HDF5 references are stored in a low local frame.  In
+    # that case the hands can intersect the Isaac ground unless the same +1 m
+    # visualization lift used by gt-only is also applied to the hand actors.
+    needs_lift = z_max < 1.0 or z_min < 0.05
+    offset_z = 1.0 if needs_lift else 0.0
+    return np.array([0.0, 0.0, offset_z], dtype=np.float32), z_min, z_max
+
+
 def _twist_args(args):
     from isaacgym import gymapi
 
@@ -864,6 +931,9 @@ def _run_gt_only(args, env, refs, head_pos_seq,
 def run(args) -> None:
     if args.gt_only:
         args.use_gt_actions = True  # gt-only always uses GT, never runs policy
+    elif not args.use_policy_refs and not args.pred_hdf5 and not args.ref_npz:
+        args.use_gt_actions = True
+        print("[refs] using GT episode actions for hand refs; pass --use-policy-refs to use human-policy predictions")
     if args.ref_npz:
         refs = _load_refs_npz(args.ref_npz)
         actions_128 = np.zeros((0, 128), dtype=np.float32)
@@ -879,6 +949,17 @@ def run(args) -> None:
         _save_refs_npz(args.dump_ref_npz, refs)
         if args.skip_gmt:
             return
+    raw_refs_for_log = refs
+    world_viz_offset = np.zeros(3, dtype=np.float32)
+    if not args.gt_only:
+        world_viz_offset, ref_z_min, ref_z_max = _world_height_viz_offset(refs)
+        if np.linalg.norm(world_viz_offset) > 1e-8:
+            refs = _offset_world_refs(refs, world_viz_offset)
+            print(f"[viz] applied world ref offset for hand actors: {world_viz_offset.tolist()} "
+                  f"(original ref_z_min={ref_z_min:.4f}, ref_z_max={ref_z_max:.4f})")
+        else:
+            print(f"[viz] no world ref offset applied "
+                  f"(ref_z_min={ref_z_min:.4f}, ref_z_max={ref_z_max:.4f})")
 
     # TWIST should use dependencies from the active TWIST environment. In
     # particular, do not let human_policy/pytorch3d shadow official PyTorch3D.
@@ -888,6 +969,7 @@ def run(args) -> None:
 
     import torch
     import imageio
+    from isaacgym import gymapi
 
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
@@ -939,14 +1021,25 @@ def run(args) -> None:
         env_cfg.domain_rand.push_robots = False
         env_cfg.domain_rand.action_delay = False
         env_cfg.env.record_video = args.record_video
+        # This bridge owns the viewer camera and reference overlay.  TWIST's
+        # built-in debug_viz draws actual/motion/global key-body markers for
+        # both hands, which makes the bridge viewer look like several hands
+        # are flickering on top of one another.
+        env_cfg.env.debug_viz = False
         # Our motion lib returns zeros_dof (no real joint angles from human policy),
         # so the physics-simulated finger tips won't match the reference at init.
         # Disable pose_termination to avoid immediate termination from this mismatch.
         env_cfg.env.pose_termination = False
         if not args.show_table:
-            env_cfg.terrain.mesh_type = "plane" if args.gt_only else None
+            env_cfg.terrain.mesh_type = "plane"
 
         env, _ = task_registry.make_env(name="dexhand_mimic_direct", args=twist_args, env_cfg=env_cfg)
+        # DexHandMimic.step() calls BaseTask.render() before physics.  If that
+        # render also draws the viewer, each bridge step produces one TWIST
+        # camera frame followed by one bridge camera frame, which appears as
+        # flicker.  We still draw explicitly from _draw_ref_skeleton().
+        if args.viewer:
+            env.enable_viewer_sync = False
         env.reset_idx(torch.arange(env.num_envs, device=env.device), torch.zeros(env.num_envs, device=env.device, dtype=torch.long))
         obs = env.get_observations()
 
@@ -970,7 +1063,7 @@ def run(args) -> None:
             writer = imageio.get_writer(str(out_video), fps=args.video_fps)
 
         # Pre-compute per-step ref wrist positions and tip world positions for viz.
-        ref_t = np.arange(total_steps, dtype=np.float32) / float(refs["fps"])
+        ref_t = np.arange(total_steps, dtype=np.float32) * float(env.dt)
         ref_frame_f = ref_t * float(refs["fps"])
         head_pos_seq = _interp_np(refs["head_pos"], ref_frame_f) if "head_pos" in refs else np.zeros((total_steps, 3), dtype=np.float32)
         rh_wrist_seq = _interp_np(refs["rh_root_pos"], ref_frame_f)            # (T,3)
@@ -981,9 +1074,16 @@ def run(args) -> None:
         lh_full_seq  = _interp_np(refs["lh_full_world"], ref_frame_f) if "lh_full_world" in refs else np.zeros((total_steps, 25, 3), dtype=np.float32)
         rh_rot_seq   = _sample_quat_nearest(refs["rh_root_rot"], ref_frame_f)  # (T,4) xyzw
         lh_rot_seq   = _sample_quat_nearest(refs["lh_root_rot"], ref_frame_f)  # (T,4) xyzw
+        head_z_max = float(np.max(head_pos_seq[:, 2])) if len(head_pos_seq) else 0.0
+        viz_offset = np.array([0.0, 0.0, 0.0 if head_z_max > 0.5 else 1.0], dtype=np.float32)
+        raw_rh_wrist_seq = _interp_np(raw_refs_for_log["rh_root_pos"], ref_frame_f)
+        raw_lh_wrist_seq = _interp_np(raw_refs_for_log["lh_root_pos"], ref_frame_f)
 
         # Print frame-0 ref vs env wrist to check coordinate alignment.
-        print(f"[ref frame0] rh_wrist_pos={rh_wrist_seq[0]}  lh_wrist_pos={lh_wrist_seq[0]}")
+        print(f"[raw ref frame0] rh_wrist_pos={raw_rh_wrist_seq[0]}  lh_wrist_pos={raw_lh_wrist_seq[0]}")
+        if np.linalg.norm(world_viz_offset) > 1e-8:
+            print(f"[sim ref frame0] rh_wrist_pos={rh_wrist_seq[0]}  lh_wrist_pos={lh_wrist_seq[0]}  "
+                  f"world_offset={world_viz_offset.tolist()}")
         print(f"[env frame0] rh_root_pos ={env.rh_root_states[0, :3].cpu().numpy()}  "
               f"lh_root_pos={env.lh_root_states[0, :3].cpu().numpy()}")
         if "rh_dof_pos" in refs and "lh_dof_pos" in refs:
@@ -993,15 +1093,48 @@ def run(args) -> None:
         has_viewer = args.viewer and env.viewer is not None
         _env_ptr = env.envs[0]
 
+        if has_viewer:
+            print(f"[viz] head_z_max={head_z_max:.4f}; viz_offset={viz_offset.tolist()}")
+            try:
+                env.gym.set_light_parameters(
+                    env.sim, 0,
+                    gymapi.Vec3(0.9, 0.9, 0.9),
+                    gymapi.Vec3(0.35, 0.35, 0.35),
+                    gymapi.Vec3(-0.3, 0.2, -1.0),
+                )
+            except Exception as exc:
+                print(f"Warning: failed to set Isaac Gym light: {exc}")
+
+            head_viz0 = head_pos_seq[0].astype(np.float32) + viz_offset
+            lh_wrist_viz0 = lh_wrist_seq[0].astype(np.float32) + viz_offset
+            rh_wrist_viz0 = rh_wrist_seq[0].astype(np.float32) + viz_offset
+            viewer_cam_pos0, cam_target0 = _lookat_from_head_wrists(head_viz0, lh_wrist_viz0, rh_wrist_viz0)
+            cam_pos = gymapi.Vec3(float(viewer_cam_pos0[0]), float(viewer_cam_pos0[1]), float(viewer_cam_pos0[2]))
+            cam_target = gymapi.Vec3(float(cam_target0[0]), float(cam_target0[1]), float(cam_target0[2]))
+            env.gym.viewer_camera_look_at(env.viewer, None, cam_pos, cam_target)
+            print(f"[viz] camera pos={list(np.round(viewer_cam_pos0, 3))}  "
+                  f"target={list(np.round([cam_target.x, cam_target.y, cam_target.z], 3))}")
+
         def _draw_ref_skeleton(step_i: int) -> None:
             if not has_viewer:
                 return
+            head_viz = head_pos_seq[step_i].astype(np.float32) + viz_offset
+            lh_wrist_viz = lh_wrist_seq[step_i].astype(np.float32) + viz_offset
+            rh_wrist_viz = rh_wrist_seq[step_i].astype(np.float32) + viz_offset
+            viewer_cam_pos, cam_target_np = _lookat_from_head_wrists(head_viz, lh_wrist_viz, rh_wrist_viz)
+            cam_pos = gymapi.Vec3(float(viewer_cam_pos[0]), float(viewer_cam_pos[1]), float(viewer_cam_pos[2]))
+            cam_target = gymapi.Vec3(float(cam_target_np[0]), float(cam_target_np[1]), float(cam_target_np[2]))
+            env.gym.viewer_camera_look_at(env.viewer, None, cam_pos, cam_target)
             env.gym.clear_lines(env.viewer)
-            n, verts, colors = _build_skeleton_lines(
-                rh_wrist_seq[step_i], lh_wrist_seq[step_i],
-                rh_tips_seq[step_i], lh_tips_seq[step_i],
+            n, verts, colors = _build_gt_debug_lines(
+                head_pos_seq[step_i],
+                rh_full_seq[step_i], lh_full_seq[step_i],
+                cam_pos=viewer_cam_pos,
+                viz_offset=viz_offset,
             )
             env.gym.add_lines(env.viewer, _env_ptr, n, verts, colors)
+            env.gym.step_graphics(env.sim)
+            env.gym.draw_viewer(env.viewer, env.sim, True)
 
         import time as _time
 
@@ -1016,14 +1149,15 @@ def run(args) -> None:
 
         action_log = []
         for step_i in range(total_steps):
-            _draw_ref_skeleton(step_i)
-
             # Periodic ref vs env wrist position print for coordinate-frame debugging.
             if step_i % 20 == 0:
-                print(f"[step {step_i:4d}] ref rh_wrist={rh_wrist_seq[step_i]}  "
+                print(f"[step {step_i:4d}] raw ref rh_wrist={raw_rh_wrist_seq[step_i]}  "
                       f"env rh_root={env.rh_root_states[0, :3].cpu().numpy()}")
-                print(f"           ref lh_wrist={lh_wrist_seq[step_i]}  "
+                print(f"           raw ref lh_wrist={raw_lh_wrist_seq[step_i]}  "
                       f"env lh_root={env.lh_root_states[0, :3].cpu().numpy()}")
+                if np.linalg.norm(world_viz_offset) > 1e-8:
+                    print(f"           sim ref rh_wrist={rh_wrist_seq[step_i]}  "
+                          f"sim ref lh_wrist={lh_wrist_seq[step_i]}")
 
             if args.hand_control_mode == "gmt":
                 with torch.no_grad():
@@ -1040,6 +1174,7 @@ def run(args) -> None:
 
             action_log.append(hand_action.detach().cpu().numpy()[0].astype(np.float32))
             obs, _, _, done, _ = env.step(hand_action.detach())
+            _draw_ref_skeleton(step_i)
 
             if args.step_delay > 0:
                 _time.sleep(args.step_delay)
@@ -1119,6 +1254,8 @@ def main() -> None:
     p.add_argument("--gt-dir", type=str, default=None, help="GT directory; first file matching --glob is used unless --episode-hdf5 is set.")
     p.add_argument("--glob", type=str, default="*.hdf5")
     p.add_argument("--use-gt-actions", action="store_true", help="Use episode action dataset instead of running human-policy.")
+    p.add_argument("--use-policy-refs", action="store_true",
+                   help="Use human-policy predictions as hand refs. Default GMT/IK refs come from the GT episode, matching --gt-only.")
     p.add_argument("--policy-ckpt", type=str, default=None)
     p.add_argument("--policy-config-yaml", type=str, default=None)
     p.add_argument("--norm-stats", type=str, default=None)
@@ -1149,6 +1286,8 @@ def main() -> None:
     p.add_argument("--ik-reg-weight", type=float, default=1e-4)
     p.add_argument("--force-recompute-ik", action="store_true",
                    help="Recompute IK even if rh/lh dof refs already exist in --ref-npz.")
+    p.add_argument("--full-ik-in-gmt", action="store_true",
+                   help="In --hand-control-mode gmt, compute IK for the full sequence instead of only frame 0 for reset.")
     p.add_argument("--no-exact-ik-reset", dest="exact_ik_reset", action="store_false",
                    help="Keep TWIST's reset dof randomization instead of exactly setting frame-0 IK dofs.")
     p.set_defaults(exact_ik_reset=True)
