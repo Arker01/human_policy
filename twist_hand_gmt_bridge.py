@@ -472,6 +472,52 @@ def _build_gt_debug_lines(head_pos, rh_full, lh_full, cam_pos=None, viz_offset=N
     return len(segs), verts, colors
 
 
+def _build_compare_debug_lines(gt_head, gt_rh_full, gt_lh_full,
+                               pol_head, pol_rh_full, pol_lh_full,
+                               cam_pos=None, viz_offset=None):
+    """Draw GT and policy skeletons in one viewer scene."""
+    segs: list[tuple[np.ndarray, np.ndarray]] = []
+    cols: list[np.ndarray] = []
+    if viz_offset is None:
+        viz_offset = np.zeros(3, dtype=np.float32)
+    viz_offset = np.asarray(viz_offset, dtype=np.float32)
+
+    def add(seg, color):
+        segs.append((np.asarray(seg[0], dtype=np.float32), np.asarray(seg[1], dtype=np.float32)))
+        cols.append(np.asarray(color, dtype=np.float32))
+
+    def add_skeleton(head_pos, rh_full, lh_full, *, head_color, rh_color, lh_color):
+        head_pos = np.asarray(head_pos, dtype=np.float32) + viz_offset
+        rh_full = np.asarray(rh_full, dtype=np.float32) + viz_offset
+        lh_full = np.asarray(lh_full, dtype=np.float32) + viz_offset
+        for seg in _point_cross_segments(head_pos, 0.07):
+            add(seg, head_color)
+        for joints, color in ((rh_full, rh_color), (lh_full, lh_color)):
+            for seg in _full_hand_segments(joints):
+                add(seg, color)
+            for joint in joints:
+                for seg in _point_cross_segments(joint, 0.006):
+                    add(seg, color)
+
+    if cam_pos is not None:
+        cam_pos = np.asarray(cam_pos, dtype=np.float32)
+        add((cam_pos, cam_pos + np.array([0.0, 0.0, 0.25], dtype=np.float32)), [1.0, 1.0, 0.0])
+
+    # GT: blue/cyan. Policy: orange/magenta. Kept deliberately high-contrast.
+    add_skeleton(gt_head, gt_rh_full, gt_lh_full,
+                 head_color=[0.1, 0.35, 1.0],
+                 rh_color=[0.0, 0.85, 1.0],
+                 lh_color=[0.0, 0.55, 1.0])
+    add_skeleton(pol_head, pol_rh_full, pol_lh_full,
+                 head_color=[1.0, 0.35, 0.0],
+                 rh_color=[1.0, 0.72, 0.0],
+                 lh_color=[1.0, 0.0, 0.7])
+
+    verts = np.array(segs, dtype=np.float32).reshape(-1, 3)
+    colors = np.repeat(np.array(cols, dtype=np.float32), 2, axis=0)
+    return len(segs), verts, colors
+
+
 def _lookat_from_head_wrists(head, left_wrist, right_wrist, distance_scale=2.5):
     H = np.asarray(head, dtype=np.float32)
     L = np.asarray(left_wrist, dtype=np.float32)
@@ -629,6 +675,15 @@ def _load_or_predict_actions(args) -> np.ndarray:
         chunk_stride=args.chunk_stride,
         temporal_decay=args.temporal_decay,
     )
+
+
+def _load_gt_actions(args) -> np.ndarray:
+    import h5py
+
+    episode = _select_episode(args.gt_dir, args.episode_hdf5, args.glob)
+    with h5py.File(episode, "r") as f:
+        actions = f["action"][()].astype(np.float32)
+    return actions[: args.max_steps] if args.max_steps else actions
 
 
 def _to_numpy_compat(x) -> np.ndarray:
@@ -928,20 +983,144 @@ def _run_gt_only(args, env, refs, head_pos_seq,
         print(f"[gt_only] saved: {args.out_gt_video}")
 
 
-def run(args) -> None:
-    if args.gt_only:
-        args.use_gt_actions = True  # gt-only always uses GT, never runs policy
-    elif not args.use_policy_refs and not args.pred_hdf5 and not args.ref_npz:
-        args.use_gt_actions = True
-        print("[refs] using GT episode actions for hand refs; pass --use-policy-refs to use human-policy predictions")
-    if args.ref_npz:
-        refs = _load_refs_npz(args.ref_npz)
-        actions_128 = np.zeros((0, 128), dtype=np.float32)
-    else:
-        actions_128 = _load_or_predict_actions(args)
-        refs = _actions_to_hand_refs(actions_128, fps=args.ref_fps)
+def _run_compare_gt_policy(args, env, gt_refs, policy_refs, has_viewer, env_ptr):
+    """Visualize GT and human-policy skeletons together, without dexhand actors."""
+    import time as _time
+    import imageio
+    import os
+    import torch
+    from isaacgym import gymapi, gymtorch
 
-    if not args.gt_only:
+    gt_len = int(np.floor(float(gt_refs["length_s"]) * float(gt_refs["fps"]))) + 1
+    pol_len = int(np.floor(float(policy_refs["length_s"]) * float(policy_refs["fps"]))) + 1
+    total_steps = min(gt_len, pol_len)
+    if args.rollout_steps is not None:
+        total_steps = min(total_steps, int(args.rollout_steps))
+    if args.max_steps is not None:
+        total_steps = min(total_steps, int(args.max_steps))
+
+    frame_f = np.arange(total_steps, dtype=np.float32)
+    gt_head = _interp_np(gt_refs["head_pos"], frame_f)
+    gt_rh_wrist = _interp_np(gt_refs["rh_root_pos"], frame_f)
+    gt_lh_wrist = _interp_np(gt_refs["lh_root_pos"], frame_f)
+    gt_rh_full = _interp_np(gt_refs["rh_full_world"], frame_f)
+    gt_lh_full = _interp_np(gt_refs["lh_full_world"], frame_f)
+    pol_head = _interp_np(policy_refs["head_pos"], frame_f)
+    pol_rh_wrist = _interp_np(policy_refs["rh_root_pos"], frame_f)
+    pol_lh_wrist = _interp_np(policy_refs["lh_root_pos"], frame_f)
+    pol_rh_full = _interp_np(policy_refs["rh_full_world"], frame_f)
+    pol_lh_full = _interp_np(policy_refs["lh_full_world"], frame_f)
+
+    # Match gt-only camera semantics: decide the lift from the GT reference, and
+    # keep the camera locked to the GT head/wrists even while policy refs differ.
+    head_z_max = float(np.max(gt_head[:, 2])) if len(gt_head) else 0.0
+    viz_offset = np.array([0.0, 0.0, 0.0 if head_z_max > 0.5 else 1.0], dtype=np.float32)
+    print(f"[compare] total_steps={total_steps}  gt_head_z_max={head_z_max:.4f}; viz_offset={viz_offset.tolist()}")
+    print("[compare] colors: GT=blue/cyan, human_policy=orange/magenta")
+
+    with torch.no_grad():
+        far = torch.tensor([0., 0., -200.], device=env.device)
+        env.rh_root_states[:, :3] = far
+        env.lh_root_states[:, :3] = far
+        eids = torch.arange(env.num_envs, device=env.device)
+        ids = torch.cat([env.rh_env_ids[eids].flatten(),
+                         env.lh_env_ids[eids].flatten()]).to(torch.int32)
+        env.gym.set_actor_root_state_tensor_indexed(
+            env.sim, gymtorch.unwrap_tensor(env.root_states),
+            gymtorch.unwrap_tensor(ids), len(ids))
+    env.gym.simulate(env.sim)
+    env.gym.fetch_results(env.sim, True)
+
+    writer = None
+    tmp_png = None
+    if args.out_gt_video:
+        out_path = Path(args.out_gt_video)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        writer = imageio.get_writer(str(out_path), fps=int(args.ref_fps))
+        tmp_png = str(out_path.parent / "_compare_tmp_frame.png")
+        print(f"[compare] recording {total_steps} frames -> {out_path}")
+
+    for step_i in range(total_steps):
+        if step_i % 20 == 0:
+            rh_err = np.mean(np.linalg.norm(policy_refs["rh_tip_world"][min(step_i, len(policy_refs["rh_tip_world"]) - 1)]
+                                            - gt_refs["rh_tip_world"][min(step_i, len(gt_refs["rh_tip_world"]) - 1)], axis=-1))
+            lh_err = np.mean(np.linalg.norm(policy_refs["lh_tip_world"][min(step_i, len(policy_refs["lh_tip_world"]) - 1)]
+                                            - gt_refs["lh_tip_world"][min(step_i, len(gt_refs["lh_tip_world"]) - 1)], axis=-1))
+            print(f"[compare step {step_i:4d}] gt rh_wrist={np.round(gt_rh_wrist[step_i], 4)}  "
+                  f"policy rh_wrist={np.round(pol_rh_wrist[step_i], 4)}  rh_tip_mean_err={rh_err:.4f}m")
+            print(f"                    gt lh_wrist={np.round(gt_lh_wrist[step_i], 4)}  "
+                  f"policy lh_wrist={np.round(pol_lh_wrist[step_i], 4)}  lh_tip_mean_err={lh_err:.4f}m")
+
+        if has_viewer:
+            head_viz = gt_head[step_i].astype(np.float32) + viz_offset
+            lh_wrist_viz = gt_lh_wrist[step_i].astype(np.float32) + viz_offset
+            rh_wrist_viz = gt_rh_wrist[step_i].astype(np.float32) + viz_offset
+            viewer_cam_pos, cam_target_np = _lookat_from_head_wrists(head_viz, lh_wrist_viz, rh_wrist_viz)
+            cam_pos = gymapi.Vec3(float(viewer_cam_pos[0]), float(viewer_cam_pos[1]), float(viewer_cam_pos[2]))
+            cam_target = gymapi.Vec3(float(cam_target_np[0]), float(cam_target_np[1]), float(cam_target_np[2]))
+            env.gym.viewer_camera_look_at(env.viewer, None, cam_pos, cam_target)
+            env.gym.clear_lines(env.viewer)
+            n, verts, colors = _build_compare_debug_lines(
+                gt_head[step_i], gt_rh_full[step_i], gt_lh_full[step_i],
+                pol_head[step_i], pol_rh_full[step_i], pol_lh_full[step_i],
+                cam_pos=viewer_cam_pos,
+                viz_offset=viz_offset,
+            )
+            env.gym.add_lines(env.viewer, env_ptr, n, verts, colors)
+            env.gym.step_graphics(env.sim)
+            env.gym.draw_viewer(env.viewer, env.sim, True)
+
+            if writer is not None:
+                env.gym.write_viewer_image_to_file(env.viewer, tmp_png)
+                img = imageio.imread(tmp_png)
+                writer.append_data(img[:, :, :3] if img.shape[-1] == 4 else img)
+
+        if args.step_delay > 0:
+            _time.sleep(args.step_delay)
+
+    if writer is not None:
+        writer.close()
+        if tmp_png and os.path.exists(tmp_png):
+            os.unlink(tmp_png)
+        print(f"[compare] saved: {args.out_gt_video}")
+
+
+def run(args) -> None:
+    compare_refs = None
+    if args.compare_gt_policy:
+        gt_actions = _load_gt_actions(args)
+        gt_refs = _actions_to_hand_refs(gt_actions, fps=args.ref_fps)
+        if args.ref_npz:
+            policy_refs = _load_refs_npz(args.ref_npz)
+            policy_actions = np.zeros((0, 128), dtype=np.float32)
+        else:
+            policy_args = SimpleNamespace(**vars(args))
+            policy_args.use_gt_actions = False
+            policy_actions = _load_or_predict_actions(policy_args)
+            policy_refs = _actions_to_hand_refs(policy_actions, fps=args.ref_fps)
+        compare_refs = (gt_refs, policy_refs)
+        refs = gt_refs
+        actions_128 = gt_actions
+    elif args.gt_only:
+        args.use_gt_actions = True  # gt-only always uses GT, never runs policy
+        if args.ref_npz:
+            refs = _load_refs_npz(args.ref_npz)
+            actions_128 = np.zeros((0, 128), dtype=np.float32)
+        else:
+            actions_128 = _load_or_predict_actions(args)
+            refs = _actions_to_hand_refs(actions_128, fps=args.ref_fps)
+    else:
+        if not args.use_policy_refs and not args.pred_hdf5 and not args.ref_npz:
+            args.use_gt_actions = True
+            print("[refs] using GT episode actions for hand refs; pass --use-policy-refs to use human-policy predictions")
+        if args.ref_npz:
+            refs = _load_refs_npz(args.ref_npz)
+            actions_128 = np.zeros((0, 128), dtype=np.float32)
+        else:
+            actions_128 = _load_or_predict_actions(args)
+            refs = _actions_to_hand_refs(actions_128, fps=args.ref_fps)
+
+    if not args.gt_only and not args.compare_gt_policy:
         refs = _add_ik_refs(refs, args)
         if args.hand_control_mode == "ik" and ("rh_dof_pos" not in refs or "lh_dof_pos" not in refs):
             raise ValueError("--hand-control-mode ik needs IK refs; use --ik-backend auto/pytorch/pinocchio or a --ref-npz with rh/lh_dof_pos.")
@@ -951,7 +1130,7 @@ def run(args) -> None:
             return
     raw_refs_for_log = refs
     world_viz_offset = np.zeros(3, dtype=np.float32)
-    if not args.gt_only:
+    if not args.gt_only and not args.compare_gt_policy:
         world_viz_offset, ref_z_min, ref_z_max = _world_height_viz_offset(refs)
         if np.linalg.norm(world_viz_offset) > 1e-8:
             refs = _offset_world_refs(refs, world_viz_offset)
@@ -960,6 +1139,20 @@ def run(args) -> None:
         else:
             print(f"[viz] no world ref offset applied "
                   f"(ref_z_min={ref_z_min:.4f}, ref_z_max={ref_z_max:.4f})")
+    camera_refs_for_viz = refs
+    camera_uses_gt_only_view = False
+    if (
+        not args.gt_only
+        and not args.compare_gt_policy
+        and (args.use_policy_refs or args.pred_hdf5 or args.ref_npz)
+        and (args.gt_dir or args.episode_hdf5)
+    ):
+        gt_camera_refs = _actions_to_hand_refs(_load_gt_actions(args), fps=args.ref_fps)
+        if np.linalg.norm(world_viz_offset) > 1e-8:
+            gt_camera_refs = _offset_world_refs(gt_camera_refs, world_viz_offset)
+        camera_refs_for_viz = gt_camera_refs
+        camera_uses_gt_only_view = True
+        print("[viz] camera follows GT-only reference view; GMT/IK tracking refs are unchanged")
 
     # TWIST should use dependencies from the active TWIST environment. In
     # particular, do not let human_policy/pytorch3d shadow official PyTorch3D.
@@ -1044,7 +1237,7 @@ def run(args) -> None:
         obs = env.get_observations()
 
         policy, normalizer = (None, None)
-        if not args.gt_only and args.hand_control_mode == "gmt":
+        if not args.gt_only and not args.compare_gt_policy and args.hand_control_mode == "gmt":
             policy, normalizer = _load_hand_policy(env, train_cfg, twist_args, args)
 
         total_steps = args.rollout_steps
@@ -1075,16 +1268,24 @@ def run(args) -> None:
         rh_rot_seq   = _sample_quat_nearest(refs["rh_root_rot"], ref_frame_f)  # (T,4) xyzw
         lh_rot_seq   = _sample_quat_nearest(refs["lh_root_rot"], ref_frame_f)  # (T,4) xyzw
         head_z_max = float(np.max(head_pos_seq[:, 2])) if len(head_pos_seq) else 0.0
-        viz_offset = np.array([0.0, 0.0, 0.0 if head_z_max > 0.5 else 1.0], dtype=np.float32)
+        if args.gt_only:
+            viz_offset = np.array([0.0, 0.0, 0.0 if head_z_max > 0.5 else 1.0], dtype=np.float32)
+        else:
+            # GMT/IK refs have already been transformed into sim/viewer space via
+            # world_viz_offset above.  Keep the overlay and camera on those exact
+            # refs instead of applying a second visual-only lift.
+            viz_offset = np.zeros(3, dtype=np.float32)
         raw_rh_wrist_seq = _interp_np(raw_refs_for_log["rh_root_pos"], ref_frame_f)
         raw_lh_wrist_seq = _interp_np(raw_refs_for_log["lh_root_pos"], ref_frame_f)
+        cam_head_seq = _interp_np(camera_refs_for_viz["head_pos"], ref_frame_f) if "head_pos" in camera_refs_for_viz else head_pos_seq
+        cam_rh_wrist_seq = _interp_np(camera_refs_for_viz["rh_root_pos"], ref_frame_f)
+        cam_lh_wrist_seq = _interp_np(camera_refs_for_viz["lh_root_pos"], ref_frame_f)
 
         # Print frame-0 ref vs env wrist to check coordinate alignment.
         print(f"[raw ref frame0] rh_wrist_pos={raw_rh_wrist_seq[0]}  lh_wrist_pos={raw_lh_wrist_seq[0]}")
         if np.linalg.norm(world_viz_offset) > 1e-8:
-            print(f"[sim ref frame0] rh_wrist_pos={rh_wrist_seq[0]}  lh_wrist_pos={lh_wrist_seq[0]}  "
-                  f"world_offset={world_viz_offset.tolist()}")
-        print(f"[env frame0] rh_root_pos ={env.rh_root_states[0, :3].cpu().numpy()}  "
+            print(f"[target offset] world_offset={world_viz_offset.tolist()}")
+        print(f"[sim frame0] rh_root_pos={env.rh_root_states[0, :3].cpu().numpy()}  "
               f"lh_root_pos={env.lh_root_states[0, :3].cpu().numpy()}")
         if "rh_dof_pos" in refs and "lh_dof_pos" in refs:
             print(f"[ik frame0] rh_dof={np.round(refs['rh_dof_pos'][0], 4)}")
@@ -1105,9 +1306,9 @@ def run(args) -> None:
             except Exception as exc:
                 print(f"Warning: failed to set Isaac Gym light: {exc}")
 
-            head_viz0 = head_pos_seq[0].astype(np.float32) + viz_offset
-            lh_wrist_viz0 = lh_wrist_seq[0].astype(np.float32) + viz_offset
-            rh_wrist_viz0 = rh_wrist_seq[0].astype(np.float32) + viz_offset
+            head_viz0 = cam_head_seq[0].astype(np.float32) + viz_offset
+            lh_wrist_viz0 = cam_lh_wrist_seq[0].astype(np.float32) + viz_offset
+            rh_wrist_viz0 = cam_rh_wrist_seq[0].astype(np.float32) + viz_offset
             viewer_cam_pos0, cam_target0 = _lookat_from_head_wrists(head_viz0, lh_wrist_viz0, rh_wrist_viz0)
             cam_pos = gymapi.Vec3(float(viewer_cam_pos0[0]), float(viewer_cam_pos0[1]), float(viewer_cam_pos0[2]))
             cam_target = gymapi.Vec3(float(cam_target0[0]), float(cam_target0[1]), float(cam_target0[2]))
@@ -1118,9 +1319,9 @@ def run(args) -> None:
         def _draw_ref_skeleton(step_i: int) -> None:
             if not has_viewer:
                 return
-            head_viz = head_pos_seq[step_i].astype(np.float32) + viz_offset
-            lh_wrist_viz = lh_wrist_seq[step_i].astype(np.float32) + viz_offset
-            rh_wrist_viz = rh_wrist_seq[step_i].astype(np.float32) + viz_offset
+            head_viz = cam_head_seq[step_i].astype(np.float32) + viz_offset
+            lh_wrist_viz = cam_lh_wrist_seq[step_i].astype(np.float32) + viz_offset
+            rh_wrist_viz = cam_rh_wrist_seq[step_i].astype(np.float32) + viz_offset
             viewer_cam_pos, cam_target_np = _lookat_from_head_wrists(head_viz, lh_wrist_viz, rh_wrist_viz)
             cam_pos = gymapi.Vec3(float(viewer_cam_pos[0]), float(viewer_cam_pos[1]), float(viewer_cam_pos[2]))
             cam_target = gymapi.Vec3(float(cam_target_np[0]), float(cam_target_np[1]), float(cam_target_np[2]))
@@ -1138,7 +1339,11 @@ def run(args) -> None:
 
         import time as _time
 
-        # ── GT-only mode: hide the dexhands, record from head-position camera ──
+        # ── Skeleton-only modes: hide the dexhands and draw debug reference lines ──
+        if args.compare_gt_policy:
+            gt_refs, policy_refs = compare_refs
+            _run_compare_gt_policy(args, env, gt_refs, policy_refs, has_viewer, _env_ptr)
+            return
         if args.gt_only:
             _run_gt_only(args, env, refs, head_pos_seq,
                          rh_wrist_seq, lh_wrist_seq, rh_tips_seq, lh_tips_seq,
@@ -1152,12 +1357,9 @@ def run(args) -> None:
             # Periodic ref vs env wrist position print for coordinate-frame debugging.
             if step_i % 20 == 0:
                 print(f"[step {step_i:4d}] raw ref rh_wrist={raw_rh_wrist_seq[step_i]}  "
-                      f"env rh_root={env.rh_root_states[0, :3].cpu().numpy()}")
+                      f"sim rh_root={env.rh_root_states[0, :3].cpu().numpy()}")
                 print(f"           raw ref lh_wrist={raw_lh_wrist_seq[step_i]}  "
-                      f"env lh_root={env.lh_root_states[0, :3].cpu().numpy()}")
-                if np.linalg.norm(world_viz_offset) > 1e-8:
-                    print(f"           sim ref rh_wrist={rh_wrist_seq[step_i]}  "
-                          f"sim ref lh_wrist={lh_wrist_seq[step_i]}")
+                      f"sim lh_root={env.lh_root_states[0, :3].cpu().numpy()}")
 
             if args.hand_control_mode == "gmt":
                 with torch.no_grad():
@@ -1298,6 +1500,8 @@ def main() -> None:
     p.add_argument("--step-delay", type=float, default=0.0, help="Seconds to sleep after each rollout step (e.g. 0.3 to slow down viewer).")
     p.add_argument("--show-table", action="store_true", help="Keep the trimesh terrain (table surface). Default: no ground.")
     p.add_argument("--gt-only", action="store_true", help="Visualize GT reference skeleton only; skip inspire hand and GMT policy.")
+    p.add_argument("--compare-gt-policy", action="store_true",
+                   help="Visualize GT and human-policy/pred refs together without inspire hands. Camera follows the GT-only view.")
     p.add_argument("--out-gt-video", type=str, default=None, help="Path to save GT-only skeleton video (requires --viewer).")
     p.add_argument("--out-video", type=str, default=str(_HP_ROOT / "outputs" / "twist_hand_gmt_bridge.mp4"))
     p.add_argument("--video-fps", type=int, default=30)
