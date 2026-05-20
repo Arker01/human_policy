@@ -2,16 +2,25 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+_HP_ROOT = Path(__file__).resolve().parent
+_REPO_ROOT = _HP_ROOT.parent
+_ISAACGYM_PY = _REPO_ROOT / "isaacgym" / "python"
+if _ISAACGYM_PY.exists() and str(_ISAACGYM_PY) not in sys.path:
+    sys.path.insert(0, str(_ISAACGYM_PY))
+
 # isaacgym must be imported before any torch import, so do it here at the top.
-import isaacgym  # noqa: F401
+# Batch IK generation does not touch Isaac Gym and may run in a different
+# Python version, so it can opt out with this private env flag.
+if os.environ.get("SHENGYIN_SKIP_ISAACGYM_IMPORT") != "1":
+    import isaacgym  # noqa: F401
 
 import numpy as np
 
-_HP_ROOT = Path(__file__).resolve().parent
 _TWIST_ROOT = _HP_ROOT.parent / "TWIST"
 _HDT_DIR = _HP_ROOT / "hdt"
 _DETR_DIR = _HDT_DIR / "detr"
@@ -38,6 +47,7 @@ _INSPIRE_DOF_NAMES = [
 _INSPIRE_TIP_NAMES = ["thumb_tip", "index_tip", "middle_tip", "ring_tip", "pinky_tip"]
 _INSPIRE_DOF_LOWER = np.array([0., 0., 0., 0., 0., 0., 0., 0., -0.1, 0., 0., 0.], dtype=np.float32)
 _INSPIRE_DOF_UPPER = np.array([1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.3, 0.5, 0.8, 1.2], dtype=np.float32)
+_DEFAULT_IK_CACHE_ROOT = _HP_ROOT.parent / "DATASETS" / "IK"
 
 
 def _mat_to_quat_xyzw(mat: np.ndarray) -> np.ndarray:
@@ -197,6 +207,38 @@ def _tips_world_to_local(root_pos: np.ndarray, root_rot_xyzw: np.ndarray, tips_w
     return np.einsum("tji,tkj->tki", root_m, tips_world - root_pos[:, None, :]).astype(np.float32)
 
 
+def _dataset_relative_path(path: str | Path) -> Path:
+    path = Path(path).expanduser().resolve()
+    datasets_root = (_HP_ROOT.parent / "DATASETS").resolve()
+    try:
+        return path.relative_to(datasets_root)
+    except ValueError:
+        return Path("__external__") / path.drive.replace(":", "") / Path(*path.parts[1:])
+
+
+def _ik_cache_path(source_path: str | Path, backend: str, cache_root: str | Path | None = None) -> Path:
+    root = Path(cache_root).expanduser() if cache_root else _DEFAULT_IK_CACHE_ROOT
+    rel = _dataset_relative_path(source_path).with_suffix(".npz")
+    return root / backend / rel
+
+
+def _has_full_ik(refs: dict[str, np.ndarray], expected_len: int | None = None) -> bool:
+    required = ("rh_dof_pos", "lh_dof_pos", "rh_dof_vel", "lh_dof_vel")
+    if not all(k in refs for k in required):
+        return False
+    if expected_len is not None and expected_len > 1:
+        return len(refs["rh_dof_pos"]) >= expected_len and len(refs["lh_dof_pos"]) >= expected_len
+    return len(refs["rh_dof_pos"]) > 0 and len(refs["lh_dof_pos"]) > 0
+
+
+def _merge_ik_refs(refs: dict[str, np.ndarray], ik_refs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    refs = dict(refs)
+    for key in ("rh_dof_pos", "lh_dof_pos", "rh_dof_vel", "lh_dof_vel", "ik_backend"):
+        if key in ik_refs:
+            refs[key] = ik_refs[key]
+    return refs
+
+
 class _PytorchKinematicsInspireIK:
     def __init__(self, side: str, *, device: str, lr: float, iters: int, smooth_w: float, reg_w: float):
         import torch
@@ -350,11 +392,24 @@ def _add_ik_refs(refs: dict[str, np.ndarray], args) -> dict[str, np.ndarray]:
     )
     if args.hand_control_mode == "gmt" and not args.exact_ik_reset and not args.full_ik_in_gmt:
         return refs
-    if all(k in refs for k in ("rh_dof_pos", "lh_dof_pos", "rh_dof_vel", "lh_dof_vel")) and not args.force_recompute_ik:
+    need_full_sequence = not gmt_reset_only
+    expected_len = len(refs["rh_tip_world"]) if need_full_sequence else 1
+    if _has_full_ik(refs, expected_len) and not args.force_recompute_ik:
         print("[ik] using cached rh/lh dof refs from input refs")
         return refs
 
     backend = _resolve_ik_backend(args.ik_backend)
+    cache_source = getattr(args, "_ik_cache_source", None)
+    cache_path = None
+    if getattr(args, "ik_cache", True) and cache_source:
+        cache_path = _ik_cache_path(cache_source, backend, getattr(args, "ik_cache_root", None))
+        if cache_path.exists() and not args.force_recompute_ik:
+            cached_refs = _load_refs_npz(str(cache_path))
+            if _has_full_ik(cached_refs, expected_len):
+                print(f"[ik] loaded cached {backend} IK refs: {cache_path}")
+                return _merge_ik_refs(refs, cached_refs)
+            print(f"[ik] ignoring incomplete IK cache for this run: {cache_path}")
+
     scope = "frame0 reset only" if gmt_reset_only else "full sequence"
     print(f"[ik] solving Inspire hand IK with backend={backend} ({scope})")
 
@@ -396,6 +451,8 @@ def _add_ik_refs(refs: dict[str, np.ndarray], args) -> dict[str, np.ndarray]:
     refs["rh_dof_vel"] = _gradient_or_zeros(refs["rh_dof_pos"], float(refs["fps"]))
     refs["lh_dof_vel"] = _gradient_or_zeros(refs["lh_dof_pos"], float(refs["fps"]))
     refs["ik_backend"] = np.asarray(backend)
+    if cache_path is not None and need_full_sequence:
+        _save_refs_npz(str(cache_path), refs)
     return refs
 
 
@@ -1087,6 +1144,7 @@ def _run_compare_gt_policy(args, env, gt_refs, policy_refs, has_viewer, env_ptr)
 
 def run(args) -> None:
     compare_refs = None
+    args._ik_cache_source = None
     if args.compare_gt_policy:
         gt_actions = _load_gt_actions(args)
         gt_refs = _actions_to_hand_refs(gt_actions, fps=args.ref_fps)
@@ -1116,9 +1174,16 @@ def run(args) -> None:
         if args.ref_npz:
             refs = _load_refs_npz(args.ref_npz)
             actions_128 = np.zeros((0, 128), dtype=np.float32)
+            args._ik_cache_source = args.ref_npz
         else:
             actions_128 = _load_or_predict_actions(args)
             refs = _actions_to_hand_refs(actions_128, fps=args.ref_fps)
+            if args.pred_hdf5:
+                args._ik_cache_source = args.pred_hdf5
+            elif args.use_gt_actions:
+                args._ik_cache_source = str(_select_episode(args.gt_dir, args.episode_hdf5, args.glob))
+            elif args.use_policy_refs:
+                print("[ik] cache disabled for live policy refs; use --pred-hdf5 or --dump-ref-npz to make them cacheable")
 
     if not args.gt_only and not args.compare_gt_policy:
         refs = _add_ik_refs(refs, args)
@@ -1488,6 +1553,11 @@ def main() -> None:
     p.add_argument("--ik-reg-weight", type=float, default=1e-4)
     p.add_argument("--force-recompute-ik", action="store_true",
                    help="Recompute IK even if rh/lh dof refs already exist in --ref-npz.")
+    p.add_argument("--ik-cache-root", type=str, default=str(_DEFAULT_IK_CACHE_ROOT),
+                   help="Directory for precomputed IK refs. Defaults to DATASETS/IK.")
+    p.add_argument("--no-ik-cache", dest="ik_cache", action="store_false",
+                   help="Do not load or save IK refs from --ik-cache-root.")
+    p.set_defaults(ik_cache=True)
     p.add_argument("--full-ik-in-gmt", action="store_true",
                    help="In --hand-control-mode gmt, compute IK for the full sequence instead of only frame 0 for reset.")
     p.add_argument("--no-exact-ik-reset", dest="exact_ik_reset", action="store_false",
