@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -529,6 +530,33 @@ def _build_gt_debug_lines(head_pos, rh_full, lh_full, cam_pos=None, viz_offset=N
     return len(segs), verts, colors
 
 
+def _build_tip_marker_lines(target_rh_tips, target_lh_tips, actual_rh_tips, actual_lh_tips, viz_offset=None):
+    """Draw target fingertips in green and simulated Inspire fingertips in red."""
+    segs: list[tuple[np.ndarray, np.ndarray]] = []
+    cols: list[np.ndarray] = []
+    if viz_offset is None:
+        viz_offset = np.zeros(3, dtype=np.float32)
+    viz_offset = np.asarray(viz_offset, dtype=np.float32)
+
+    def add_points(points, color, radius, offset):
+        points = np.asarray(points, dtype=np.float32)
+        for point in points:
+            for seg in _point_cross_segments(point + offset, radius):
+                segs.append(seg)
+                cols.append(np.asarray(color, dtype=np.float32))
+
+    add_points(target_rh_tips, [0.0, 1.0, 0.0], 0.018, viz_offset)
+    add_points(target_lh_tips, [0.0, 1.0, 0.0], 0.018, viz_offset)
+    add_points(actual_rh_tips, [1.0, 0.0, 0.0], 0.014, np.zeros(3, dtype=np.float32))
+    add_points(actual_lh_tips, [1.0, 0.0, 0.0], 0.014, np.zeros(3, dtype=np.float32))
+
+    if not segs:
+        return 0, np.zeros((0, 3), dtype=np.float32), np.zeros((0, 3), dtype=np.float32)
+    verts = np.array(segs, dtype=np.float32).reshape(-1, 3)
+    colors = np.repeat(np.array(cols, dtype=np.float32), 2, axis=0)
+    return len(segs), verts, colors
+
+
 def _build_compare_debug_lines(gt_head, gt_rh_full, gt_lh_full,
                                pol_head, pol_rh_full, pol_lh_full,
                                cam_pos=None, viz_offset=None):
@@ -880,6 +908,75 @@ def _twist_args(args):
     )
 
 
+def _checkpoint_number(path: Path) -> int | None:
+    import re
+
+    match = re.search(r"model_(\d+)\.pt$", path.name)
+    if match is None:
+        return None
+    return int(match.group(1))
+
+
+def _find_checkpoint_in_dir(root: Path, checkpoint: int) -> Path:
+    candidates = [p for p in root.rglob("*.pt") if _checkpoint_number(p) is not None]
+    if not candidates:
+        raise FileNotFoundError(
+            f"No model_*.pt checkpoint found under {root}. "
+            "Pass --hand-gmt-ckpt /path/to/model_*.pt if the model file is stored elsewhere."
+        )
+    if checkpoint != -1:
+        matches = [p for p in candidates if _checkpoint_number(p) == checkpoint]
+        if not matches:
+            raise FileNotFoundError(f"No model_{checkpoint}.pt checkpoint found under {root}")
+        return sorted(matches)[0]
+    return sorted(candidates, key=lambda p: (_checkpoint_number(p), str(p)))[-1]
+
+
+def _resolve_hand_gmt_checkpoint(args) -> Path | None:
+    ckpt_path = Path(args.hand_gmt_ckpt).expanduser() if args.hand_gmt_ckpt else None
+    if ckpt_path is not None:
+        if ckpt_path.is_dir():
+            return _find_checkpoint_in_dir(ckpt_path, args.hand_gmt_checkpoint)
+        return ckpt_path
+    return None
+
+
+def _load_checkpoint_json_cfgs(env_cfg, train_cfg, args) -> None:
+    if not args.hand_gmt_ckpt:
+        return
+    ckpt_path = Path(args.hand_gmt_ckpt).expanduser()
+    run_dir = ckpt_path if ckpt_path.is_dir() else ckpt_path.parent
+
+    env_json = run_dir / "env_cfg.json"
+    train_json = run_dir / "train_cfg.json"
+    if not env_json.exists() and not train_json.exists():
+        print(f"[hand-gmt cfg] no env_cfg.json/train_cfg.json in {run_dir}; using current TWIST defaults")
+        return
+
+    from legged_gym.gym_utils.helpers import update_class_from_dict
+
+    if env_json.exists():
+        with open(env_json, "r") as f:
+            update_class_from_dict(env_cfg, json.load(f))
+    if train_json.exists():
+        with open(train_json, "r") as f:
+            update_class_from_dict(train_cfg, json.load(f))
+
+    env = env_cfg.env
+    scales = env_cfg.rewards.scales
+    print(
+        "[hand-gmt cfg] loaded JSON config from "
+        f"{run_dir} | obs={env.num_observations} priv={env.num_privileged_obs} "
+        f"hand_obs_global={getattr(env, 'hand_obs_global', None)} "
+        f"wrist_pos_obs={getattr(env, 'include_wrist_pos_in_proprio', None)} "
+        f"proprio_yaw={getattr(env, 'include_yaw_in_proprio', None)} "
+        f"wrist_error_obs={getattr(env, 'include_wrist_error_obs', None)} "
+        f"inject_wrist_error={getattr(env, 'inject_wrist_tracking_error', None)} "
+        f"key_local={getattr(scales, 'tracking_keybody_pos_rh', None)} "
+        f"key_global={getattr(scales, 'tracking_keybody_pos_global_rh', None)}"
+    )
+
+
 def _load_hand_policy(env, train_cfg, twist_args, args):
     import torch
     from legged_gym.gym_utils import task_registry
@@ -895,7 +992,7 @@ def _load_hand_policy(env, train_cfg, twist_args, args):
         init_wandb=False,
     )
 
-    ckpt_path = args.hand_gmt_ckpt
+    ckpt_path = _resolve_hand_gmt_checkpoint(args)
     if ckpt_path is None:
         log_root = Path(args.hand_gmt_log_root) if args.hand_gmt_log_root else _TWIST_ROOT / "legged_gym" / "logs" / args.hand_gmt_proj_name / args.hand_gmt_exptid
         ckpt_path = get_load_path(str(log_root), checkpoint=args.hand_gmt_checkpoint)
@@ -1269,6 +1366,7 @@ def run(args) -> None:
     try:
         twist_args = _twist_args(args)
         env_cfg, train_cfg = task_registry.get_cfgs(name="dexhand_mimic_direct")
+        _load_checkpoint_json_cfgs(env_cfg, train_cfg, args)
         env_cfg.env.num_envs = 1
         env_cfg.env.rand_reset = False
         env_cfg.env.training = False
@@ -1399,6 +1497,19 @@ def run(args) -> None:
                 viz_offset=viz_offset,
             )
             env.gym.add_lines(env.viewer, _env_ptr, n, verts, colors)
+            try:
+                actual_rh_tips = env.rh_body_states[0, env._key_body_ids, :3].detach().cpu().numpy()
+                actual_lh_tips = env.lh_body_states[0, env._key_body_ids, :3].detach().cpu().numpy()
+                n, verts, colors = _build_tip_marker_lines(
+                    rh_tips_seq[step_i], lh_tips_seq[step_i],
+                    actual_rh_tips, actual_lh_tips,
+                    viz_offset=viz_offset,
+                )
+                if n > 0:
+                    env.gym.add_lines(env.viewer, _env_ptr, n, verts, colors)
+            except Exception as exc:
+                if step_i == 0:
+                    print(f"Warning: failed to draw fingertip target/actual markers: {exc}")
             env.gym.step_graphics(env.sim)
             env.gym.draw_viewer(env.viewer, env.sim, True)
 
