@@ -8,6 +8,28 @@ from pathlib import Path
 
 from hdt.inference_utils import get_eef_kpts_from_prediction
 
+HEAD_TRACKER_EEF = np.arange(58, 67)
+WAIST_EEF = np.arange(89, 98)
+
+
+def _rotation_6d_to_matrix_np(rot6d: np.ndarray) -> np.ndarray:
+    import torch
+    from pytorch3d.transforms import rotation_6d_to_matrix
+
+    rot6d = np.asarray(rot6d, dtype=np.float32)
+    if np.allclose(rot6d, 0.0):
+        return np.eye(3, dtype=np.float32)
+    return rotation_6d_to_matrix(torch.from_numpy(rot6d).unsqueeze(0)).squeeze(0).numpy()
+
+
+def _pose9_mat_from_action(action_128: np.ndarray, indices: np.ndarray) -> np.ndarray:
+    pose = np.asarray(action_128[indices], dtype=np.float32)
+    pose_mat = np.eye(4, dtype=np.float32)
+    pose_mat[:3, 3] = pose[:3]
+    pose_mat[:3, :3] = _rotation_6d_to_matrix_np(pose[3:])
+    return pose_mat
+
+
 def _expand_hand_25_from_tips(hand_kpts_25: np.ndarray) -> np.ndarray:
     hand_kpts_25 = np.asarray(hand_kpts_25, dtype=np.float32)
     if hand_kpts_25.shape != (25, 3):
@@ -39,8 +61,14 @@ def load_cmd_tuple_hdf5(path, *, full_hand=False, max_frames=None):
         frame_count = file["/action"].shape[0]
         if max_frames is not None:
             frame_count = min(frame_count, int(max_frames))
+        actions = file["/action"][:frame_count]
+        waist_valid = file["waist_valid"][:frame_count].astype(bool) if "waist_valid" in file else None
+        head_tracker_valid = file["head_tracker_valid"][:frame_count].astype(bool) if "head_tracker_valid" in file else None
+        has_waist = bool(np.any(np.abs(actions[:, WAIST_EEF]) > 1e-6))
+        has_head_tracker = bool(np.any(np.abs(actions[:, HEAD_TRACKER_EEF]) > 1e-6))
         for i in range(frame_count):
-            cur_cmd_dict = get_eef_kpts_from_prediction(file["/action"][i])
+            action = actions[i]
+            cur_cmd_dict = get_eef_kpts_from_prediction(action)
             # Format post-processed data to match expected structure
             head_mat = cur_cmd_dict['head_mat']
             left_wrist_mat = cur_cmd_dict['left_wrist_mat']
@@ -80,6 +108,12 @@ def load_cmd_tuple_hdf5(path, *, full_hand=False, max_frames=None):
                     'joints': left_skeleton_joints.reshape(-1).tolist()
                 }
             }
+            if has_waist and (waist_valid is None or waist_valid[i]):
+                waist_mat = _pose9_mat_from_action(action, WAIST_EEF)
+                data['waist'] = waist_mat.flatten(order="F").tolist()
+            if has_head_tracker and (head_tracker_valid is None or head_tracker_valid[i]):
+                head_tracker_mat = _pose9_mat_from_action(action, HEAD_TRACKER_EEF)
+                data['headTracker'] = head_tracker_mat.flatten(order="F").tolist()
             data_list.append(data)
 
     return data_list
@@ -287,7 +321,7 @@ def evaluate_mpjpe(gt_hdf5_path: str, pred_hdf5_path: str, save_json_path: str |
 
     return metrics
 
-def main(input_file, *, full_hand=False, max_frames=None):
+def main(input_file, *, full_hand=False, max_frames=None, draw_spine=False):
     # Processed HDF5
     datas = load_cmd_tuple_hdf5(input_file, full_hand=full_hand, max_frames=max_frames)
     
@@ -297,6 +331,8 @@ def main(input_file, *, full_hand=False, max_frames=None):
         head_mat = np.array(data['head']).reshape(4, 4, order="F")
         right_wrist_mat = np.array(data['rightWrist']).reshape(4, 4, order="F")
         left_wrist_mat = np.array(data['leftWrist']).reshape(4, 4, order="F")
+        waist_mat = np.array(data['waist']).reshape(4, 4, order="F") if 'waist' in data else None
+        head_tracker_mat = np.array(data['headTracker']).reshape(4, 4, order="F") if 'headTracker' in data else None
         
         right_fingers = np.array(data["rightSkeleton"]["joints"]).reshape(25, 4, 4)[:, 3, 0:3]
         left_fingers = np.array(data["leftSkeleton"]["joints"]).reshape(25, 4, 4)[:, 3, 0:3]
@@ -318,6 +354,10 @@ def main(input_file, *, full_hand=False, max_frames=None):
         head_pos, head_x, head_y, head_z = get_axes(head_mat)
         rw_pos, rw_x, rw_y, rw_z = get_axes(right_wrist_mat)
         lw_pos, lw_x, lw_y, lw_z = get_axes(left_wrist_mat)
+        if waist_mat is not None:
+            waist_pos, waist_x, waist_y, waist_z = get_axes(waist_mat)
+        if head_tracker_mat is not None:
+            head_tracker_pos, head_tracker_x, head_tracker_y, head_tracker_z = get_axes(head_tracker_mat)
         
         # Transform finger positions from local wrist frame to world frame
         def transform_points(points, transform_mat):
@@ -346,13 +386,31 @@ def main(input_file, *, full_hand=False, max_frames=None):
                 'left': left_fingers_world
             }
         }
+        if waist_mat is not None:
+            frame_data['positions']['waist'] = waist_pos
+            frame_data['axes']['waist'] = (waist_x, waist_y, waist_z)
+        if head_tracker_mat is not None:
+            frame_data['positions']['head_tracker'] = head_tracker_pos
+            frame_data['axes']['head_tracker'] = (head_tracker_x, head_tracker_y, head_tracker_z)
+        if draw_spine and head_tracker_mat is not None:
+            links = []
+            if waist_mat is not None:
+                links.append(('head_tracker_to_waist', np.stack([head_tracker_pos, waist_pos], axis=0)))
+            links.append(('head_tracker_to_head', np.stack([head_tracker_pos, head_pos], axis=0)))
+            frame_data['body_links'] = links
         frames.append(frame_data)
     
     # Create figure
     fig = go.Figure()
     
     # Add initial positions
-    colors = {'head': 'blue', 'right_wrist': 'red', 'left_wrist': 'green'}
+    colors = {
+        'head': 'blue',
+        'right_wrist': 'red',
+        'left_wrist': 'green',
+        'waist': 'orange',
+        'head_tracker': 'purple',
+    }
     axis_colors = ['red', 'green', 'blue']  # x, y, z axes colors
     
     def add_coordinate_frame(pos, axes, name, base_color):
@@ -383,13 +441,65 @@ def main(input_file, *, full_hand=False, max_frames=None):
             name=f"{name}_fingers",
             marker=dict(size=4, color=color, opacity=0.7)
         ))
+
+    def add_body_links(body_links):
+        link_colors = {
+            'head_tracker_to_waist': 'black',
+            'head_tracker_to_head': 'purple',
+        }
+        link_names = {
+            'head_tracker_to_waist': 'head_tracker_to_waist',
+            'head_tracker_to_head': 'head_tracker_to_head',
+        }
+        for name, points in body_links:
+            color = link_colors.get(name, 'black')
+            label = link_names.get(name, name)
+            fig.add_trace(go.Scatter3d(
+                x=points[:, 0], y=points[:, 1], z=points[:, 2],
+                mode='lines+markers',
+                name=label,
+                line=dict(color=color, width=5),
+                marker=dict(size=4, color=color)
+            ))
+
+    def make_body_link_traces(body_links):
+        link_colors = {
+            'head_tracker_to_waist': 'black',
+            'head_tracker_to_head': 'purple',
+        }
+        traces = []
+        for name, points in body_links:
+            color = link_colors.get(name, 'black')
+            traces.append(go.Scatter3d(
+                x=points[:, 0],
+                y=points[:, 1],
+                z=points[:, 2],
+                mode='lines+markers',
+                line=dict(color=color, width=5),
+                marker=dict(size=4, color=color)
+            ))
+        return traces
+
+    def add_spine(spine_points):
+        fig.add_trace(go.Scatter3d(
+            x=spine_points[:, 0], y=spine_points[:, 1], z=spine_points[:, 2],
+            mode='lines+markers',
+            name='spine',
+            line=dict(color='black', width=5),
+            marker=dict(size=4, color='black')
+        ))
     
     # Initial frame
     first_frame = frames[0]
+    parts = ['head', 'right_wrist', 'left_wrist']
+    if 'waist' in first_frame['positions']:
+        parts.append('waist')
+    if 'head_tracker' in first_frame['positions']:
+        parts.append('head_tracker')
     # Add origin coordinate frame
     
     
-    for part in ['head', 'right_wrist', 'left_wrist']:
+    for part in parts:
         pos = first_frame['positions'][part]
         axes = first_frame['axes'][part]
         add_coordinate_frame(pos, axes, part, colors[part])
@@ -401,6 +511,10 @@ def main(input_file, *, full_hand=False, max_frames=None):
     add_hand_keypoints(first_frame['positions']['left_wrist'], 
                       first_frame['fingers']['left'], 
                       'left', colors['left_wrist'])
+    if draw_spine and 'spine' in first_frame:
+        add_spine(first_frame['spine'])
+    if draw_spine and 'body_links' in first_frame:
+        add_body_links(first_frame['body_links'])
     
     # Update layout
     fig.update_layout(
@@ -487,7 +601,7 @@ def main(input_file, *, full_hand=False, max_frames=None):
         #         line=dict(color=color, width=3)
         #     ))
             
-        for part in ['head', 'right_wrist', 'left_wrist']:
+        for part in parts:
             pos = frame['positions'][part]
             axes = frame['axes'][part]
             
@@ -524,6 +638,19 @@ def main(input_file, *, full_hand=False, max_frames=None):
             mode='markers',
             marker=dict(size=4, color=colors['left_wrist'], opacity=0.7)
         ))
+
+        if draw_spine and 'spine' in frame:
+            spine_points = frame['spine']
+            frame_traces.append(go.Scatter3d(
+                x=spine_points[:, 0],
+                y=spine_points[:, 1],
+                z=spine_points[:, 2],
+                mode='lines+markers',
+                line=dict(color='black', width=5),
+                marker=dict(size=4, color='black')
+            ))
+        if draw_spine and 'body_links' in frame:
+            frame_traces.extend(make_body_link_traces(frame['body_links']))
         
         fig_frames.append(go.Frame(data=frame_traces, name=str(i)))
     
@@ -587,11 +714,22 @@ def _save_mp4_matplotlib(frames, out_path, *, fps=20, width=960, height=720):
     fig_w = width / dpi
     fig_h = height / dpi
 
-    colors = {'head': 'blue', 'right_wrist': 'red', 'left_wrist': 'green'}
+    colors = {
+        'head': 'blue',
+        'right_wrist': 'red',
+        'left_wrist': 'green',
+        'waist': 'orange',
+        'head_tracker': 'purple',
+    }
     axis_colors = ['red', 'green', 'blue']
+    parts = ['head', 'right_wrist', 'left_wrist']
+    if frames and 'waist' in frames[0]['positions']:
+        parts.append('waist')
+    if frames and 'head_tracker' in frames[0]['positions']:
+        parts.append('head_tracker')
 
     all_pts = np.concatenate(
-        [np.stack([f['positions'][p] for p in ('head', 'right_wrist', 'left_wrist')])
+        [np.stack([f['positions'][p] for p in parts])
          for f in frames], axis=0
     )
     margin = 0.1
@@ -612,7 +750,7 @@ def _save_mp4_matplotlib(frames, out_path, *, fps=20, width=960, height=720):
             ax.set_title(f"Frame {i}")
             fig_m.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=0.95)
 
-            for part in ('head', 'right_wrist', 'left_wrist'):
+            for part in parts:
                 pos = frame['positions'][part]
                 axes_ends = frame['axes'][part]
                 c = colors[part]
@@ -625,6 +763,19 @@ def _save_mp4_matplotlib(frames, out_path, *, fps=20, width=960, height=720):
                 pts = frame['fingers'][side]
                 ax.scatter(pts[:, 0], pts[:, 1], pts[:, 2], color=c, s=15, alpha=0.7,
                            label=f"{side}_fingers")
+
+            if 'spine' in frame:
+                spine = frame['spine']
+                ax.plot(spine[:, 0], spine[:, 1], spine[:, 2],
+                        color='black', linewidth=3, marker='o', markersize=3,
+                        label='spine')
+
+            if 'body_links' in frame:
+                for name, points in frame['body_links']:
+                    c = 'purple' if name == 'head_tracker_to_head' else 'black'
+                    ax.plot(points[:, 0], points[:, 1], points[:, 2],
+                            color=c, linewidth=3, marker='o', markersize=3,
+                            label=name)
 
             ax.legend(loc='upper left', fontsize=6, markerscale=0.8)
 
@@ -660,6 +811,7 @@ if __name__ == "__main__":
     parser.add_argument('--max_steps', type=int, default=None, help='Limit number of steps to predict')
     parser.add_argument('--device', type=str, default=None, help='cuda or cpu (default auto)')
     parser.add_argument('--full_hand', action='store_true', help='Expand each hand from 5 fingertip keypoints to an approximate 25-joint chain for visualization')
+    parser.add_argument('--spine', action='store_true', help='Draw an approximate waist-to-head spine when action[89:98] contains waist pose data')
     parser.add_argument('--save_html', type=str, default=None, help='If set, save the interactive visualization to an HTML file')
     parser.add_argument('--save_mp4', type=str, default=None, help='If set, export the animation to an MP4 file (requires kaleido + ffmpeg)')
     parser.add_argument('--fps', type=int, default=20, help='FPS for MP4 export')
@@ -689,7 +841,7 @@ if __name__ == "__main__":
             max_steps=args.max_steps,
             device=args.device,
         )
-        fig, frames = main(args.out, full_hand=args.full_hand, max_frames=max_frames)
+        fig, frames = main(args.out, full_hand=args.full_hand, max_frames=max_frames, draw_spine=args.spine)
         if args.eval_mpjpe:
             gt_file = args.gt_file if args.gt_file is not None else args.predict_episode
             metrics = evaluate_mpjpe(gt_file, args.out, save_json_path=args.metrics_out)
@@ -697,7 +849,7 @@ if __name__ == "__main__":
             for k, v in metrics.items():
                 print(f"{k}: {v}")
     else:
-        fig, frames = main(args.file, full_hand=args.full_hand, max_frames=max_frames)
+        fig, frames = main(args.file, full_hand=args.full_hand, max_frames=max_frames, draw_spine=args.spine)
         if args.eval_mpjpe:
             if args.gt_file is None:
                 raise ValueError("--gt_file is required when using --eval_mpjpe without --predict_episode")
