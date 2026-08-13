@@ -3,9 +3,9 @@
 # 训练配置
 batch_size=64
 learning_rate=1e-5
-finetune_lr=1e-6
+finetune_lr=5e-6
 chunk_size=100
-expt_id="train_newset"
+expt_id="train_all_episodes_finetune"
 
 # 数据和模型配置
 model_cfg_path="hdt/configs/models/act_resnet.yaml"
@@ -15,12 +15,14 @@ base_dir="/home/aigc/human_policy/data"
 output_dir="/home/aigc/human_policy/data/${expt_id}_ckpt"
 mkdir -p "$output_dir"
 
-finetune_expt_id="${expt_id}_finetune_task2"
+finetune_expt_id="${expt_id}_finetune_all_episodes"
 finetune_output_dir="/home/aigc/human_policy/data/${finetune_expt_id}_ckpt"
 mkdir -p "$finetune_output_dir"
 
-# 创建第一阶段训练配置（不含task2_aligned）
-cat > /tmp/pick_place_base.json << 'EOF'
+# ==========================================
+# 阶段1: 用 processed + ego_last 预训练
+# ==========================================
+cat > /tmp/pick_place_base_stage1.json << 'EOF'
 {
   "train": [
     {
@@ -91,7 +93,7 @@ cat > /tmp/pick_place_base.json << 'EOF'
       "dataset_path": "/home/aigc/.cache/modelscope/hub/datasets/arker01/human_policy/convert_ego_last",
       "type": "human",
       "start_idx": 0,
-      "end_idx": 1800
+      "end_idx": 800
     }
   ],
   "val": [
@@ -102,27 +104,29 @@ cat > /tmp/pick_place_base.json << 'EOF'
     {
       "dataset_path": "/home/aigc/.cache/modelscope/hub/datasets/arker01/human_policy/convert_ego_last",
       "type": "human",
-      "start_idx": 1800,
-      "end_idx": 2000
+      "start_idx": 800,
+      "end_idx": 1000
     }
   ]
 }
 EOF
 
-# 创建finetune训练配置（仅task2_aligned）
-cat > /tmp/task2_aligned_finetune.json << 'EOF'
+# ==========================================
+# 阶段2: 在 all_episodes 新数据集上 Finetune
+# ==========================================
+cat > /tmp/all_episodes_finetune.json << 'EOF'
 {
   "train": [
     {
-      "dataset_path": "/home/aigc/human_policy/data/convert_whole_last",
+      "dataset_path": "/home/aigc/human_policy/data/all_episodes",
       "type": "human",
       "start_idx": 10,
-      "end_idx": 150
+      "end_idx": 95
     }
   ],
   "val": [
     {
-      "dataset_path": "/home/aigc/human_policy/data/convert_whole_last",
+      "dataset_path": "/home/aigc/human_policy/data/all_episodes",
       "type": "human",
       "start_idx": 0,
       "end_idx": 10
@@ -131,14 +135,15 @@ cat > /tmp/task2_aligned_finetune.json << 'EOF'
 }
 EOF
 
-==========================================
-阶段1: 用基础数据集训练
+# ==========================================
+# 阶段1: 预训练
 # ==========================================
 echo "=========================================="
-echo "阶段1: 用基础数据集训练..."
+echo "阶段1: processed + ego_last 预训练..."
 echo "=========================================="
 echo "Output directory: $output_dir"
 echo "Learning rate: $learning_rate"
+echo "Config: /tmp/pick_place_base_stage1.json"
 
 CUDA_VISIBLE_DEVICES=1 python hdt/main.py \
     --batch_size $batch_size \
@@ -146,29 +151,30 @@ CUDA_VISIBLE_DEVICES=1 python hdt/main.py \
     --lr $learning_rate \
     --chunk_size $chunk_size \
     --exptid "$expt_id" \
-    --dataset_json_path /tmp/pick_place_base.json \
+    --dataset_json_path /tmp/pick_place_base_stage1.json \
     --model_cfg_path "$model_cfg_path" \
     --base_dir "$base_dir" \
     --no_wandb
 
-==========================================
-阶段2: 在task2_aligned上Finetune
-==========================================
+# ==========================================
+# 阶段2: 在 all_episodes 上 Finetune
+# ==========================================
 echo ""
 echo "=========================================="
-echo "阶段2: 在task2_aligned上Finetune..."
+echo "阶段2: 在 all_episodes 上 Finetune..."
 echo "=========================================="
 
-# 加载阶段1训练好的checkpoint
-latest_ckpt="/home/aigc/human_policy/train_newset_ckpt/policy_last.ckpt"
+latest_ckpt="/home/aigc/human_policy/train_all_episodes_finetune_ckpt/policy_last.ckpt"
 if [ ! -f "$latest_ckpt" ]; then
     echo "Error: No checkpoint found at $latest_ckpt"
     exit 1
 fi
 echo "Loading pretrained model from: $latest_ckpt"
-echo "Using finetune dataset: /home/embodied/human-policy/data/task2_aligned"
+echo "Using finetune dataset: /home/aigc/human_policy/data/all_episodes"
+echo "  - train: files 10-95 (85 files)"
+echo "  - val:   files 0-9  (10 files)"
 echo "Output directory: $finetune_output_dir"
-echo "Learning rate: $finetune_lr (smaller for finetune)"
+echo "Learning rate: $finetune_lr"
 
 CUDA_VISIBLE_DEVICES=1 python hdt/main.py \
     --batch_size $batch_size \
@@ -176,7 +182,7 @@ CUDA_VISIBLE_DEVICES=1 python hdt/main.py \
     --lr $finetune_lr \
     --chunk_size $chunk_size \
     --exptid "$finetune_expt_id" \
-    --dataset_json_path /tmp/task2_aligned_finetune.json \
+    --dataset_json_path /tmp/all_episodes_finetune.json \
     --model_cfg_path "$model_cfg_path" \
     --base_dir "$base_dir" \
     --load_pretrained_path "$latest_ckpt" \

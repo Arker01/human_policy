@@ -17,6 +17,148 @@ import hdt.constants
 
 CTRL_FREQS = 30
 
+
+class FutureDINOHead(nn.Module):
+    """
+    Future-DINO Head for predicting future visual latent features.
+    Uses Transformer Decoder to predict future DINO patch tokens from
+    current DINO tokens (as queries) and HAT shared features (as memory).
+    """
+    def __init__(
+        self,
+        dino_dim: int = 1152,
+        hidden_dim: int = 2048,
+        num_layers: int = 4,
+        num_heads: int = 8,
+        num_patches: int = 300,
+        dropout: float = 0.1,
+    ):
+        super().__init__()
+        self.dino_dim = dino_dim
+        self.hidden_dim = hidden_dim
+        self.num_patches = num_patches
+
+        # Project current DINO tokens to hidden_dim
+        self.query_proj = nn.Linear(dino_dim, hidden_dim)
+
+        # Position embedding for patches
+        self.position_embedding = nn.Parameter(
+            torch.randn(1, num_patches, hidden_dim) * 0.02
+        )
+
+        # Horizon embedding (single horizon for now)
+        self.horizon_embedding = nn.Parameter(
+            torch.randn(1, 1, hidden_dim) * 0.02
+        )
+
+        # Transformer Decoder
+        decoder_layer = nn.TransformerDecoderLayer(
+            d_model=hidden_dim,
+            nhead=num_heads,
+            dim_feedforward=hidden_dim * 4,
+            batch_first=True,
+            norm_first=True,
+            dropout=dropout,
+        )
+
+        self.decoder = nn.TransformerDecoder(
+            decoder_layer,
+            num_layers=num_layers,
+        )
+
+        # Output projection back to DINO dimension
+        self.output_proj = nn.Linear(hidden_dim, dino_dim)
+
+        self._init_weights()
+
+    def _init_weights(self):
+        nn.init.normal_(self.position_embedding, std=0.02)
+        nn.init.normal_(self.horizon_embedding, std=0.02)
+
+    def forward(
+        self,
+        current_dino_tokens: torch.Tensor,
+        hat_memory: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Args:
+            current_dino_tokens: [B, P, D_dino] - Current frame DINO patch features
+            hat_memory: [B, N, D_hidden] - HAT shared trunk features (from RDT blocks)
+
+        Returns:
+            pred_future_dino: [B, P, D_dino] - Predicted future DINO patch features
+        """
+        # Project queries
+        queries = self.query_proj(current_dino_tokens)  # [B, P, hidden_dim]
+
+        # Add position and horizon embeddings
+        queries = queries + self.position_embedding[:, :queries.shape[1], :]
+        queries = queries + self.horizon_embedding
+
+        # Transformer Decoder
+        # queries: [B, P, hidden_dim]
+        # hat_memory: [B, N, hidden_dim]
+        future_tokens = self.decoder(
+            tgt=queries,
+            memory=hat_memory,
+        )
+
+        # Project back to DINO dimension
+        return self.output_proj(future_tokens)
+
+
+class FutureDINOLoss(nn.Module):
+    """
+    Loss for Future-DINO prediction: cosine similarity + Smooth L1 loss.
+    """
+    def __init__(self, huber_weight: float = 0.1):
+        super().__init__()
+        self.huber_weight = huber_weight
+
+    def forward(
+        self,
+        predicted: torch.Tensor,
+        target: torch.Tensor,
+        mask: torch.Tensor | None = None,
+    ) -> dict[str, torch.Tensor]:
+        """
+        Args:
+            predicted: [B, P, D] - Predicted future DINO tokens
+            target: [B, P, D] - Ground truth future DINO tokens
+            mask: [B, P] or None - Optional mask for valid patches
+
+        Returns:
+            Dictionary with 'cosine_loss', 'huber_loss', and 'loss'
+        """
+        # Cosine loss
+        predicted_norm = F.normalize(predicted, dim=-1)
+        target_norm = F.normalize(target.detach(), dim=-1)
+
+        if mask is not None:
+            # Masked cosine loss
+            mask_expanded = mask.unsqueeze(-1)  # [B, P, 1]
+            cosine_sim = (predicted_norm * target_norm).sum(dim=-1)  # [B, P]
+            cosine_loss = (1.0 - cosine_sim) * mask.float()
+            cosine_loss = cosine_loss.sum() / mask.float().sum().clamp(min=1.0)
+        else:
+            cosine_loss = 1.0 - (predicted_norm * target_norm).sum(dim=-1).mean()
+
+        # Huber (Smooth L1) loss
+        if mask is not None:
+            huber_loss = F.smooth_l1_loss(predicted, target.detach(), reduction='none')
+            huber_loss = (huber_loss * mask_expanded).sum() / mask.float().sum().clamp(min=1.0)
+        else:
+            huber_loss = F.smooth_l1_loss(predicted, target.detach())
+
+        loss = cosine_loss + self.huber_weight * huber_loss
+
+        return {
+            'cosine_loss': cosine_loss,
+            'huber_loss': huber_loss,
+            'loss': loss,
+        }
+
+
 class HumanDiffusionTransformer(nn.Module):
     # Adapted from RDT https://github.com/thu-ml/RoboticsDiffusionTransformer/blob/main/models/rdt/model.py
     def __init__(self, *, action_dim, pred_horizon, config, 
@@ -95,6 +237,37 @@ class HumanDiffusionTransformer(nn.Module):
 
         self.pred_horizon = pred_horizon
         self.action_dim = action_dim
+
+        # Future-DINO Head configuration (optional)
+        # NOTE: the RDT/HDT variant of this head is NOT validated -- all real runs use
+        # the ACT path. Its memory is still the pre-trunk conditioning rather than the
+        # RDT block output, so the world gradient does not reach the diffusion trunk.
+        # See HAT_future_DINO_fixes.md before enabling it.
+        self._training_step = 0  # must exist up front: forward_pass() sets it via
+                                 # set_training_step(), and without it the warmup
+                                 # factor stayed 0 for the whole run.
+        self.use_future_dino_head = config.get('model', {}).get('future_dino', {}).get('enabled', False)
+        if self.use_future_dino_head:
+            future_dino_config = config['model']['future_dino']
+            num_patches = self.vision_encoder.num_patches * config['common'].get('num_cameras', 1)
+            self.future_dino_head = FutureDINOHead(
+                dino_dim=img_token_dim,  # Use same dimension as image tokens
+                hidden_dim=hidden_size,
+                num_layers=future_dino_config.get('num_layers', 4),
+                num_heads=future_dino_config.get('num_heads', 8),
+                num_patches=num_patches,
+                dropout=future_dino_config.get('dropout', 0.1),
+            )
+            self.future_dino_loss_fn = FutureDINOLoss(
+                huber_weight=future_dino_config.get('huber_weight', 0.1)
+            )
+            self.future_dino_weight = future_dino_config.get('weight', 0.3)
+            self.future_dino_warmup_steps = future_dino_config.get('warmup_steps', 1000)
+            print(f"Future-DINO Head enabled: weight={self.future_dino_weight}, warmup={self.future_dino_warmup_steps} steps")
+        else:
+            self.future_dino_head = None
+            self.future_dino_loss_fn = None
+            self.future_dino_weight = 0.0
 
         print("Diffusion params: %e" % sum(
             [p.numel() for p in self.model.parameters()] + 
@@ -209,12 +382,13 @@ class HumanDiffusionTransformer(nn.Module):
         
         return action_pred
     
-    def forward(self, image, qpos, actions=None, is_pad=None, conditioning_dict=None):
+    def forward(self, image, qpos, actions=None, is_pad=None, conditioning_dict=None, future_image=None):
         '''
         image: (batch_size, num_cameras, 3, img_height, img_width)
         qpos: (batch_size, state_dim)
         actions: (batch_size, max_pad_len, state_dim)
         is_pad: (batch_size, max_pad_len), a mask for INvalid actions (True for invalid)
+        future_image: (batch_size, num_cameras, 3, img_height, img_width), optional future image for Future-DINO loss
         '''
         # Preprocess inputs
         qpos = qpos.unsqueeze(1)  # (batch_size, 1, state_dim)  # adapter wants (numbers of tokens) dim in the middle
@@ -304,14 +478,73 @@ class HumanDiffusionTransformer(nn.Module):
                 right_kpts_loss = F.l1_loss(valid_pred[:, hdt.constants.OUTPUT_RIGHT_KEYPOINTS], valid_target[:, hdt.constants.OUTPUT_RIGHT_KEYPOINTS])
                 head_kpts_loss = F.l1_loss(valid_pred[:, hdt.constants.OUTPUT_HEAD_EEF], valid_target[:, hdt.constants.OUTPUT_HEAD_EEF])
                 # Increase head loss weight
-                loss_dict['loss'] = left_eef_loss + right_eef_loss + 1.2 * head_kpts_loss + 0.5 * (left_kpts_loss + right_kpts_loss)
+                loss_dict['loss'] = left_eef_loss + right_eef_loss + 1.0 * head_kpts_loss + 0.5 * (left_kpts_loss + right_kpts_loss)
             else:
                 # Compute loss against the entire trajectory
                 loss_dict['l2'] = F.mse_loss(valid_pred, valid_target)
                 loss_dict['l1'] = F.l1_loss(valid_pred, valid_target)
                 # loss_dict['initial_state_loss']  = F.l1_loss(pred[:, 0], target[:, 0])
                 loss_dict['loss'] = loss_dict['l1']
+
+            # Future-DINO loss (optional auxiliary loss)
+            if self.use_future_dino_head and future_image is not None and self.future_dino_head is not None:
+                # Extract shared features from RDT model
+                # We need to get the last layer's output from the RDT model
+                # For now, we'll use the image_embeds as the memory for Future-DINO head
+                # and predict future DINO tokens
+
+                # Encode future image to get target DINO features
+                with torch.no_grad():
+                    future_batch_size, future_num_cams, _, future_h, future_w = future_image.shape
+                    future_image_flat = future_image.view(future_batch_size * future_num_cams, -1, future_h, future_w)
+                    future_image_features = self.vision_encoder(future_image_flat)
+                    future_num_patches = future_image_features.shape[1]
+                    future_image_embeds = future_image_features.reshape(
+                        future_batch_size, future_num_cams * future_num_patches, self.vision_encoder.hidden_size
+                    ).detach()
+
+                # Current DINO tokens (from image_embeds)
+                current_dino_tokens = image_embeds  # [B, P, D_dino]
+
+                # Get HAT shared features as memory
+                # `state_action_traj` carries the NOISY GROUND-TRUTH FUTURE ACTIONS.
+                # Feeding it to the world head let the head read the answer instead of
+                # inferring it, so the world loss could drop without the trunk learning
+                # anything. Only the image conditioning is used now.
+                hat_memory = img_cond  # [B, N_img, hidden_size]
+
+                # Predict future DINO tokens
+                pred_future_dino = self.future_dino_head(
+                    current_dino_tokens=current_dino_tokens,  # [B, P, D_dino]
+                    hat_memory=hat_memory,  # [B, N, hidden_size]
+                )  # [B, P, D_dino]
+
+                # Compute Future-DINO loss
+                future_dino_loss_dict = self.future_dino_loss_fn(
+                    predicted=pred_future_dino,
+                    target=future_image_embeds,  # [B, P, D_dino]
+                )
+
+                # Warmup the Future-DINO loss weight
+                # Get current step from config or use a default
+                current_step = self.get_current_step()
+                warmup_factor = min(1.0, current_step / max(self.future_dino_warmup_steps, 1))
+                effective_weight = self.future_dino_weight * warmup_factor
+
+                loss_dict['future_dino_cosine_loss'] = future_dino_loss_dict['cosine_loss']
+                loss_dict['future_dino_huber_loss'] = future_dino_loss_dict['huber_loss']
+                loss_dict['future_dino_loss'] = future_dino_loss_dict['loss']
+                loss_dict['loss'] = loss_dict['loss'] + effective_weight * future_dino_loss_dict['loss']
+
             return loss_dict
+
+    def get_current_step(self):
+        """Get current training step (override in subclass or set externally)."""
+        return getattr(self, '_training_step', 0)
+
+    def set_training_step(self, step):
+        """Set current training step. Called by forward_pass() every iteration."""
+        self._training_step = step
 
 if __name__ == "__main__":
     import yaml

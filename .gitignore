@@ -180,3 +180,50 @@ cython_debug/
 data/recordings/
 
 *.pem
+
+# ===== Local artifacts: raw data, weights, run outputs =====
+# Video / raw episodes
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.hdf5
+*.h5
+*.parquet
+*.zip
+
+# Weights / stats / cached tensors
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.pkl
+*.npy
+*.npz
+# ...except the few already committed
+!hdt/empty_lang_embed.pt
+!data/ref_gestures/*.npy
+
+# Training run outputs
+*_ckpt/
+logs/
+*.pid
+
+# Local dataset trees
+data/all_episodes*/
+data/convert_UnifoLM_WBT*/
+data/dex5_train/
+data/dex5_val/
+data/eval_ego_last/
+data/eval_splits_45_95/
+data/eval_whole_last/
+data/human_train/
+data/human_val/
+data/processed/
+data/vis_compare/
+data3/
+data/.msc
+data/.mv
+
+# Eval reports
+*_mpjpe_eval*.json

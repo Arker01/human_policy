@@ -3,16 +3,242 @@
 DETR model and criterion classes.
 """
 import torch
+import torch.nn.functional as F
+import torchvision
 from torch import nn
 from torch.autograd import Variable
 from .backbone import build_backbone
 from .transformer import build_transformer, TransformerEncoder, TransformerEncoderLayer
 
 import numpy as np
-import time 
+import time
 
 import IPython
 e = IPython.embed
+
+
+class FrozenPatchTargetEncoder(nn.Module):
+    """
+    Frozen visual encoder used ONLY to produce the Future-DINO query/target tokens.
+
+    This must NOT be the trunk backbone: if the encoder that produces the target is
+    also being trained, the target moves with the predictor and the world loss can be
+    driven to zero by collapsing the features instead of by predicting the future.
+    The trunk backbone (resnet18 or whatever) stays trainable as before -- only the
+    *target* space is frozen.
+
+    Deliberately NOT registered in the parent module tree (the parent holds it in a
+    plain list) so that:
+      - its ~22M params never enter the optimizer or the checkpoint,
+      - DDP does not have to bucket/allreduce them.
+    Device placement is therefore done lazily in the parent's forward().
+    """
+
+    DINOV2_EMBED_DIM = {
+        'dinov2_vits14': 384,
+        'dinov2_vitb14': 768,
+        'dinov2_vitl14': 1024,
+        'dinov2_vitg14': 1536,
+    }
+
+    def __init__(self, name: str = 'dinov2_vits14'):
+        super().__init__()
+        self.name = name
+        if name.startswith('dinov2'):
+            if name not in self.DINOV2_EMBED_DIM:
+                raise ValueError(f"Unsupported Future-DINO target encoder {name}")
+            self.body = torch.hub.load('facebookresearch/dinov2', name)
+            self.kind = 'dinov2'
+            self.patch_size = 14
+            self.embed_dim = self.DINOV2_EMBED_DIM[name]
+        elif name in ('resnet18', 'resnet34'):
+            # Fallback for offline machines. Weaker targets than DINOv2 but still a
+            # *frozen* teacher, which is the property that actually matters.
+            m = getattr(torchvision.models, name)(pretrained=True)
+            self.body = nn.Sequential(*(list(m.children())[:-2]))
+            self.kind = 'resnet'
+            self.patch_size = 32
+            self.embed_dim = 512
+        else:
+            raise ValueError(f"Unsupported Future-DINO target encoder {name}")
+
+        self.body.eval()
+        for p in self.body.parameters():
+            p.requires_grad_(False)
+
+    @torch.no_grad()
+    def forward(self, x):
+        """
+        x: [N, 3, H, W], already ImageNet-normalized by ACTPolicy.transform.
+        returns: [N, P, D] patch tokens (no CLS / register tokens).
+        """
+        self.body.eval()
+        if self.kind == 'dinov2':
+            p = self.patch_size
+            H, W = x.shape[-2:]
+            if H % p or W % p:
+                # ACTPolicy.transform already resizes to a multiple of 14; this only
+                # fires when the encoder is called directly (tests, probes) and keeps
+                # current and future frames on an identical grid either way.
+                x = F.interpolate(x, size=(max(p, round(H / p) * p), max(p, round(W / p) * p)),
+                                  mode='bilinear', align_corners=False)
+            # forward_features()['x_norm_patchtokens'] already drops CLS and the
+            # register tokens, i.e. doc S2.2 remove_cls_and_register_tokens.
+            return self.body.forward_features(x)['x_norm_patchtokens']
+        feat = self.body(x)                      # [N, D, h, w]
+        return feat.flatten(2).transpose(1, 2)   # [N, P, D]
+
+
+class FutureDINOHead(nn.Module):
+    """
+    Future-DINO Head for predicting future visual latent features.
+    Uses Transformer Decoder to predict future DINO patch tokens from
+    current DINO tokens (as queries) and shared features (as memory).
+    """
+    def __init__(
+        self,
+        dino_dim: int = 512,
+        hidden_dim: int = 512,
+        num_layers: int = 4,
+        num_heads: int = 8,
+        num_patches: int = 150,
+        dropout: float = 0.1,
+    ):
+        super().__init__()
+        self.dino_dim = dino_dim
+        self.hidden_dim = hidden_dim
+        # `num_patches` is an upper bound: the table is sliced to the actual patch
+        # count at forward time, so it only has to be >= P (asserted below).
+        self.num_patches = num_patches
+
+        # Project current DINO tokens to hidden_dim
+        self.query_proj = nn.Linear(dino_dim, hidden_dim)
+
+        # Position embedding for patches
+        self.position_embedding = nn.Parameter(
+            torch.randn(1, num_patches, hidden_dim) * 0.02
+        )
+
+        # Horizon embedding (single horizon for now)
+        self.horizon_embedding = nn.Parameter(
+            torch.randn(1, 1, hidden_dim) * 0.02
+        )
+
+        # Transformer Decoder
+        decoder_layer = nn.TransformerDecoderLayer(
+            d_model=hidden_dim,
+            nhead=num_heads,
+            dim_feedforward=hidden_dim * 4,
+            batch_first=True,
+            norm_first=True,
+            dropout=dropout,
+        )
+
+        self.decoder = nn.TransformerDecoder(
+            decoder_layer,
+            num_layers=num_layers,
+        )
+
+        # Output projection back to DINO dimension
+        self.output_proj = nn.Linear(hidden_dim, dino_dim)
+
+        self._init_weights()
+
+    def _init_weights(self):
+        nn.init.normal_(self.position_embedding, std=0.02)
+        nn.init.normal_(self.horizon_embedding, std=0.02)
+
+    def forward(
+        self,
+        current_dino_tokens: torch.Tensor,
+        hat_memory: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Args:
+            current_dino_tokens: [B, P, D_dino] - Current frame DINO patch features
+            hat_memory: [B, N, hidden_size] - Shared features from transformer
+
+        Returns:
+            pred_future_dino: [B, P, D_dino] - Predicted future DINO patch features
+        """
+        # Project queries
+        queries = self.query_proj(current_dino_tokens)  # [B, P, hidden_dim]
+
+        assert queries.shape[1] <= self.num_patches, (
+            f"Future-DINO head got {queries.shape[1]} patches but its position table only "
+            f"holds {self.num_patches}; raise future_dino.num_patches in the model config.")
+
+        # Add position and horizon embeddings
+        queries = queries + self.position_embedding[:, :queries.shape[1], :]
+        queries = queries + self.horizon_embedding
+
+        # Transformer Decoder
+        future_tokens = self.decoder(
+            tgt=queries,
+            memory=hat_memory,
+        )
+
+        # Project back to DINO dimension
+        return self.output_proj(future_tokens)
+
+
+class FutureDINOLoss(nn.Module):
+    """
+    Loss function for Future-DINO Head.
+    Combines cosine similarity loss and Huber loss.
+    """
+    def __init__(self, huber_weight: float = 0.1, normalize_target: bool = True):
+        super().__init__()
+        self.huber_weight = huber_weight
+        self.normalize_target = normalize_target
+
+    def forward(
+        self,
+        predicted: torch.Tensor,
+        target: torch.Tensor,
+        mask: torch.Tensor = None,
+    ) -> dict:
+        """
+        Args:
+            predicted: [B, P, D] - Predicted future DINO features
+            target: [B, P, D] - Target future DINO features
+            mask: [B, P] - Optional mask for valid patches (1=valid, 0=invalid)
+
+        Returns:
+            dict with 'cosine_loss', 'huber_loss', 'loss' keys
+        """
+        # Hard stop-gradient on the teacher. The encoder is already frozen and run
+        # under no_grad, this is belt-and-braces so the loss can never train a target.
+        target = target.detach()
+        if self.normalize_target:
+            # doc S2.2 tokenwise_normalize: unit-norm each patch token so the Huber
+            # term is scale-free and comparable across patches/images.
+            target = F.normalize(target, dim=-1)
+
+        # Cosine similarity loss
+        cos_sim = F.cosine_similarity(predicted, target, dim=-1)  # [B, P]
+        cosine_loss = (1.0 - cos_sim)  # [B, P]
+
+        # Huber loss
+        huber_loss = F.smooth_l1_loss(predicted, target, reduction='none')  # [B, P, D]
+        huber_loss = huber_loss.mean(dim=-1)  # [B, P]
+
+        if mask is not None:
+            # Apply mask
+            mask = mask.float()  # [B, P]
+            cosine_loss = (cosine_loss * mask).sum() / (mask.sum() + 1e-8)
+            huber_loss = (huber_loss * mask).sum() / (mask.sum() + 1e-8)
+        else:
+            cosine_loss = cosine_loss.mean()
+            huber_loss = huber_loss.mean()
+
+        total_loss = cosine_loss + self.huber_weight * huber_loss
+
+        return {
+            'cosine_loss': cosine_loss,
+            'huber_loss': huber_loss,
+            'loss': total_loss,
+        }
 
 
 def reparametrize(mu, logvar):
@@ -33,7 +259,7 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 
 class DETRVAE(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, backbones, transformer, encoder, state_dim, action_dim, num_queries, camera_names, image_feature_strategy, use_language_conditioning):
+    def __init__(self, backbones, transformer, encoder, state_dim, action_dim, num_queries, camera_names, image_feature_strategy, use_language_conditioning, future_dino_config=None):
         """ Initializes the model.
         Parameters:
             backbones: torch module of the backbone to be used. See backbone.py
@@ -42,6 +268,7 @@ class DETRVAE(nn.Module):
             num_queries: number of object queries, ie detection slot. This is the maximal number of objects
                          DETR can detect in a single image. For COCO, we recommend 100 queries.
             aux_loss: True if auxiliary decoding losses (loss at each decoder layer) are to be used.
+            future_dino_config: config dict for Future-DINO Head (optional)
         """
         super().__init__()
         self.num_queries = num_queries
@@ -88,6 +315,58 @@ class DETRVAE(nn.Module):
         # decoder extra parameters
         self.latent_out_proj = nn.Linear(self.latent_dim, hidden_dim) # project latent sample to embedding
         self.additional_pos_embed = nn.Embedding(2, hidden_dim) # learned position embedding for proprio and latent
+
+        # Future-DINO Head (optional auxiliary head)
+        self.use_future_dino_head = False
+        self.future_dino_head = None
+        self.future_dino_loss_fn = None
+        self.future_dino_weight = 0.0
+        self.future_dino_warmup_steps = 0
+        self._training_step = 0
+
+        # Held in a plain list so nn.Module never registers it: keeps the frozen
+        # teacher out of state_dict(), out of the optimizer and out of DDP.
+        self._future_dino_target_encoder = []
+        self.future_dino_ablation = 'none'
+
+        if future_dino_config and future_dino_config.get('enabled', False):
+            target_encoder = FrozenPatchTargetEncoder(
+                future_dino_config.get('target_encoder', 'dinov2_vits14'))
+            self._future_dino_target_encoder.append(target_encoder)
+            # Queries and targets both come from the frozen teacher, so they live in
+            # the same space and the head only has to model the *change*.
+            dino_dim = target_encoder.embed_dim
+            self.use_future_dino_head = True
+            self.future_dino_head = FutureDINOHead(
+                dino_dim=dino_dim,
+                hidden_dim=hidden_dim,
+                num_layers=future_dino_config.get('num_layers', 4),
+                num_heads=future_dino_config.get('num_heads', 8),
+                num_patches=future_dino_config.get('num_patches', 1024),
+                dropout=future_dino_config.get('dropout', 0.1),
+            )
+            self.future_dino_loss_fn = FutureDINOLoss(
+                huber_weight=future_dino_config.get('huber_weight', 0.1),
+                normalize_target=future_dino_config.get('normalize_target', True),
+            )
+            self.future_dino_weight = future_dino_config.get('weight', 0.3)
+            self.future_dino_warmup_steps = future_dino_config.get('warmup_steps', 1000)
+            # doc S9 ablations: 'none' | 'shuffled' (break the temporal pairing) |
+            # 'current' (predict the current frame, i.e. plain reconstruction).
+            self.future_dino_ablation = future_dino_config.get('ablation', 'none')
+            assert self.future_dino_ablation in ('none', 'shuffled', 'current')
+            print(f"Future-DINO Head enabled: target_encoder={target_encoder.name} "
+                  f"(dim={dino_dim}, frozen), weight={self.future_dino_weight}, "
+                  f"warmup_steps={self.future_dino_warmup_steps}, "
+                  f"ablation={self.future_dino_ablation}")
+
+    def get_current_step(self):
+        """Get current training step."""
+        return self._training_step
+
+    def set_training_step(self, step):
+        """Set current training step."""
+        self._training_step = step
     
     def get_features_and_pos(self, image):
         """
@@ -126,12 +405,13 @@ class DETRVAE(nn.Module):
 
         return src, pos
 
-    def forward(self, qpos, image, env_state, actions=None, is_pad=None, conditioning_dict=None):
+    def forward(self, qpos, image, env_state, actions=None, is_pad=None, conditioning_dict=None, future_image=None):
         """
         qpos: batch, qpos_dim
         image: batch, num_cam, channel, height, width
         env_state: None
         actions: batch, seq, action_dim
+        future_image: batch, num_cam, channel, height, width (optional, for Future-DINO)
         """
         is_training = actions is not None # train or val
         bs, _ = qpos.shape
@@ -179,7 +459,84 @@ class DETRVAE(nn.Module):
 
         a_hat = self.action_head(hs)
         is_pad_hat = self.is_pad_head(hs)
-        return a_hat, is_pad_hat, [mu, logvar]
+
+        # Future-DINO loss computation (optional)
+        future_dino_loss_dict = None
+        if self.use_future_dino_head and future_image is not None and self.future_dino_head is not None:
+            B_img, num_cam, C_img, H_img, W_img = image.shape
+            assert future_image.shape == image.shape, (
+                f"future_image {tuple(future_image.shape)} must match image {tuple(image.shape)}")
+
+            target_encoder = self._future_dino_target_encoder[0]
+            # Lazy device/dtype placement: the encoder is intentionally not part of the
+            # module tree, so .cuda()/.to() on the parent never reaches it.
+            enc_param = next(target_encoder.parameters())
+            if enc_param.device != image.device or enc_param.dtype != image.dtype:
+                target_encoder.to(device=image.device, dtype=image.dtype)
+
+            # One frozen pass over current+future together. Both query and target
+            # tokens come from the SAME frozen teacher, so no gradient can reach it
+            # and the target space cannot collapse.
+            with torch.no_grad():
+                pair = torch.cat([image, future_image], dim=0)  # [2B, num_cam, C, H, W]
+                tokens = target_encoder(pair.reshape(2 * B_img * num_cam, C_img, H_img, W_img))
+                P_cam, D_dino = tokens.shape[1], tokens.shape[2]
+                # fold cameras into the patch axis, mirroring get_features_and_pos()
+                tokens = tokens.reshape(2 * B_img, num_cam * P_cam, D_dino)
+                current_dino_tokens, future_target = tokens[:B_img], tokens[B_img:]
+
+                if self.future_dino_ablation == 'shuffled':
+                    # doc S9.2: destroy the temporal pairing. If the world loss still
+                    # helps, the gain is not coming from future prediction.
+                    future_target = future_target[torch.randperm(B_img, device=future_target.device)]
+                elif self.future_dino_ablation == 'current':
+                    # doc S9.3: degenerate to current-frame reconstruction.
+                    future_target = current_dino_tokens
+
+            # Memory MUST be the shared trunk output, not the pre-trunk `src`.
+            # `hs` is exactly the feature the action head consumes, so the world
+            # gradient lands on the representation used for trajectory prediction
+            # (doc S3). Using `src` here only reached backbone+input_proj and left
+            # the transformer trunk with literally zero world gradient.
+            hat_memory = hs  # [B, num_queries, hidden_dim]
+
+            # Predict future DINO tokens
+            pred_future_dino = self.future_dino_head(
+                current_dino_tokens=current_dino_tokens,
+                hat_memory=hat_memory,
+            )  # [B, P, D]
+
+            assert pred_future_dino.shape == future_target.shape, (
+                f"Future-DINO shape mismatch: pred {tuple(pred_future_dino.shape)} vs "
+                f"target {tuple(future_target.shape)}")
+
+            # Samples whose t+H ran past the end of the episode were clamped by the
+            # dataloader; masking them out avoids teaching "the future is static".
+            patch_mask = None
+            if conditioning_dict is not None and conditioning_dict.get('future_valid') is not None:
+                future_valid = conditioning_dict['future_valid'].to(pred_future_dino.dtype)
+                patch_mask = future_valid.reshape(B_img, 1).expand(-1, pred_future_dino.shape[1])
+
+            future_dino_loss_dict = self.future_dino_loss_fn(
+                predicted=pred_future_dino,
+                target=future_target,
+                mask=patch_mask,
+            )
+
+            # Apply warmup. warmup_steps <= 0 means "no warmup": full weight from step 0.
+            # (The old `current_step / max(warmup_steps, 1)` form silently gave weight 0 on
+            # step 0 even with warmup disabled.) Default is 0 -- the measured world
+            # contribution to the shared trunk gradient is ~1% of the trajectory one, so
+            # there is nothing to ramp in. See act_with_future_dino.yaml.
+            current_step = self.get_current_step()
+            if self.future_dino_warmup_steps > 0:
+                warmup_factor = min(1.0, current_step / self.future_dino_warmup_steps)
+            else:
+                warmup_factor = 1.0
+            effective_weight = self.future_dino_weight * warmup_factor
+            future_dino_loss_dict['effective_weight'] = effective_weight
+
+        return a_hat, is_pad_hat, [mu, logvar], future_dino_loss_dict
 
 class CNNMLP(nn.Module):
     def __init__(self, backbones, state_dim, camera_names):
@@ -285,6 +642,9 @@ def build(args):
 
     encoder = build_encoder(args)
 
+    # Get Future-DINO config if available
+    future_dino_config = getattr(args, 'future_dino_config', None)
+
     model = DETRVAE(
         backbones,
         transformer,
@@ -295,6 +655,7 @@ def build(args):
         camera_names=args.camera_names,
         image_feature_strategy=args.image_feature_strategy,
         use_language_conditioning=args.use_language_conditioning,
+        future_dino_config=future_dino_config,
     )
 
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)

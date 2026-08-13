@@ -200,7 +200,49 @@ def main(args, base_dir, processed_dir=None):
     set_seed(1)
     with open(args["model_cfg_path"], "r") as fp:
         trainer_config = yaml.safe_load(fp)
-    
+
+    # Override Future-DINO config from CLI if specified
+    if args.get('use_future_dino_head'):
+        if 'future_dino' not in trainer_config.get('model', {}):
+            trainer_config.setdefault('model', {})['future_dino'] = {}
+        trainer_config['model']['future_dino']['enabled'] = True
+
+    if args.get('future_dino_weight') is not None:
+        if 'future_dino' not in trainer_config.get('model', {}):
+            trainer_config.setdefault('model', {})['future_dino'] = {}
+        trainer_config['model']['future_dino']['weight'] = args['future_dino_weight']
+
+    if args.get('future_dino_warmup_steps') is not None:
+        if 'future_dino' not in trainer_config.get('model', {}):
+            trainer_config.setdefault('model', {})['future_dino'] = {}
+        trainer_config['model']['future_dino']['warmup_steps'] = args['future_dino_warmup_steps']
+
+    if args.get('future_dino_horizon') is not None:
+        if 'future_dino' not in trainer_config.get('model', {}):
+            trainer_config.setdefault('model', {})['future_dino'] = {}
+        trainer_config['model']['future_dino']['horizon'] = args['future_dino_horizon']
+
+    if args.get('future_dino_ablation') is not None:
+        if 'future_dino' not in trainer_config.get('model', {}):
+            trainer_config.setdefault('model', {})['future_dino'] = {}
+        trainer_config['model']['future_dino']['ablation'] = args['future_dino_ablation']
+
+    future_dino_cfg = trainer_config.get('model', {}).get('future_dino', {}) or {}
+    future_dino_enabled = bool(future_dino_cfg.get('enabled', False))
+    # The horizon drives the dataloader, so it has to be resolved here, not in the model.
+    future_dino_horizon = int(future_dino_cfg.get('horizon', 16)) if future_dino_enabled else 0
+
+    # Print Future-DINO config if enabled
+    if future_dino_enabled:
+        print("Future-DINO World Head enabled:")
+        print(f"  Weight: {future_dino_cfg.get('weight', 0.3)}")
+        print(f"  Warmup steps: {future_dino_cfg.get('warmup_steps', 1000)}")
+        print(f"  Num layers: {future_dino_cfg.get('num_layers', 4)}")
+        print(f"  Num heads: {future_dino_cfg.get('num_heads', 8)}")
+        print(f"  Horizon (frames): {future_dino_horizon}")
+        print(f"  Target encoder (frozen): {future_dino_cfg.get('target_encoder', 'dinov2_vits14')}")
+        print(f"  Ablation: {future_dino_cfg.get('ablation', 'none')}")
+
     policy_class = trainer_config["common"]["policy_class"]
     batch_size_train = args['batch_size']
     batch_size_val = args['batch_size']
@@ -233,7 +275,11 @@ def main(args, base_dir, processed_dir=None):
                          'action_dim': action_dim,
                          'image_feature_strategy': trainer_config['model']['image_feature_strategy'],
                          'use_language_conditioning': trainer_config['model']['use_language_conditioning'],
+                         'query0_extra_weight': args.get('query0_extra_weight', 0.0),
                          }
+        # Add Future-DINO config if enabled
+        if future_dino_enabled:
+            policy_config['future_dino_config'] = future_dino_cfg
     elif policy_class == 'RDT':
         assert "visual_backbone" not in trainer_config
         trainer_config["visual_backbone"] = trainer_config["model"]["backbone"]
@@ -303,7 +349,13 @@ def main(args, base_dir, processed_dir=None):
                                                         visual_preprocessor,
                                                         args['cond_mask_prob'],
                                                         args['human_slow_down_factor'],
-                                                        [processed_dir] if processed_dir else None)
+                                                        [processed_dir] if processed_dir else None,
+                                                        auto_trim_dirty_start=True,
+                                                        dirty_start_check_frames=args.get('dirty_start_check_frames', 20),
+                                                        dirty_start_jump_threshold_m=args.get('dirty_start_jump_threshold_m', 0.3),
+                                                        dirty_start_settle_frames=args.get('dirty_start_settle_frames', 0),
+                                                        future_image_enabled=future_dino_enabled,
+                                                        future_horizon=future_dino_horizon)
 
     if args.get("eval_ckpts", False):
         val_dataloader, policy = accelerator.prepare(val_dataloader, policy)
@@ -330,7 +382,7 @@ def maybe_to_tensor(element, to_target):
         return element
 
 #!!! we also change it to tensor in the forward pass
-def forward_pass(data, policy):
+def forward_pass(data, policy, training_step=0):
     device = next(policy.parameters()).device
     if isinstance(data, dict):
         for k, v in data.items():
@@ -338,7 +390,18 @@ def forward_pass(data, policy):
     elif isinstance(data, list):
         for i in range(len(data)):
             data[i] = maybe_to_tensor(data[i], device)
-    
+
+    # Set training step for Future-DINO loss warmup.
+    # Must unwrap DDP first: under accelerate `policy` is a DistributedDataParallel,
+    # so `policy.model` is not the ACT model and the step never landed -> warmup
+    # factor stayed at 0 -> effective_weight stayed at 0 for the whole run.
+    inner = policy.module if hasattr(policy, 'module') else policy
+    for candidate in (inner, getattr(inner, 'model', None)):
+        if candidate is None:
+            continue
+        if hasattr(candidate, 'set_training_step'):
+            candidate.set_training_step(training_step)
+
     return policy(*(data))
 
 class WarmupMultiplicativeLR(torch.optim.lr_scheduler._LRScheduler):
@@ -387,16 +450,19 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
     min_val_loss = np.inf
 
     if config['load_pretrained_path'] is not None:
-        # TODO(roger): currently it does not respect --lr
         print(f"Loading pretrained model from {config['load_pretrained_path']}")
         state_dict = torch.load(config['load_pretrained_path'], map_location=next(policy.parameters()).device, weights_only=True)
         policy.load_state_dict(state_dict, strict=False)
-        # Create custom scheduler
+        # Create custom scheduler with configurable learning rate
+        # 使用配置中的学习率，默认为较低的值以保护 finetune
+        finetune_lr = config.get('finetune_lr', 1e-6)
+        finetune_warmup_period = config.get('finetune_warmup_period', 1000)
+        print(f"Finetune mode: max_lr={finetune_lr}, warmup_period={finetune_warmup_period}")
         scheduler = WarmupMultiplicativeLR(
             optimizer,
-            initial_lr=1e-7,
-            max_lr=1e-4,
-            warmup_period=1000
+            initial_lr=finetune_lr / 1000,  # 初始学习率为 max_lr 的 1/1000
+            max_lr=finetune_lr,
+            warmup_period=finetune_warmup_period
         )
     else:
         # use constant LR scheduler
@@ -442,18 +508,18 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
                     policy.eval()
                     validation_dicts = []
                     for batch_idx, data in enumerate(val_dataloader):
-                        forward_dict = forward_pass(data, policy)
+                        forward_dict = forward_pass(data, policy, training_step=cur_iter)
                         validation_dicts.append(forward_dict)
                         if batch_idx > 20:
                             break
 
                     validation_summary = compute_dict_mean(validation_dicts)
-                    
+
                     epoch_val_loss = validation_summary['loss']
                 if accelerator.is_main_process:
                     print(f'\n Iter {cur_iter}')
                     for k in list(validation_summary.keys()):
-                        validation_summary[f'val/{k}'] = validation_summary.pop(k)     
+                        validation_summary[f'val/{k}'] = validation_summary.pop(k)
 
                     if wandb.run is not None:
                         wandb.log(validation_summary, step=cur_iter)
@@ -461,7 +527,7 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
                     _plot_metrics(
                         metrics_csv,
                         metrics_png,
-                        keys=["val/loss", "val/l1", "val/eef_loss", "val/kl", "train/loss", "train/l1", "train/eef_loss", "train/kl"],
+                        keys=["val/loss", "val/l1", "val/eef_loss", "val/kl", "train/loss", "train/l1", "train/eef_loss", "train/kl", "train/future_dino_loss", "val/future_dino_loss", "train/future_dino_cosine_loss", "val/future_dino_cosine_loss"],
                     )
                     print(f'Val loss:   {epoch_val_loss:.5f}')
                     summary_string = ''
@@ -474,7 +540,7 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
 
                 policy.train()
 
-            forward_dict = policy(*(data))
+            forward_dict = forward_pass(data, policy, training_step=cur_iter)
             # backward
             loss = forward_dict['loss']
 
@@ -525,7 +591,11 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
         my_policy_wrapper.eval().to(TRACING_DEVICE)
 
         # Benchmark
-        image, qpos, _, _, conditioning_dict = data
+        # With Future-DINO enabled the loader yields 6 items (trailing future_image), which
+        # the 5-way unpack could not take -- tracing crashed exactly on the configs that
+        # need tracing. The head is training-only and the traced graph is eval-mode, so the
+        # extra element is simply dropped here. Disabled path is byte-identical (5 items).
+        image, qpos, _, _, conditioning_dict = data[:5]
         image = image.to(TRACING_DEVICE)
         qpos = qpos.to(TRACING_DEVICE)
         conditioning_dict = {k: maybe_to_tensor(v, TRACING_DEVICE) for k, v in conditioning_dict.items()}
@@ -580,13 +650,23 @@ if __name__ == '__main__':
     parser.add_argument('--exptid', action='store', type=str, help='experiment id', required=True)
     parser.add_argument('--epoch', action='store', type=str, help='epoch num', required=False)
     parser.add_argument('--cond_mask_prob', type=float, default=0.1, help='cond_mask_prob', required=False)
+    parser.add_argument('--query0_extra_weight', type=float, default=0.0, help='extra L1 weight anchoring a_hat[:,0] to actions[:,0], to counter chunk-loss query0 lag', required=False)
     parser.add_argument('--dataset_json_path', type=str, help='dataset_json_path', required=True)
     parser.add_argument('--model_cfg_path', type=str, help='path to model cfg yaml', required=True)
     parser.add_argument('--human_slow_down_factor', type=int, default=4, help='human demonstrations slow_down_factor', required=False)
+    parser.add_argument('--no_auto_trim_dirty_start', action='store_true', help='disable automatic trimming of early dirty motion frames')
+    parser.add_argument('--dirty_start_check_frames', type=int, default=20, help='number of early frames to scan for dirty motion jumps')
+    parser.add_argument('--dirty_start_jump_threshold_m', type=float, default=0.3, help='position jump threshold in meters for dirty-start detection')
+    parser.add_argument('--dirty_start_settle_frames', type=int, default=0, help='extra frames to skip after the last detected early dirty jump')
     parser.add_argument('--load_pretrained_path', type=str, help='path to load pretrained model', required=False)
     parser.add_argument('--eval_ckpts', action='store_true', help='evaluate all checkpoints under ckpt_dir and write retro_metrics.csv/png')
     parser.add_argument('--base_dir', type=str, help='base directory for data', required=False)
     parser.add_argument('--processed_dir', type=str, help='additional base directory for processed data', required=False)
+    parser.add_argument('--use_future_dino_head', action='store_true', help='enable Future-DINO World Head for auxiliary training')
+    parser.add_argument('--future_dino_weight', type=float, default=None, help='weight for Future-DINO loss (overrides config)')
+    parser.add_argument('--future_dino_warmup_steps', type=int, default=None, help='warmup steps for Future-DINO loss (overrides config)')
+    parser.add_argument('--future_dino_horizon', type=int, default=None, help='future frame offset H in raw frames (overrides config)')
+    parser.add_argument('--future_dino_ablation', type=str, default=None, choices=['none', 'shuffled', 'current'], help='Future-DINO ablation mode (overrides config)')
     args = vars(parser.parse_args())
 
     if args.get('base_dir'):

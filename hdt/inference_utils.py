@@ -27,12 +27,18 @@ def get_eef_kpts_from_prediction(action):
     head_rmat = rotation_6d_to_matrix(torch.tensor(action[hdt.constants.OUTPUT_HEAD_EEF[3:]]).unsqueeze(0)).squeeze().numpy()
     head_mat[0:3, 0:3] = head_rmat
 
+    waist_mat = np.eye(4)
+    waist_mat[0:3, 3] = action[hdt.constants.OUTPUT_WAIST[0:3]]
+    waist_rmat = rotation_6d_to_matrix(torch.tensor(action[hdt.constants.OUTPUT_WAIST[3:]]).unsqueeze(0)).squeeze().numpy()
+    waist_mat[0:3, 0:3] = waist_rmat
+
     return {
         'left_wrist_mat': left_wrist_mat,
         'left_hand_kpts': left_hand_keypoints,
         'right_wrist_mat': right_wrist_mat,
         'right_hand_kpts': right_hand_keypoints,
-        'head_mat': head_mat
+        'head_mat': head_mat,
+        'waist_mat': waist_mat
     }
 
 def rotation_matrix_to_yp(rotation_matrix):

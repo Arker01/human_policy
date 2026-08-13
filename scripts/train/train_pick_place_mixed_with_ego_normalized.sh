@@ -3,20 +3,20 @@
 # 训练配置
 batch_size=64
 learning_rate=1e-5
-finetune_lr=1e-6
+finetune_lr=5e-6
 chunk_size=100
-expt_id="train1"
+expt_id="train_lr1e-5"
 
 # 数据和模型配置
 model_cfg_path="hdt/configs/models/act_resnet.yaml"
-base_dir="/data1/zxlei/dataset"
+base_dir="/home/aigc/human_policy/data"
 
 # 输出路径
-output_dir="/data1/zxlei/model/${expt_id}_ckpt"
+output_dir="/home/aigc/human_policy/data/${expt_id}_ckpt"
 mkdir -p "$output_dir"
 
 finetune_expt_id="${expt_id}_finetune_task2"
-finetune_output_dir="/data1/zxlei/model/${finetune_expt_id}_ckpt"
+finetune_output_dir="/home/aigc/human_policy/data/${finetune_expt_id}_ckpt"
 mkdir -p "$finetune_output_dir"
 
 # 创建第一阶段训练配置（不含task2_aligned）
@@ -88,7 +88,7 @@ cat > /tmp/pick_place_base.json << 'EOF'
       "type": "robot"
     },
     {
-      "dataset_path": "/home/embodied/human-policy/data/task1_convert",
+      "dataset_path": "/home/aigc/.cache/modelscope/hub/datasets/arker01/human_policy/convert_ego_last",
       "type": "human",
       "start_idx": 0,
       "end_idx": 1800
@@ -100,7 +100,7 @@ cat > /tmp/pick_place_base.json << 'EOF'
       "type": "mixed"
     },
     {
-      "dataset_path": "/home/embodied/human-policy/data/task1_convert",
+      "dataset_path": "/home/aigc/.cache/modelscope/hub/datasets/arker01/human_policy/convert_ego_last",
       "type": "human",
       "start_idx": 1800,
       "end_idx": 2000
@@ -114,7 +114,7 @@ cat > /tmp/task2_aligned_finetune.json << 'EOF'
 {
   "train": [
     {
-      "dataset_path": "/home/embodied/human-policy/data/task2_aligned_head_aligned",
+      "dataset_path": "/home/aigc/human_policy/data/convert_whole_last",
       "type": "human",
       "start_idx": 10,
       "end_idx": 150
@@ -122,7 +122,7 @@ cat > /tmp/task2_aligned_finetune.json << 'EOF'
   ],
   "val": [
     {
-      "dataset_path": "/home/embodied/human-policy/data/task2_aligned_head_aligned",
+      "dataset_path": "/home/aigc/human_policy/data/convert_whole_last",
       "type": "human",
       "start_idx": 0,
       "end_idx": 10
@@ -140,13 +140,12 @@ echo "=========================================="
 echo "Output directory: $output_dir"
 echo "Learning rate: $learning_rate"
 
-python hdt/main.py \
+CUDA_VISIBLE_DEVICES=1 python hdt/main.py \
     --batch_size $batch_size \
     --num_epochs 50000 \
     --lr $learning_rate \
     --chunk_size $chunk_size \
     --exptid "$expt_id" \
-    --output_dir "$output_dir" \
     --dataset_json_path /tmp/pick_place_base.json \
     --model_cfg_path "$model_cfg_path" \
     --base_dir "$base_dir" \
@@ -161,7 +160,7 @@ echo "阶段2: 在task2_aligned上Finetune..."
 echo "=========================================="
 
 # 加载阶段1训练好的checkpoint
-latest_ckpt="/home/embodied/human-policy/pick_place_ph2d_with_ego_normalized_ckpt/policy_last.ckpt"
+latest_ckpt="/home/aigc/human_policy/train_lr1e-5_ckpt/policy_last.ckpt"
 if [ ! -f "$latest_ckpt" ]; then
     echo "Error: No checkpoint found at $latest_ckpt"
     exit 1
@@ -171,7 +170,7 @@ echo "Using finetune dataset: /home/embodied/human-policy/data/task2_aligned"
 echo "Output directory: $finetune_output_dir"
 echo "Learning rate: $finetune_lr (smaller for finetune)"
 
-python hdt/main.py \
+CUDA_VISIBLE_DEVICES=1 python hdt/main.py \
     --batch_size $batch_size \
     --num_epochs 20000 \
     --lr $finetune_lr \

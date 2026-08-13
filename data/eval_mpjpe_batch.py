@@ -48,6 +48,11 @@ def _action_to_eval_joints(action_128: np.ndarray) -> dict[str, np.ndarray]:
     rw = action_128[C.OUTPUT_RIGHT_EEF]
     lk_local = action_128[C.OUTPUT_LEFT_KEYPOINTS].reshape(6, 3).astype(np.float32)
     rk_local = action_128[C.OUTPUT_RIGHT_KEYPOINTS].reshape(6, 3).astype(np.float32)
+    
+    waist = action_128[89:98]
+    waist_mat = np.eye(4, dtype=np.float32)
+    waist_mat[:3, 3] = waist[:3]
+    waist_mat[:3, :3] = _rot6d_to_mat(waist[3:9])
 
     head_mat = np.eye(4, dtype=np.float32)
     head_mat[:3, 3] = head[:3]
@@ -70,20 +75,59 @@ def _action_to_eval_joints(action_128: np.ndarray) -> dict[str, np.ndarray]:
         "rw": rw_mat[:3, 3].astype(np.float32),
         "lk_world": lk_world.astype(np.float32),
         "rk_world": rk_world.astype(np.float32),
+        "waist": waist_mat[:3, 3].astype(np.float32),
     }
 
 
-def eval_arrays_mpjpe(gt_actions: np.ndarray, pred_actions: np.ndarray) -> dict[str, float | int]:
+_EARLY_JUMP_CHECK_SLICES = (
+    C.OUTPUT_HEAD_EEF[0:3],
+    C.OUTPUT_RIGHT_EEF[0:3],
+    C.OUTPUT_NECK[0:3],
+    C.OUTPUT_LEFT_EEF[0:3],
+    C.OUTPUT_WAIST[0:3],
+)
+
+
+def _detect_valid_start_from_actions(actions, *, check_frames=20, jump_threshold_m=0.3, settle_frames=0):
+    if actions.shape[0] <= 1 or check_frames <= 1 or jump_threshold_m <= 0:
+        return 0
+
+    n = min(int(check_frames), int(actions.shape[0]))
+    last_bad_next_frame = -1
+    for sl in _EARLY_JUMP_CHECK_SLICES:
+        pos = actions[:n, sl]
+        if pos.shape[1] != 3:
+            continue
+        step = np.linalg.norm(np.diff(pos, axis=0), axis=1)
+        bad = np.where(step > float(jump_threshold_m))[0]
+        if len(bad) > 0:
+            last_bad_next_frame = max(last_bad_next_frame, int(bad[-1]) + 1)
+
+    if last_bad_next_frame < 0:
+        return 0
+    valid_start = last_bad_next_frame + int(settle_frames)
+    return min(valid_start, max(0, int(actions.shape[0]) - 1))
+
+
+def eval_arrays_mpjpe(gt_actions: np.ndarray, pred_actions: np.ndarray, *, dirty_start_check_frames=20, dirty_start_jump_threshold_m=0.3, dirty_start_settle_frames=0) -> dict[str, float | int]:
     T = min(int(gt_actions.shape[0]), int(pred_actions.shape[0]))
     if T <= 0:
         raise ValueError("No overlapping timesteps between gt and prediction.")
+
+    valid_start = _detect_valid_start_from_actions(
+        gt_actions,
+        check_frames=dirty_start_check_frames,
+        jump_threshold_m=dirty_start_jump_threshold_m,
+        settle_frames=dirty_start_settle_frames,
+    )
 
     all_joint_err = []
     hand_err = []
     wrist_err = []
     head_err = []
+    waist_err = []
 
-    for t in range(T):
+    for t in range(valid_start, T):
         gt_j = _action_to_eval_joints(gt_actions[t])
         pr_j = _action_to_eval_joints(pred_actions[t])
 
@@ -93,38 +137,45 @@ def eval_arrays_mpjpe(gt_actions: np.ndarray, pred_actions: np.ndarray) -> dict[
         pr_wrist = np.stack([pr_j["lw"], pr_j["rw"]], axis=0)
         gt_head = gt_j["head"][None, :]
         pr_head = pr_j["head"][None, :]
+        gt_waist = gt_j["waist"][None, :]
+        pr_waist = pr_j["waist"][None, :]
 
-        gt_all = np.concatenate([gt_head, gt_wrist, gt_hand], axis=0)  # (15, 3)
-        pr_all = np.concatenate([pr_head, pr_wrist, pr_hand], axis=0)
+        gt_all = np.concatenate([gt_head, gt_wrist, gt_hand, gt_waist], axis=0)  # (16, 3)
+        pr_all = np.concatenate([pr_head, pr_wrist, pr_hand, pr_waist], axis=0)
 
         all_joint_err.append(np.linalg.norm(pr_all - gt_all, axis=1))
         hand_err.append(np.linalg.norm(pr_hand - gt_hand, axis=1))
         wrist_err.append(np.linalg.norm(pr_wrist - gt_wrist, axis=1))
         head_err.append(np.linalg.norm(pr_head - gt_head, axis=1))
+        waist_err.append(np.linalg.norm(pr_waist - gt_waist, axis=1))
 
     all_joint_err = np.concatenate(all_joint_err, axis=0)
     hand_err = np.concatenate(hand_err, axis=0)
     wrist_err = np.concatenate(wrist_err, axis=0)
     head_err = np.concatenate(head_err, axis=0)
+    waist_err = np.concatenate(waist_err, axis=0)
 
     return {
-        "timesteps_compared": int(T),
-        "joints_per_timestep": 15,
+        "timesteps_compared": int(T - valid_start),
+        "timesteps_skipped": int(valid_start),
+        "joints_per_timestep": 16,
         "mpjpe_all_m": float(np.mean(all_joint_err)),
         "mpjpe_hand_m": float(np.mean(hand_err)),
         "mpjpe_wrist_m": float(np.mean(wrist_err)),
         "mpjpe_head_m": float(np.mean(head_err)),
+        "mpjpe_waist_m": float(np.mean(waist_err)),
         "mpjpe_all_mm": float(np.mean(all_joint_err) * 1000.0),
         "mpjpe_hand_mm": float(np.mean(hand_err) * 1000.0),
         "mpjpe_wrist_mm": float(np.mean(wrist_err) * 1000.0),
         "mpjpe_head_mm": float(np.mean(head_err) * 1000.0),
+        "mpjpe_waist_mm": float(np.mean(waist_err) * 1000.0),
     }
 
-def eval_pair_mpjpe(gt_hdf5_path: Path, pred_hdf5_path: Path) -> dict[str, float | int]:
+def eval_pair_mpjpe(gt_hdf5_path: Path, pred_hdf5_path: Path, *, dirty_start_check_frames=20, dirty_start_jump_threshold_m=0.3, dirty_start_settle_frames=0) -> dict[str, float | int]:
     with h5py.File(gt_hdf5_path, "r") as f_gt, h5py.File(pred_hdf5_path, "r") as f_pr:
         gt_actions = f_gt["action"][()]
         pr_actions = f_pr["action"][()]
-    return eval_arrays_mpjpe(gt_actions, pr_actions)
+    return eval_arrays_mpjpe(gt_actions, pr_actions, dirty_start_check_frames=dirty_start_check_frames, dirty_start_jump_threshold_m=dirty_start_jump_threshold_m, dirty_start_settle_frames=dirty_start_settle_frames)
 
 
 def _safe_mean(values: list[float]) -> float:
@@ -273,6 +324,11 @@ def _predict_actions_for_episode(
                     else:
                         raise KeyError(f"Missing {key} in {episode_path}")
                 img = _read_image_frame(f[key], t)
+                if img.shape[-1] == 4:
+                    img = img[:, :, :3]
+                if img.shape[0] != 240 or img.shape[1] != 320:
+                    import cv2
+                    img = cv2.resize(img, (320, 240))
                 imgs.append(img)
             imgs = np.stack(imgs, axis=0)  # (num_cam, H, W, 3)
             imgs_t = torch.from_numpy(imgs).to(device=device, dtype=torch.float32) / 255.0
@@ -304,10 +360,13 @@ def main() -> None:
         help="严格模式：若某个预测文件找不到同名 GT 文件则报错退出",
     )
     parser.add_argument("--policy-ckpt", type=str, default=None, help="直接加载 policy ckpt 并在 GT episode 上推理")
-    parser.add_argument("--policy-config-yaml", type=str, default=None, help="policy 模型配置 YAML（例如 hdt/configs/models/act_resnet.yaml）")
+    parser.add_argument("--policy-config-yaml", type=str, default="/home/aigc/human_policy/hdt/configs/models/act_resnet.yaml", help="policy 模型配置 YAML（例如 hdt/configs/models/act_resnet.yaml）")
     parser.add_argument("--norm-stats", type=str, default=None, help="归一化统计量 pkl（例如 dataset_stats.pkl）")
     parser.add_argument("--device", type=str, default="cuda", help="推理设备（ACT 默认需要 cuda）")
     parser.add_argument("--max-steps", type=int, default=None, help="每个 episode 最多评估多少步（默认全部）")
+    parser.add_argument("--dirty-start-check-frames", type=int, default=20, help="检测脏帧的初始帧数（默认20）")
+    parser.add_argument("--dirty-start-jump-threshold-m", type=float, default=0.3, help="脏帧位置跳变阈值（米，默认0.3）")
+    parser.add_argument("--dirty-start-settle-frames", type=int, default=0, help="脏帧后额外跳过的帧数（默认0）")
     parser.add_argument(
         "--out-json",
         type=str,
@@ -372,7 +431,12 @@ def main() -> None:
                 raise
             with h5py.File(gt_path, "r") as f_gt:
                 gt_actions = f_gt["action"][()]
-            metrics = eval_arrays_mpjpe(gt_actions, pred_actions)
+            metrics = eval_arrays_mpjpe(
+                gt_actions, pred_actions,
+                dirty_start_check_frames=args.dirty_start_check_frames,
+                dirty_start_jump_threshold_m=args.dirty_start_jump_threshold_m,
+                dirty_start_settle_frames=args.dirty_start_settle_frames,
+            )
             metrics["file"] = gt_path.name
             per_file.append(metrics)
     else:
@@ -383,7 +447,12 @@ def main() -> None:
                     raise FileNotFoundError(f"Missing GT file for {pred_path.name}: {gt_path}")
                 skipped.append(pred_path.name)
                 continue
-            metrics = eval_pair_mpjpe(gt_path, pred_path)
+            metrics = eval_pair_mpjpe(
+                gt_path, pred_path,
+                dirty_start_check_frames=args.dirty_start_check_frames,
+                dirty_start_jump_threshold_m=args.dirty_start_jump_threshold_m,
+                dirty_start_settle_frames=args.dirty_start_settle_frames,
+            )
             metrics["file"] = pred_path.name
             per_file.append(metrics)
 
@@ -395,14 +464,17 @@ def main() -> None:
         "num_pairs_skipped": len(skipped),
         "skipped_files": skipped,
         "avg_timesteps_compared": _safe_mean([m["timesteps_compared"] for m in per_file]),  # type: ignore[index]
+        "avg_timesteps_skipped": _safe_mean([m["timesteps_skipped"] for m in per_file]),  # type: ignore[index]
         "avg_mpjpe_all_m": _safe_mean([m["mpjpe_all_m"] for m in per_file]),  # type: ignore[index]
         "avg_mpjpe_hand_m": _safe_mean([m["mpjpe_hand_m"] for m in per_file]),  # type: ignore[index]
         "avg_mpjpe_wrist_m": _safe_mean([m["mpjpe_wrist_m"] for m in per_file]),  # type: ignore[index]
         "avg_mpjpe_head_m": _safe_mean([m["mpjpe_head_m"] for m in per_file]),  # type: ignore[index]
+        "avg_mpjpe_waist_m": _safe_mean([m["mpjpe_waist_m"] for m in per_file]),  # type: ignore[index]
         "avg_mpjpe_all_mm": _safe_mean([m["mpjpe_all_mm"] for m in per_file]),  # type: ignore[index]
         "avg_mpjpe_hand_mm": _safe_mean([m["mpjpe_hand_mm"] for m in per_file]),  # type: ignore[index]
         "avg_mpjpe_wrist_mm": _safe_mean([m["mpjpe_wrist_mm"] for m in per_file]),  # type: ignore[index]
         "avg_mpjpe_head_mm": _safe_mean([m["mpjpe_head_mm"] for m in per_file]),  # type: ignore[index]
+        "avg_mpjpe_waist_mm": _safe_mean([m["mpjpe_waist_mm"] for m in per_file]),  # type: ignore[index]
     }
 
     print("===== Batch MPJPE Summary =====")

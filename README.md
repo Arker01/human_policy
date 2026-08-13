@@ -23,6 +23,90 @@ This repository contains the codebase for the paper "Humanoid Policy ~ Human Pol
 
 It trains egocentric (i.e., without wrist camera) humanoid manipulation policies, with few wrappers to focus on the core components.
 
+## 近期 Pickup Pillow 训练记录（2026-07-14 ～ 2026-07-17）
+
+以下内容根据目录中的文件时间、数据配置和命令历史整理。
+
+### 1. 数据和训练结果存放位置
+
+训练数据位于 `data/`：
+
+| 数据集 | 训练集 | 验证集 | 数据配置 |
+| --- | --- | --- | --- |
+| Human | `data/human_train/` | `data/human_val/` | `pillow_human.json` |
+| Robot（Dex5） | `data/dex5_train/` | `data/dex5_val/` | `pillow_robot.json` |
+| Human + Robot 混合 | 上述两个训练集 | 上述两个验证集 | `pickup_pillow_mixed.json` |
+
+三次训练的结果位于仓库根目录：
+
+| 训练 | 结果目录 | 完成时间 |
+| --- | --- | --- |
+| Human only | `train_pillow_human_ckpt/` | 2026-07-14 |
+| Robot only | `train_pillow_robot_ckpt/` | 2026-07-16 |
+| Human + Robot mixed | `train_pillow_ckpt/` | 2026-07-16 |
+
+每个结果目录中：
+
+- `policy_last.ckpt`：最终模型；
+- `policy_iter_*_seed_0/`：每 10,000 iteration 保存的模型、优化器、scheduler 和随机状态；
+- `dataset_stats.pkl`：训练数据的归一化统计量；
+- `metrics.csv`：训练/验证指标的数值记录；
+- `metrics.png`：指标曲线图。
+
+### 2. 训练程序
+
+训练入口是 `hdt/main.py`，模型配置使用
+`hdt/configs/models/act_resnet.yaml`，运行环境为 Conda 环境
+`/home/aigc/miniconda/envs/human_policy`。
+
+三组训练分别把以下数据配置传给 `--dataset_json_path`：
+
+```text
+pillow_human.json          -> train_pillow_human_ckpt/
+pillow_robot.json          -> train_pillow_robot_ckpt/
+pickup_pillow_mixed.json   -> train_pillow_ckpt/
+```
+
+也就是说，实际训练程序是 ACT/ResNet 对应的 `hdt/main.py`；数据划分和
+human/robot 类型由以上 JSON 文件指定。
+
+### 3. Evaluation 程序
+
+批量 evaluation 使用：
+
+```text
+data/eval_mpjpe_batch.py
+```
+
+该程序直接加载 `policy_last.ckpt` 和同目录的 `dataset_stats.pkl`，在指定
+GT 数据集上推理并统计 MPJPE，包括 all joints、hand、wrist、head 和 waist，
+同时输出米和毫米单位的汇总结果。近期命令主要评估了：
+
+- Human：`data/human_train/`、`data/human_val/`；
+- Robot：`data/dex5_train/`、`data/dex5_val/`。
+
+例如：
+
+```bash
+conda activate human_policy
+cd /home/aigc/human_policy
+
+python data/eval_mpjpe_batch.py \
+  --gt-dir data/human_val \
+  --policy-ckpt train_pillow_ckpt/policy_last.ckpt \
+  --norm-stats train_pillow_ckpt/dataset_stats.pkl \
+  --dirty-start-check-frames 20 \
+  --dirty-start-jump-threshold-m 0.3 \
+  --out-json train_pillow_ckpt/mpjpe_eval_human_val.json
+```
+
+注意：命令历史中的近期批量 evaluation 没有传 `--out-json`，因此当时的
+MPJPE 汇总默认只打印在终端，没有在当前目录留下对应的 JSON 文件。以后如需
+持久保存统计结果，应像上例一样显式添加 `--out-json`。
+
+单条 episode 的预测、MPJPE 检查和视频可视化使用
+`data/plot_keypoints_ys.py`；最近生成的示例视频为仓库根目录的 `out.mp4`。
+
 ## Repo Structure
 
 ```

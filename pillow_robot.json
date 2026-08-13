@@ -1,0 +1,14 @@
+{
+  "train": [
+    {
+      "dataset_path": "/home/aigc/human_policy/data/dex5_train",
+      "type": "robot"
+    }
+  ],
+  "val": [
+    {
+      "dataset_path": "/home/aigc/human_policy/data/dex5_val",
+      "type": "robot"
+    }
+  ]
+}
