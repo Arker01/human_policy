@@ -143,6 +143,68 @@ class DINOv2BackBone(nn.Module):
             raise ValueError(f"Strategy {self.image_feature_strategy} not supported")
         return od
     
+class VJEPABackBone(nn.Module):
+    """V-JEPA 2.1 as the trunk's INPUT encoder, mirroring DINOv2BackBone above.
+
+    This is the experiment the literature actually supports. omega-0 uses a frozen
+    V-JEPA 2.1 encoder on the CURRENT observation (its future regression target is a
+    frozen Wan VAE latent, not V-JEPA), and swapping that input encoder to Wan costs it
+    15.5 SR points. Note what is NOT established anywhere: V-JEPA beating DINOv2 or a
+    trained resnet18 in this slot. DexHand's encoder sweep (DINOv2 / DINOv3 / Web-SSL /
+    V-JEPA 2 / SigLIP 2) put DINOv2 first. So this class exists to measure that, not
+    because the answer is known.
+
+    Two things to keep in mind when reading the comparison:
+      * A video encoder needs `tubelet` (=2) frames. The trunk only ever has the current
+        frame, so the frame is repeated to fill the tubelet -- the tubelet conv sees zero
+        motion, and the temporal half of V-JEPA's pretraining is idle here.
+        Two things make that acceptable, and one thing does not follow from it:
+          - There is no alternative with these weights. The released 2.1 ViT-B is built
+            as a video model (num_frames=64, PatchEmbed3D); upstream's 4-D image branch
+            needs num_frames=1 and a 2D PatchEmbed, which the pretrained Conv3d weights
+            cannot load into. Feeding [B,3,H,W] directly raises ValueError.
+          - Repeating is exactly the standard 3D->2D kernel deflation: the same frame
+            twice through the Conv3d equals a Conv2d whose kernel is the temporal sum
+            (measured max abs diff 1.9e-05). So nothing is lost versus a "proper"
+            image mode.
+          - It does NOT follow that omega-0 does this. Their paper says only that the
+            policy "receives only a single current image" and calls it a frozen V-JEPA
+            2.1 "image encoder"; the tubelet/temporal handling is never stated. They do
+            apply 2D RoPE to the current-observation tokens (3D RoPE is reserved for the
+            future-video queries), whereas this class keeps 3D RoPE with a single
+            temporal group -- a real implementation difference, not a match.
+      * Like DINOv2BackBone, this runs under no_grad and is frozen, whereas the resnet18
+        baseline is trained end-to-end with lr_backbone. That confound is inherited from
+        the existing design, not introduced here.
+    """
+    def __init__(self, model_name: str = 'vjepa2_1_vitb',
+                 image_feature_strategy: str = 'ACT_linear') -> None:
+        super().__init__()
+        # import here so the resnet/dinov2 paths never pay for it
+        from .detr_vae import FrozenPatchTargetEncoder
+        assert image_feature_strategy == 'ACT_linear', (
+            f"VJEPABackBone only implements ACT_linear, got {image_feature_strategy}")
+        self.image_feature_strategy = image_feature_strategy
+        # target_resolution_hw snaps 224x308 -> 224x304 so patch 16 divides the grid
+        self.encoder = FrozenPatchTargetEncoder(model_name, target_resolution_hw=[224, 304])
+        self.num_channels = self.encoder.embed_dim
+        self.model_stride = self.encoder.patch_size
+        self.grid_hw = (224 // self.model_stride, 304 // self.model_stride)   # 14 x 19
+
+    @torch.no_grad()
+    def forward(self, tensor):
+        B = tensor.shape[0]
+        # [B,3,H,W] -> [B,K,3,H,W] by repeating the frame across the tubelet
+        clip = tensor.unsqueeze(1).expand(-1, self.encoder.tubelet_size, -1, -1, -1)
+        tokens = self.encoder(clip)                       # [B, 1*14*19, D]
+        gh, gw = self.grid_hw
+        assert tokens.shape[1] == gh * gw, (
+            f"expected {gh * gw} tokens, got {tokens.shape[1]}")
+        od = OrderedDict()
+        od["0"] = tokens.reshape(B, gh, gw, self.num_channels).permute(0, 3, 1, 2)
+        return od
+
+
 class Joiner(nn.Sequential):
     def __init__(self, backbone, position_embedding):
         super().__init__(backbone, position_embedding)
@@ -170,6 +232,8 @@ def build_backbone(args):
     return_interm_layers = args.masks
     if args.backbone.startswith('dinov2'):
         backbone = DINOv2BackBone(args.backbone, args.image_feature_strategy)
+    elif args.backbone.startswith('vjepa'):
+        backbone = VJEPABackBone(args.backbone, args.image_feature_strategy)
     else:
         assert args.backbone in ['resnet18', 'resnet34']
         backbone = Backbone(args.backbone, train_backbone, return_interm_layers, dilation=False)

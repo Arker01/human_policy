@@ -24,11 +24,16 @@ set -euo pipefail
 gpu="${1:-0}"
 weight="${2:-0.3}"
 ablation="${3:-none}"
+dataset_json="${4:-/home/aigc/human_policy/pillow_robot.json}"
 
 cd /home/aigc/human_policy
 
 PY=/home/aigc/miniconda/envs/human_policy/bin/python
-DATASET_JSON=/tmp/episodes_45_95_train.json
+# Defaults to pillow_robot.json (data/dex5_train + data/dex5_val) so this run is a
+# like-for-like A/B against train_pillow_robot_ckpt, whose only difference is the
+# absent world head. The previous default pointed at /tmp/episodes_45_95_train.json,
+# which no longer exists.
+DATASET_JSON="$dataset_json"
 MODEL_CFG=hdt/configs/models/act_with_future_dino.yaml
 BASE_DIR=/home/aigc/human_policy/data
 

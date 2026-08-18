@@ -1,0 +1,74 @@
+common:
+  policy_class: ACT
+  state_dim: 128
+  action_dim: 128
+  camera_names: ['top']
+
+model:
+  enc_layers: 4
+  dec_layers: 7
+  nheads: 8
+  hidden_dim: 512
+  kl_weight: 10
+  dim_feedforward: 3200
+  lr_backbone: 1e-5
+  # INPUT-encoder arm of the comparison: frozen V-JEPA 2.1 ViT-B (768-d) instead of the
+  # trained resnet18. This is the slot omega-0 actually puts V-JEPA in. The current frame
+  # is repeated across the tubelet, so the encoder is used as an image encoder (see
+  # VJEPABackBone in hdt/detr/models/backbone.py). Same frozen-vs-trained caveat as the
+  # dinov2 arm. Everything else matches ab4.
+  backbone: vjepa2_1_vitb
+  image_feature_strategy: ACT_linear
+  use_language_conditioning: False
+
+  # Future-DINO World Head Configuration
+  # ====================================
+  # This is an auxiliary head that predicts future DINO patch features
+  # It helps the model learn to predict future world states
+  future_dino:
+    enabled: true
+    # Weight for the Future-DINO loss (lambda_world in the doc)
+    # Recommended to test: 0.1, 0.3, 1.0
+    weight: 1.0
+    # FROZEN encoder that produces BOTH the query tokens (frame t) and the target
+    # tokens (frame t+H). It is deliberately NOT the trunk backbone above: the trunk
+    # stays resnet18 and stays trainable, but a teacher that trains with the student
+    # lets the world loss collapse the target space instead of predicting the future.
+    # 'dinov2_vits14' (384-d, needs the weights in ~/.cache/torch/hub) or
+    # 'resnet18' / 'resnet34' (512-d, frozen ImageNet, offline fallback).
+    target_encoder: dinov2_vits14
+    # Future frame offset H, in raw dataset frames. Human episodes rescale this by
+    # slow_down_factor so it stays aligned with the action chunk they actually cover.
+    # chunk_size is 64 and human chunks span 64/slow_down_factor raw frames.
+    horizon: 45
+    # Number of Transformer Decoder layers
+    num_layers: 4
+    # Number of attention heads in decoder
+    num_heads: 8
+    # Dropout rate for decoder
+    dropout: 0.1
+    # Upper bound on patch count (position table size). dinov2_vits14 at 224x308 gives
+    # 16*22 = 352 patches per camera. Asserted at forward time, so raise it if you add
+    # cameras or resolution.
+    num_patches: 1024
+    # L2-normalize each target token before the loss (doc S2.2 tokenwise_normalize)
+    normalize_target: true
+    # Weight for Huber (Smooth L1) loss component
+    # Total loss = cosine_loss + huber_weight * huber_loss
+    huber_weight: 0.1
+    # Warmup steps for the Future-DINO loss weight (0 = off, the default).
+    # Doc S7 only asks for warmup "如果两个 loss 数量级差异很大", measured on the shared
+    # trunk gradient norm. Measured at step 0 with this exact config on real data
+    # (batch 8, chunk 100, head at random init), |g_trunk| from the trajectory loss is
+    # 4.08e+02 and from the world loss at lambda=1 is 1.44e+01 -- at weight=0.3 the world
+    # term is ~1% of the trajectory gradient. It cannot swamp anything, so warmup is not
+    # needed and would only delay the head from learning. We train from scratch, not
+    # finetune (doc S8's three-stage recipe is prefixed "如果从现有 HAT checkpoint 开始").
+    # Raise this only if you raise `weight` far above 1.0.
+    warmup_steps: 0
+    # Ablation (doc S9): 'none' | 'shuffled' (break the t -> t+H pairing across the
+    # batch) | 'current' (predict frame t, i.e. plain reconstruction)
+    ablation: none
+
+data:
+  image_resolution_hw: [240, 320]

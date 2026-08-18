@@ -212,6 +212,7 @@ logs/
 # Local dataset trees
 data/all_episodes*/
 data/convert_UnifoLM_WBT*/
+data/convert_UnifoLM_WBT*
 data/dex5_train/
 data/dex5_val/
 data/eval_ego_last/
@@ -227,3 +228,17 @@ data/.mv
 
 # Eval reports
 *_mpjpe_eval*.json
+
+# Checkpoint dirs, again -- the `*_ckpt/` rule above only matches real directories,
+# and every run since 2026-08-17 creates `<exptid>_ckpt` as a SYMLINK onto
+# /mnt/nvme0n1 (main.py only mkdir's when the path is not already a directory).
+# A symlink is not a directory as far as gitignore is concerned, so it needs the
+# trailing-slash-free form.
+*_ckpt
+# The hand-assembled "copy this folder and it runs" bundle. Symlink to
+# /mnt/nvme0n1/human_policy_ckpt/BEST_ab4_mixed_w1.0_h45/ -- 390MB of weights,
+# moved between machines by hand, never through git.
+BEST_CKPT
+
+# Perturbation-suite raw output
+perturb_*.json

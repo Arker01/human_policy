@@ -172,6 +172,7 @@ def predict_episode_to_hdf5(
     camera_name="top",
     max_steps=None,
     device=None,
+    norm_stats_path=None,
 ):
     import torch
     import cv2
@@ -190,13 +191,14 @@ def predict_episode_to_hdf5(
 
     with h5py.File(episode_hdf5_path, "r") as root:
         embodiment = str(root.attrs.get("embodiment", "human_mocap_annotated"))
-        ckpt_dir = os.path.dirname(ckpt_path)
-        if os.path.basename(ckpt_dir).startswith("policy_iter_"):
-            ckpt_dir = os.path.dirname(ckpt_dir)
-        stats_path = os.path.join(ckpt_dir, "dataset_stats.pkl")
-        if not os.path.exists(stats_path):
-            raise FileNotFoundError(f"dataset_stats.pkl not found next to ckpt: {stats_path}")
-        with open(stats_path, "rb") as f:
+        if norm_stats_path is None:
+            ckpt_dir = os.path.dirname(ckpt_path)
+            if os.path.basename(ckpt_dir).startswith("policy_iter_"):
+                ckpt_dir = os.path.dirname(ckpt_dir)
+            norm_stats_path = os.path.join(ckpt_dir, "dataset_stats.pkl")
+        if not os.path.exists(norm_stats_path):
+            raise FileNotFoundError(f"dataset_stats.pkl not found: {norm_stats_path}")
+        with open(norm_stats_path, "rb") as f:
             loaded = pickle.load(f)
         norm_stats = loaded[0] if isinstance(loaded, tuple) and len(loaded) == 2 else loaded
         if embodiment not in norm_stats:
@@ -274,18 +276,46 @@ def _transform_points(points, transform_mat):
     transformed = np.dot(transform_mat, points_h.T).T
     return transformed[:, :3]
 
+def _normalize(v: np.ndarray) -> np.ndarray:
+    n = np.linalg.norm(v)
+    if n < 1e-8:
+        return np.zeros_like(v)
+    return v / n
+
+def _rot6d_to_mat(rot6d: np.ndarray) -> np.ndarray:
+    a1 = rot6d[0:3]
+    a2 = rot6d[3:6]
+    b1 = _normalize(a1)
+    b2 = _normalize(a2 - np.dot(b1, a2) * b1)
+    b3 = np.cross(b1, b2)
+    R = np.stack([b1, b2, b3], axis=1).astype(np.float32)
+    return R
+
 def _action_to_eval_joints(action_128: np.ndarray) -> dict:
     import hdt.constants as C
-    cmd = get_eef_kpts_from_prediction(action_128)
-    head_mat = cmd["head_mat"]
-    lw_mat = cmd["left_wrist_mat"]
-    rw_mat = cmd["right_wrist_mat"]
-    waist_mat = cmd["waist_mat"]
-    lk_full = cmd["left_hand_kpts"]
-    rk_full = cmd["right_hand_kpts"]
-    valid_idx = C.RETARGETTING_INDICES
-    lk_local = lk_full[valid_idx].astype(np.float32)
-    rk_local = rk_full[valid_idx].astype(np.float32)
+
+    head = action_128[C.OUTPUT_HEAD_EEF]
+    lw = action_128[C.OUTPUT_LEFT_EEF]
+    rw = action_128[C.OUTPUT_RIGHT_EEF]
+    lk_local = action_128[C.OUTPUT_LEFT_KEYPOINTS].reshape(6, 3).astype(np.float32)
+    rk_local = action_128[C.OUTPUT_RIGHT_KEYPOINTS].reshape(6, 3).astype(np.float32)
+    waist = action_128[89:98]
+
+    waist_mat = np.eye(4, dtype=np.float32)
+    waist_mat[:3, 3] = waist[:3]
+    waist_mat[:3, :3] = _rot6d_to_mat(waist[3:9])
+
+    head_mat = np.eye(4, dtype=np.float32)
+    head_mat[:3, 3] = head[:3]
+    head_mat[:3, :3] = _rot6d_to_mat(head[3:9])
+
+    lw_mat = np.eye(4, dtype=np.float32)
+    lw_mat[:3, 3] = lw[:3]
+    lw_mat[:3, :3] = _rot6d_to_mat(lw[3:9])
+
+    rw_mat = np.eye(4, dtype=np.float32)
+    rw_mat[:3, 3] = rw[:3]
+    rw_mat[:3, :3] = _rot6d_to_mat(rw[3:9])
 
     lk_world = _transform_points(lk_local, lw_mat)
     rk_world = _transform_points(rk_local, rw_mat)
@@ -323,13 +353,7 @@ def evaluate_mpjpe(
         jump_threshold_m=_dirty_start_jump_threshold_m,
         settle_frames=_dirty_start_settle_frames,
     )
-    pr_start = _detect_valid_start_from_actions(
-        pr_actions,
-        check_frames=_dirty_start_check_frames,
-        jump_threshold_m=_dirty_start_jump_threshold_m,
-        settle_frames=_dirty_start_settle_frames,
-    )
-    valid_start = max(start_step, gt_start, pr_start)
+    valid_start = max(start_step, gt_start)
 
     T = min(gt_actions.shape[0], pr_actions.shape[0]) - valid_start
     if T <= 0:
@@ -470,6 +494,7 @@ def predict_dir_to_hdf5(
     max_steps=None,
     device=None,
     glob="*.hdf5",
+    norm_stats_path=None,
 ):
     gt_files = sorted(Path(gt_dir).glob(glob))
     if not gt_files:
@@ -487,6 +512,7 @@ def predict_dir_to_hdf5(
             camera_name=camera_name,
             max_steps=max_steps,
             device=device,
+            norm_stats_path=norm_stats_path,
         )
 
 
@@ -524,6 +550,7 @@ def batch_evaluate_mpjpe(
         predict_dir_to_hdf5(
             str(gt_dir), str(pred_dir), ckpt, model_cfg or str(_REPO_ROOT / "hdt/configs/models/act_resnet.yaml"),
             chunk_size=chunk_size, camera_name=camera, max_steps=None, device=device, glob=glob,
+            norm_stats_path=norm_stats,
         )
     else:
         if pred_dir is None:

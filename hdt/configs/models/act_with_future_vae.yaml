@@ -1,0 +1,81 @@
+common:
+  policy_class: ACT
+  state_dim: 128
+  action_dim: 128
+  camera_names: ['top']
+
+model:
+  enc_layers: 4
+  dec_layers: 7
+  nheads: 8
+  hidden_dim: 512
+  kl_weight: 10
+  dim_feedforward: 3200
+  lr_backbone: 1e-5
+  backbone: resnet18
+  image_feature_strategy: ACT_linear
+  use_language_conditioning: False
+
+  # Two future-target species at once, ST-WAM style.
+  # ==================================================================
+  # ST-WAM regresses a frozen VAE latent AND a frozen DINO feature of the same future
+  # frame, and in their ablation the VAE half is the load-bearing one: LIBERO-Plus
+  # drops 72.8 -> 63.5 when DINO is removed, but 72.8 -> 39.7 when the VAE is removed.
+  # Their DINO term rides at lambda 0.02 against the VAE's 1.0. Our whole ab0..ab7
+  # suite only ever had the DINO half -- i.e. the arm ST-WAM says does the least -- so
+  # the point of this config is to add the half we were missing.
+  #
+  # Everything outside the two world heads matches ab4 (mixed 1:1 data, horizon 45,
+  # resnet18 trunk) so ab4 IS the DINO-only arm of this comparison; do not retrain it.
+
+  # --- species 1: DINO (unchanged from ab4) ---------------------------------
+  future_dino:
+    enabled: true
+    # Overridden per-arm on the command line: 1.0 (ab4 setting), 0.02 (ST-WAM ratio),
+    # or 0.0 (VAE-only, head attached but silent -- the ab0/ab1 pattern, which keeps
+    # parameter count and optimizer state identical across arms).
+    weight: 0.02
+    target_encoder: dinov2_vits14
+    # Shared with the VAE head: there is one future frame per sample, so one horizon.
+    horizon: 45
+    num_layers: 4
+    num_heads: 8
+    dropout: 0.1
+    num_patches: 1024
+    normalize_target: true
+    huber_weight: 0.1
+    warmup_steps: 0
+    ablation: none
+
+  # --- species 2: Wan VAE (new) ---------------------------------------------
+  future_vae:
+    enabled: true
+    weight: 1.0
+    # Wan2.2 TI2V-5B VAE, 16x spatial compression, 48 latent channels. A 224x304 frame
+    # becomes 14x19 = 266 tokens, the same order as DINOv2-S's 352, so the head gets a
+    # comparable token budget rather than a 4x bigger one. Weights live locally at
+    # ~/.cache/huggingface/wan22_vae (2.8GB); the path is in FrozenPatchTargetEncoder.
+    # Pinned to bf16 -- fp32 costs 2x the time and memory for 0.016 max latent error.
+    target_encoder: wan22_vae
+    num_layers: 4
+    num_heads: 8
+    dropout: 0.1
+    num_patches: 1024
+    # Different default from the DINO head, on purpose. The latent is already
+    # per-channel standardized by the checkpoint's latents_mean/latents_std, and
+    # unit-norming each 48-d token afterwards would discard absolute magnitude --
+    # which for a reconstruction code is signal, not nuisance. The wv4 arm flips this
+    # to true so the choice is measured rather than assumed.
+    normalize_target: false
+    # And for the same reason the regression term leads here instead of trailing at
+    # 0.1: predicting a reconstruction latent is a regression problem, whereas
+    # predicting a DINO direction is mostly an angular one.
+    huber_weight: 1.0
+    # 'none' | 'shuffled' | 'current', same meanings as the DINO head. The shuffled arm
+    # matters more than usual: on the DINO-only suite the shuffled control TIED with
+    # ab4 (9.8% vs 9.5% mean degradation), so any VAE gain has to clear its own
+    # shuffled control before it can be called future prediction.
+    ablation: none
+
+data:
+  image_resolution_hw: [240, 320]

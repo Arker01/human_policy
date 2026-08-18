@@ -66,12 +66,19 @@ class EpisodicDataset(torch.utils.data.Dataset):
                  dirty_start_jump_threshold_m=0.3,
                  dirty_start_settle_frames=0,
                  future_image_enabled=False,
-                 future_horizon=0):
+                 future_horizon=0,
+                 future_clip_frames=1,
+                 future_clip_stride=1):
         super(EpisodicDataset).__init__()
         # Future-DINO: when disabled (default) every code path below is byte-for-byte
         # the original one and read_one() still returns the original 5-tuple.
         self.future_image_enabled = bool(future_image_enabled)
         self.future_horizon = int(future_horizon)
+        # clip_frames == 1 (default) keeps the single-frame teacher path bit-identical.
+        # clip_frames > 1 is video-teacher mode (V-JEPA 2): read a K-frame clip ending
+        # at t AND one ending at t+H, spaced clip_stride raw frames apart.
+        self.future_clip_frames = max(1, int(future_clip_frames))
+        self.future_clip_stride = max(1, int(future_clip_stride))
         if self.future_image_enabled:
             assert self.future_horizon > 0, "future_horizon must be > 0 when future images are enabled"
         self.camera_names = camera_names
@@ -403,6 +410,21 @@ class EpisodicDataset(torch.utils.data.Dataset):
             images.append(img.transpose(2, 0, 1))  # CHW
         return images
 
+    def _read_cam_clip_ending_at(self, root, end_ts, single_hdf_path, first_ts=0):
+        """
+        Future-DINO video-teacher mode. Read future_clip_frames frames ENDING at
+        end_ts, spaced future_clip_stride raw frames apart, in chronological order.
+        Timesteps that fall before the episode start are clamped to first_ts -- a clip
+        at t=0 then just repeats frame 0, which is what actually happened (the robot
+        was standing still), not a fabricated frame.
+
+        Returns a list of K entries, each a list of per-camera CHW uint8 arrays.
+        """
+        K, S = self.future_clip_frames, self.future_clip_stride
+        return [self._read_cam_images_at(root, max(first_ts, end_ts - (K - 1 - i) * S),
+                                         single_hdf_path)
+                for i in range(K)]
+
     def read_one(self, index, start_ts):
         episode_len = int(self.episode_len_list[index])
         raw_start_ts = int(self.valid_start_list[index]) + int(start_ts)
@@ -448,6 +470,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
 
         # ---- Future-DINO: read the frame at t+H (disabled by default) ----
         future_cam_images = None
+        current_clip = future_clip = None
         future_valid = 1.0
         if self.future_image_enabled:
             if self.load_hdf_to_cpu:
@@ -468,7 +491,18 @@ class EpisodicDataset(torch.utils.data.Dataset):
                 # clamped frame would teach "the future is static" near episode ends.
                 future_ts = last_raw_ts
                 future_valid = 0.0
-            future_cam_images = self._read_cam_images_at(root, future_ts, single_hdf_path)
+            if self.future_clip_frames > 1:
+                # Video teacher: the query side is a clip ending at t and the target a
+                # clip ending at t+H. Both are read here so that the single
+                # visual_preprocessor/training_transforms call below applies the
+                # identical photometric augmentation to every frame (doc S2.3).
+                first_ts = int(self.valid_start_list[index])
+                current_clip = self._read_cam_clip_ending_at(
+                    root, raw_start_ts, single_hdf_path, first_ts=first_ts)
+                future_clip = self._read_cam_clip_ending_at(
+                    root, future_ts, single_hdf_path, first_ts=first_ts)
+            else:
+                future_cam_images = self._read_cam_images_at(root, future_ts, single_hdf_path)
 
         if not self.load_hdf_to_cpu:
             lang_instruction = root.attrs.get('description', '')
@@ -504,11 +538,28 @@ class EpisodicDataset(torch.utils.data.Dataset):
             # samples the ColorJitter params once per call, so both frames get the
             # identical photometric transform (doc S2.3).
             n_cam = all_cam_images.shape[0]
-            stacked = np.concatenate([all_cam_images, np.stack(future_cam_images, axis=0)], axis=0)
-            stacked = self.visual_preprocessor(stacked)
-            if self.train:
-                stacked = self.training_transforms(stacked)
-            image_data, future_image_data = stacked[:n_cam], stacked[n_cam:]
+            if self.future_clip_frames > 1:
+                K = self.future_clip_frames
+                # [current frame for the trunk] + [2K clip frames for the teacher],
+                # flattened as (k * n_cam + cam) so the model can fold it back to
+                # [2K, n_cam, ...] and then to per-camera clips.
+                clip_stack = np.stack(
+                    [np.stack(frame, axis=0) for frame in (current_clip + future_clip)],
+                    axis=0)                                    # [2K, n_cam, C, H, W]
+                stacked = np.concatenate(
+                    [all_cam_images,
+                     clip_stack.reshape(2 * K * n_cam, *all_cam_images.shape[1:])], axis=0)
+                stacked = self.visual_preprocessor(stacked)
+                if self.train:
+                    stacked = self.training_transforms(stacked)
+                image_data = stacked[:n_cam]
+                future_image_data = stacked[n_cam:].reshape(2 * K, n_cam, *stacked.shape[1:])
+            else:
+                stacked = np.concatenate([all_cam_images, np.stack(future_cam_images, axis=0)], axis=0)
+                stacked = self.visual_preprocessor(stacked)
+                if self.train:
+                    stacked = self.training_transforms(stacked)
+                image_data, future_image_data = stacked[:n_cam], stacked[n_cam:]
         else:
             image_data = self.visual_preprocessor(all_cam_images)
             if self.train:
@@ -748,7 +799,9 @@ def load_data(base_dir,
               dirty_start_jump_threshold_m=0.3,
               dirty_start_settle_frames=0,
               future_image_enabled=False,
-              future_horizon=0):
+              future_horizon=0,
+              future_clip_frames=1,
+              future_clip_stride=1):
 
 
     assert os.path.exists(dataset_json_path)
@@ -789,7 +842,9 @@ def load_data(base_dir,
                                     dirty_start_jump_threshold_m=dirty_start_jump_threshold_m,
                                     dirty_start_settle_frames=dirty_start_settle_frames,
                                     future_image_enabled=future_image_enabled,
-                                    future_horizon=future_horizon)
+                                    future_horizon=future_horizon,
+                                    future_clip_frames=future_clip_frames,
+                                    future_clip_stride=future_clip_stride)
     
     train_dataset = dataset_dict['train']
     val_dataset = dataset_dict['val']

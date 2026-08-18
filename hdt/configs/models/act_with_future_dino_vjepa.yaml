@@ -1,0 +1,87 @@
+common:
+  policy_class: ACT
+  state_dim: 128
+  action_dim: 128
+  camera_names: ['top']
+
+model:
+  enc_layers: 4
+  dec_layers: 7
+  nheads: 8
+  hidden_dim: 512
+  kl_weight: 10
+  dim_feedforward: 3200
+  lr_backbone: 1e-5
+  backbone: resnet18
+  image_feature_strategy: ACT_linear
+  use_language_conditioning: False
+
+  # Future-DINO World Head, V-JEPA 2.1 teacher variant.
+  # ===================================================
+  # Only the *teacher* differs from act_with_future_dino.yaml. Everything the trunk
+  # and the action head see is unchanged.
+  #
+  # Why: our own measurement says the DINOv2 target is weak. Under camera perturbation,
+  # DINOv2-S gives cosine 0.517 between two views of the SAME state, while two DIFFERENT
+  # states sit at 0.480 -- i.e. the target space is nearly information-free exactly where
+  # we need it to generalize. DINOv2 is image-only and its tokens are pinned to the image
+  # grid (the failure EgoWAM's desideratum D3 describes). V-JEPA 2 is trained on video and
+  # the 2.1 release optimizes temporally consistent DENSE features.
+  #
+  # READ THIS BEFORE SPENDING A GPU-DAY -- the published evidence is AGAINST this config:
+  #  * omega-0 does NOT predict V-JEPA latents (an earlier version of this comment said it
+  #    did, wrongly). Its regression target is frozen Wan latents; V-JEPA 2.1 encodes the
+  #    CURRENT observation on the input side. Swapping that input encoder Wan->V-JEPA is
+  #    worth 15.5 SR points to them, so their evidence supports V-JEPA as an INPUT encoder,
+  #    not as a target.
+  #  * DexWM benchmarked target encoders head-to-head (DINOv2 / DINOv3 / Web-SSL /
+  #    V-JEPA 2 / SigLIP 2) and found DINOv2 best overall.
+  #  * ST-WAM predicts BOTH VAE and DINO futures, and VAE is the load-bearing half
+  #    (removing it: LIBERO-Plus 72.8 -> 39.7; removing DINO: -> 63.5). Their DINO-future-
+  #    only row, which is what our setup is, is the weakest variant in the table.
+  # Our own 8-way ablation also found the bigger DINOv2 ViT-B teacher WORSE than ViT-S
+  # (mean perturbation degradation 9.5% -> 13.5%), i.e. teacher capacity is not the axis
+  # that pays. Keep this config for the record, but the input-side experiment is the one
+  # the literature actually supports.
+  future_dino:
+    enabled: true
+    weight: 1.0
+    # V-JEPA 2.1 ViT-B, distilled from ViT-G, 768-d, ~80M params, frozen.
+    # Weights are fetched once from dl.fbaipublicfiles.com/vjepa2 into
+    # ~/.cache/torch/hub/checkpoints (see FrozenPatchTargetEncoder.VJEPA2_MODELS).
+    target_encoder: vjepa2_1_vitb
+    # --- video-teacher-only settings ---
+    # A video teacher cannot be fed a single frame: its patch embed fuses `tubelet`
+    # (=2) consecutive frames into one token group. clip_frames=2 is therefore the
+    # minimum AND the cheapest choice -- it yields exactly ONE temporal group, so the
+    # token count per camera (14*19 = 266 at the resolution below) is actually lower
+    # than DINOv2-S's 352, while the tubelet convolution still sees real motion.
+    #
+    # The query side is the clip ending at t, the target side the clip ending at t+H,
+    # so both sides are the same kind of object and the head still only models change.
+    clip_frames: 2
+    # Spacing between the two frames, in raw dataset frames. 4 frames at 30fps = 133ms
+    # apart, enough for visible motion. Set to 1 for adjacent frames.
+    clip_stride: 4
+    # V-JEPA uses patch 16, which does not divide the 224x308 grid ACTPolicy.transform
+    # produces for the trunk. 224x304 is the nearest multiple of 16, so the extra
+    # resize is a 4-pixel crop-equivalent rather than a real distortion.
+    # NOTE this means teacher inputs are resized twice (240x320 -> 224x308 -> 224x304).
+    # Harmless, but it is why the number here is 304 and not 320.
+    target_resolution_hw: [224, 304]
+    # Future frame offset H, in raw dataset frames. 45 matches ab4/ab5/ab6 so this run
+    # is a clean one-factor change (teacher only) against ab4.
+    horizon: 45
+    num_layers: 4
+    num_heads: 8
+    dropout: 0.1
+    # Upper bound on the position table. 1 camera * 1 temporal group * 14*19 = 266
+    # spatio-temporal tokens here. Raise if you add cameras, frames or resolution.
+    num_patches: 1024
+    normalize_target: true
+    huber_weight: 0.1
+    warmup_steps: 0
+    ablation: none
+
+data:
+  image_resolution_hw: [240, 320]

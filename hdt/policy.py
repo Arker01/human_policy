@@ -92,6 +92,18 @@ class ACTPolicy(nn.Module):
                     effective_weight, device=loss_dict['loss'].device, dtype=loss_dict['loss'].dtype)
                 loss_dict['loss'] = loss_dict['loss'] + effective_weight * future_dino_loss_dict['loss']
 
+                # Second future-target species (frozen Wan VAE, ST-WAM style). Present
+                # only when future_vae is enabled; carried in the same dict so nothing
+                # about the model's return contract changed.
+                if 'vae_loss' in future_dino_loss_dict:
+                    vae_weight = future_dino_loss_dict.get('vae_effective_weight', 0.0)
+                    loss_dict['future_vae_cosine_loss'] = future_dino_loss_dict['vae_cosine_loss']
+                    loss_dict['future_vae_huber_loss'] = future_dino_loss_dict['vae_huber_loss']
+                    loss_dict['future_vae_loss'] = future_dino_loss_dict['vae_loss']
+                    loss_dict['future_vae_effective_weight'] = torch.as_tensor(
+                        vae_weight, device=loss_dict['loss'].device, dtype=loss_dict['loss'].dtype)
+                    loss_dict['loss'] = loss_dict['loss'] + vae_weight * future_dino_loss_dict['vae_loss']
+
             return loss_dict
         else: # inference time
             a_hat, _, (_, _), _ = self.model(qpos, image, env_state, conditioning_dict=conditioning_dict) # no action, sample from prior

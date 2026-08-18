@@ -227,10 +227,33 @@ def main(args, base_dir, processed_dir=None):
             trainer_config.setdefault('model', {})['future_dino'] = {}
         trainer_config['model']['future_dino']['ablation'] = args['future_dino_ablation']
 
+    # Second future-target species (frozen Wan VAE). Same CLI-overrides-yaml pattern as
+    # future_dino above. It shares future_dino's horizon and future frame by design, so
+    # there is deliberately no --future_vae_horizon.
+    if args.get('use_future_vae_head'):
+        trainer_config.setdefault('model', {}).setdefault('future_vae', {})['enabled'] = True
+
+    if args.get('future_vae_weight') is not None:
+        trainer_config.setdefault('model', {}).setdefault('future_vae', {})['weight'] = args['future_vae_weight']
+
+    if args.get('future_vae_ablation') is not None:
+        trainer_config.setdefault('model', {}).setdefault('future_vae', {})['ablation'] = args['future_vae_ablation']
+
+    if args.get('future_vae_normalize_target') is not None:
+        trainer_config.setdefault('model', {}).setdefault('future_vae', {})['normalize_target'] = \
+            bool(args['future_vae_normalize_target'])
+
+    future_vae_cfg = trainer_config.get('model', {}).get('future_vae', {}) or {}
+    future_vae_enabled = bool(future_vae_cfg.get('enabled', False))
+
     future_dino_cfg = trainer_config.get('model', {}).get('future_dino', {}) or {}
     future_dino_enabled = bool(future_dino_cfg.get('enabled', False))
     # The horizon drives the dataloader, so it has to be resolved here, not in the model.
     future_dino_horizon = int(future_dino_cfg.get('horizon', 16)) if future_dino_enabled else 0
+    # Same for the clip shape: a video teacher (V-JEPA 2) needs the dataloader to read
+    # K frames per side instead of 1. Defaults keep the single-frame path unchanged.
+    future_dino_clip_frames = int(future_dino_cfg.get('clip_frames', 1)) if future_dino_enabled else 1
+    future_dino_clip_stride = int(future_dino_cfg.get('clip_stride', 1)) if future_dino_enabled else 1
 
     # Print Future-DINO config if enabled
     if future_dino_enabled:
@@ -241,7 +264,20 @@ def main(args, base_dir, processed_dir=None):
         print(f"  Num heads: {future_dino_cfg.get('num_heads', 8)}")
         print(f"  Horizon (frames): {future_dino_horizon}")
         print(f"  Target encoder (frozen): {future_dino_cfg.get('target_encoder', 'dinov2_vits14')}")
+        print(f"  Clip frames / stride: {future_dino_clip_frames} / {future_dino_clip_stride}")
         print(f"  Ablation: {future_dino_cfg.get('ablation', 'none')}")
+
+    if future_vae_enabled:
+        assert future_dino_enabled, (
+            "future_vae reuses the future frame the Future-DINO path requests from the "
+            "dataloader. Enable future_dino too (--future_dino_weight 0.0 gives a "
+            "VAE-only arm with the DINO head attached but silent).")
+        print("Future-VAE (Wan) target enabled:")
+        print(f"  Weight: {future_vae_cfg.get('weight', 1.0)}")
+        print(f"  Target encoder (frozen): {future_vae_cfg.get('target_encoder', 'wan22_vae')}")
+        print(f"  Normalize target: {future_vae_cfg.get('normalize_target', False)}")
+        print(f"  Huber weight: {future_vae_cfg.get('huber_weight', 1.0)}")
+        print(f"  Ablation: {future_vae_cfg.get('ablation', 'none')}")
 
     policy_class = trainer_config["common"]["policy_class"]
     batch_size_train = args['batch_size']
@@ -280,6 +316,8 @@ def main(args, base_dir, processed_dir=None):
         # Add Future-DINO config if enabled
         if future_dino_enabled:
             policy_config['future_dino_config'] = future_dino_cfg
+        if future_vae_enabled:
+            policy_config['future_vae_config'] = future_vae_cfg
     elif policy_class == 'RDT':
         assert "visual_backbone" not in trainer_config
         trainer_config["visual_backbone"] = trainer_config["model"]["backbone"]
@@ -355,7 +393,9 @@ def main(args, base_dir, processed_dir=None):
                                                         dirty_start_jump_threshold_m=args.get('dirty_start_jump_threshold_m', 0.3),
                                                         dirty_start_settle_frames=args.get('dirty_start_settle_frames', 0),
                                                         future_image_enabled=future_dino_enabled,
-                                                        future_horizon=future_dino_horizon)
+                                                        future_horizon=future_dino_horizon,
+                                                        future_clip_frames=future_dino_clip_frames,
+                                                        future_clip_stride=future_dino_clip_stride)
 
     if args.get("eval_ckpts", False):
         val_dataloader, policy = accelerator.prepare(val_dataloader, policy)
@@ -667,6 +707,10 @@ if __name__ == '__main__':
     parser.add_argument('--future_dino_warmup_steps', type=int, default=None, help='warmup steps for Future-DINO loss (overrides config)')
     parser.add_argument('--future_dino_horizon', type=int, default=None, help='future frame offset H in raw frames (overrides config)')
     parser.add_argument('--future_dino_ablation', type=str, default=None, choices=['none', 'shuffled', 'current'], help='Future-DINO ablation mode (overrides config)')
+    parser.add_argument('--use_future_vae_head', action='store_true', help='enable the second future-target head with a frozen Wan VAE teacher (ST-WAM style); requires --use_future_dino_head')
+    parser.add_argument('--future_vae_weight', type=float, default=None, help='weight for the Future-VAE loss (overrides config)')
+    parser.add_argument('--future_vae_ablation', type=str, default=None, choices=['none', 'shuffled', 'current'], help='Future-VAE ablation mode (overrides config)')
+    parser.add_argument('--future_vae_normalize_target', type=int, default=None, choices=[0, 1], help='1 = normalize each Wan latent token before the loss; default 0 keeps the latent magnitude')
     args = vars(parser.parse_args())
 
     if args.get('base_dir'):
