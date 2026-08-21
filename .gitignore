@@ -239,6 +239,8 @@ data/.mv
 # /mnt/nvme0n1/human_policy_ckpt/BEST_ab4_mixed_w1.0_h45/ -- 390MB of weights,
 # moved between machines by hand, never through git.
 BEST_CKPT
+BEST_CKPT_vjepa
+BEST_CKPT_ab4_nostate
 
 # Perturbation-suite raw output
 perturb_*.json

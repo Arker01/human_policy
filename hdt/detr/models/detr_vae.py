@@ -450,7 +450,7 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 
 class DETRVAE(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, backbones, transformer, encoder, state_dim, action_dim, num_queries, camera_names, image_feature_strategy, use_language_conditioning, future_dino_config=None, future_vae_config=None):
+    def __init__(self, backbones, transformer, encoder, state_dim, action_dim, num_queries, camera_names, image_feature_strategy, use_language_conditioning, future_dino_config=None, future_vae_config=None, zero_state_dims=None):
         """ Initializes the model.
         Parameters:
             backbones: torch module of the backbone to be used. See backbone.py
@@ -466,6 +466,18 @@ class DETRVAE(nn.Module):
                 DINO head, so future_dino must be enabled for it to have a frame to
                 look at (set future_dino.weight = 0 for a VAE-only arm, the same way
                 ab0/ab1 keep the head attached but silent).
+            zero_state_dims: (lo, hi) half-open range of NORMALIZED qpos dims to force
+                to 0 before the state ever reaches a projection, or None to leave the
+                state untouched (the default -- ab0..ab7 and r2_* are unaffected).
+
+                Why zeroing the *normalized* state and not the raw one: dex5 stores the
+                robot's own configuration at 100:126 (root pos 3 + root quat 4 + the
+                first 19 of 29 joint angles, verbatim from robot_q_current[0:26]), and
+                human episodes have that whole block at raw 0 with mean 0 / std 0.01,
+                so human samples already arrive at the model as exactly 0 there.
+                Writing raw 0 for dex5 would instead land at -59 sigma under dex5's own
+                statistics. Zeroing post-normalization is the only way to make the two
+                embodiments agree, and it is what "same as the human data" means.
         """
         super().__init__()
         self.num_queries = num_queries
@@ -512,6 +524,20 @@ class DETRVAE(nn.Module):
         # decoder extra parameters
         self.latent_out_proj = nn.Linear(self.latent_dim, hidden_dim) # project latent sample to embedding
         self.additional_pos_embed = nn.Embedding(2, hidden_dim) # learned position embedding for proprio and latent
+
+        # Optional state-block ablation. Kept as a buffer so the range travels with the
+        # checkpoint: whoever loads these weights for real-robot inference gets the
+        # masking automatically and never has to know which dims to leave unfilled.
+        self.zero_state_dims = tuple(zero_state_dims) if zero_state_dims else None
+        if self.zero_state_dims is not None:
+            lo, hi = self.zero_state_dims
+            assert 0 <= lo < hi <= state_dim, (
+                f"zero_state_dims {self.zero_state_dims} out of range for state_dim {state_dim}")
+            keep = torch.ones(state_dim)
+            keep[lo:hi] = 0.0
+            self.register_buffer('state_keep_mask', keep)
+            print(f"[state ablation] normalized qpos[{lo}:{hi}] forced to 0 "
+                  f"({hi - lo}/{state_dim} dims), matching the human episodes")
 
         # Future-DINO Head (optional auxiliary head)
         self.use_future_dino_head = False
@@ -737,6 +763,10 @@ class DETRVAE(nn.Module):
         """
         is_training = actions is not None # train or val
         bs, _ = qpos.shape
+        # Applied before BOTH the CVAE encoder's qpos_embed and the decoder's
+        # input_proj_robot_state, so the masked dims are invisible everywhere.
+        if self.zero_state_dims is not None:
+            qpos = qpos * self.state_keep_mask.to(qpos.dtype)
         ### Obtain latent z from action sequence
         if is_training:
             # project action sequence to embedding dim, and concat with a CLS token
@@ -1001,6 +1031,7 @@ def build(args):
     # Get Future-DINO config if available
     future_dino_config = getattr(args, 'future_dino_config', None)
     future_vae_config = getattr(args, 'future_vae_config', None)
+    zero_state_dims = getattr(args, 'zero_state_dims', None)
 
     model = DETRVAE(
         backbones,
@@ -1014,6 +1045,7 @@ def build(args):
         use_language_conditioning=args.use_language_conditioning,
         future_dino_config=future_dino_config,
         future_vae_config=future_vae_config,
+        zero_state_dims=zero_state_dims,
     )
 
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)

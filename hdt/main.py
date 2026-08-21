@@ -243,6 +243,20 @@ def main(args, base_dir, processed_dir=None):
         trainer_config.setdefault('model', {}).setdefault('future_vae', {})['normalize_target'] = \
             bool(args['future_vae_normalize_target'])
 
+    if args.get('zero_state_dims') is not None:
+        trainer_config.setdefault('model', {})['zero_state_dims'] = args['zero_state_dims']
+
+    # "100:128" -> (100, 128). None means "leave the state alone", the default.
+    zero_state_dims = trainer_config.get('model', {}).get('zero_state_dims', None)
+    if isinstance(zero_state_dims, str):
+        lo, hi = zero_state_dims.split(':')
+        zero_state_dims = (int(lo), int(hi))
+    elif zero_state_dims is not None:
+        zero_state_dims = tuple(int(v) for v in zero_state_dims)
+    if zero_state_dims is not None:
+        print(f"\n=== State ablation: normalized qpos[{zero_state_dims[0]}:{zero_state_dims[1]}] "
+              f"forced to 0 for every embodiment ===")
+
     future_vae_cfg = trainer_config.get('model', {}).get('future_vae', {}) or {}
     future_vae_enabled = bool(future_vae_cfg.get('enabled', False))
 
@@ -318,6 +332,8 @@ def main(args, base_dir, processed_dir=None):
             policy_config['future_dino_config'] = future_dino_cfg
         if future_vae_enabled:
             policy_config['future_vae_config'] = future_vae_cfg
+        if zero_state_dims is not None:
+            policy_config['zero_state_dims'] = zero_state_dims
     elif policy_class == 'RDT':
         assert "visual_backbone" not in trainer_config
         trainer_config["visual_backbone"] = trainer_config["model"]["backbone"]
@@ -711,6 +727,7 @@ if __name__ == '__main__':
     parser.add_argument('--future_vae_weight', type=float, default=None, help='weight for the Future-VAE loss (overrides config)')
     parser.add_argument('--future_vae_ablation', type=str, default=None, choices=['none', 'shuffled', 'current'], help='Future-VAE ablation mode (overrides config)')
     parser.add_argument('--future_vae_normalize_target', type=int, default=None, choices=[0, 1], help='1 = normalize each Wan latent token before the loss; default 0 keeps the latent magnitude')
+    parser.add_argument('--zero_state_dims', type=str, default=None, help='"lo:hi" half-open range of normalized qpos dims to force to 0, e.g. "100:128" to hide the dex5 robot-configuration block and match the human episodes. Default: keep the whole state.')
     args = vars(parser.parse_args())
 
     if args.get('base_dir'):

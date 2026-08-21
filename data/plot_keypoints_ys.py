@@ -158,6 +158,20 @@ def _load_act_policy(model_cfg_path, chunk_size, camera_names):
         "use_language_conditioning": trainer_config["model"]["use_language_conditioning"],
     }
 
+    # Optional state-block ablation, additive: absent key -> None -> identical behaviour
+    # to every checkpoint trained before this existed. Must be honoured here, because
+    # the mask lives in the checkpoint as a buffer and load_state_dict(strict=False)
+    # would silently drop it -- the model would then be fed the full state it was
+    # never trained on, which looks like a huge regression rather than a config bug.
+    zsd = trainer_config["model"].get("zero_state_dims", None)
+    if isinstance(zsd, str):
+        lo, hi = zsd.split(":")
+        zsd = (int(lo), int(hi))
+    elif zsd is not None:
+        zsd = tuple(int(v) for v in zsd)
+    if zsd is not None:
+        policy_config["zero_state_dims"] = zsd
+
     policy = ACTPolicy(policy_config)
     policy.eval()
     return policy
