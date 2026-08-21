@@ -106,7 +106,14 @@ def run_ckpt(name, ckpt_dir, cfg, val_dir, ckpt_file="policy_last.ckpt"):
     ns = loaded[0] if isinstance(loaded, tuple) else loaded
 
     err = {p: [] for p, _ in PERTURBS}
+    # Per-episode means, kept alongside the flat per-frame list rather than replacing it:
+    # the flat list still produces the exact same headline number as before, so every
+    # figure already reported stays valid, and this only ADDS the spread we were missing.
+    # Without it a 2-3mm gap between two checkpoints cannot be told from noise, which is
+    # the single biggest hole in the whole ablation suite.
+    err_ep = {p: [] for p, _ in PERTURBS}
     for path in sorted(glob.glob(os.path.join(val_dir, "*.hdf5"))):
+        ep = {p: [] for p, _ in PERTURBS}
         with h5py.File(path, "r") as root:
             s = ns[str(root.attrs.get("embodiment", "dex5"))]
             qm, qs = s["qpos_mean"].astype(np.float32), s["qpos_std"].astype(np.float32)
@@ -131,9 +138,13 @@ def run_ckpt(name, ckpt_dir, cfg, val_dir, ckpt_file="policy_last.ckpt"):
                     with torch.no_grad():
                         a = policy(it, q, conditioning_dict=None)[0, 0].cpu().numpy()
                     pj = joints(a * (ast + 1e-6) + am)
-                    err[pname].append(np.linalg.norm(pj - gtj, axis=1).mean())
+                    e = np.linalg.norm(pj - gtj, axis=1).mean()
+                    err[pname].append(e)
+                    ep[pname].append(e)
+        for p in err_ep:
+            err_ep[p].append(float(np.mean(ep[p]) * 1000))
         print(f"  [{name}] {os.path.basename(path)[-22:]}", flush=True)
-    return {p: float(np.mean(v) * 1000) for p, v in err.items()}
+    return ({p: float(np.mean(v) * 1000) for p, v in err.items()}, err_ep)
 
 
 if __name__ == "__main__":
@@ -146,6 +157,12 @@ if __name__ == "__main__":
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
-    res = run_ckpt(a.name, a.ckpt, a.cfg, a.val_dir, a.ckpt_file)
+    res, per_ep = run_ckpt(a.name, a.ckpt, a.cfg, a.val_dir, a.ckpt_file)
     json.dump({a.name: res}, open(a.out, "w"), indent=1)
+    # Separate file on purpose: perturb_report.py globs the --out files and would choke
+    # on an extra top-level key, so the spread rides alongside instead of inside.
+    json.dump({a.name: per_ep}, open(a.out.replace(".json", "") + ".per_ep.json", "w"), indent=1)
     print(f"== {a.name}: " + "  ".join(f"{k}={v:.1f}" for k, v in res.items()), flush=True)
+    n = len(next(iter(per_ep.values())))
+    print(f"== {a.name} (mean +- SEM over {n} episodes): " + "  ".join(
+        f"{k}={np.mean(v):.1f}+-{np.std(v, ddof=1)/np.sqrt(n):.1f}" for k, v in per_ep.items()), flush=True)

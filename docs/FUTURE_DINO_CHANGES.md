@@ -318,6 +318,101 @@ python data/eval_mpjpe_batch.py \
   Wan VAE 那 2.8GB **不会自动下**,默认找 `~/.cache/huggingface/wan22_vae`,
   放在别处就设 `WAN_VAE_DIR` 环境变量。**纯推理这两个都不需要。**
 
+## 三之五、`--zero_state_dims`:把机器人自身构型那一块挡掉(2026-08-18 16:35 开跑)
+
+**为什么要挡。** 128 维状态里 `98:128` 这一块只有 dex5 有内容(`robot_q_current[0:26]`:
+根位置 3 + 根四元数 4 + 29 个关节角的前 19 个),人类数据这一块原始值全是 0。
+在 ab4 上量过:把这一块换成训练均值,MPJPE 掉 +36%,说明模型真的在读它。
+问题是真机部署要一模一样地复现这一块,代价不小 —— 这一版就是问:这 36% 值不值。
+
+**为什么是在归一化之后置 0,不是原始值置 0。** 人类那一半的统计是 mean 0 / std 0.01,
+所以人类样本进模型时那一块本来就正好是 0。dex5 若写原始 0,按 dex5 自己的统计会落到 −59σ,
+反而更糟。只有归一化之后置 0,两个 embodiment 才真正对齐,这才是"跟人类数据一样"。
+
+**为什么写 `98:128` 而不是 `100:128`。** 第 98、99 维在两个 embodiment 里都恒为 0,两个区间等价;
+`98:128` 只是对齐了块边界。共 30/128 维。
+
+**改了什么(全部是新增、默认关闭,ab0~ab7 和 r2_\* 逐比特不受影响):**
+
+- `hdt/main.py`:新增 `--zero_state_dims "lo:hi"`,解析成 `(lo, hi)` 塞进 `policy_config`。
+  默认 `None` = 整个状态不动。
+- `hdt/detr/models/detr_vae.py`:`DETRVAE.__init__` 多一个 `zero_state_dims=None` 参数,
+  据此注册 buffer `state_keep_mask`;`forward` 里在 `bs, _ = qpos.shape` 之后立刻
+  `qpos = qpos * self.state_keep_mask`。放这个位置的意思是 CVAE encoder 的 `qpos_embed`
+  和 decoder 的 `input_proj_robot_state` **两条路都看不到**被挡的维度。
+  写成 buffer 而不是普通属性,是为了让区间跟着 ckpt 走:真机那边加载权重就自动带上 mask,
+  不需要知道该留哪几维空着。
+- `scripts/train/run_zero_state.sh`(新文件):ab4 的命令原样照抄,只多 `--zero_state_dims 98:128`。
+
+**评测侧也必须带 mask(踩过一次的坑):** mask 是 ckpt 里的 buffer,
+`load_state_dict(strict=False)` 会**静默丢掉**它。用 `act_with_future_dino.yaml` 建模型来评,
+模型就会被喂进它从没见过的完整状态,看起来像大幅退化,其实是配置错了。所以另加两处:
+
+- `hdt/configs/models/act_with_future_dino_nostate.yaml`(新文件):ab4 的 config + `model.zero_state_dims: "98:128"`。
+- `data/plot_keypoints_ys.py::_load_act_policy`:读 `model.zero_state_dims` 塞进 `policy_config`。
+  纯新增,key 不存在时为 `None`,对之前所有 ckpt 行为逐比特不变。
+  评测日志里应该能看到 `[state ablation] normalized qpos[98:128] forced to 0`,看不到就是没生效。
+
+**结论(100k 步跑完,2026-08-18 21:11,9h49m @ 2.89 it/s):挡掉这一块反而更好。**
+dex5_val 扰动套件,单位 mm:
+
+| run | clean | noise | blur | camera | occlusion | background | compound |
+|---|---|---|---|---|---|---|---|
+| ab4(给全部状态) | 43.5 | 48.2 | 49.9 | 44.7 | 48.6 | 48.6 | 61.8 |
+| r3_ab4_nostate | **41.0** | **44.0** | **44.7** | **41.0** | **44.1** | 48.7 | 63.3 |
+
+clean −2.5mm(−5.8%),七个轴里五个更好,只有 compound +1.5mm。
+**对真机的意义:98:128 那 30 维不用复现了** —— 之前在 ab4 上量到的 +36% 只说明 ab4 学会了依赖它,
+不说明这信息是必需的;不给它去训,模型自己就找到了更好的解。
+
+## 三之六、误差棒:哪些差是真的,哪些是噪声(2026-08-20)
+
+之前全表每个 run 每个轴只有一个数,于是 2–3mm 的差一律说不清。补了两件小东西:
+
+**1. `scripts/eval/perturb_eval.py`:多存一份 per-episode 均值。**
+`run_ckpt` 原来只返回 `{轴: 全部帧的均值}`,现在返回 `({轴: 同一个均值}, {轴: [10 个 episode 的均值]})`。
+**headline 均值的算法一个字没改**(还是那个 flat 的逐帧 list 取平均),所以已经报出去的每一个数都还成立 ——
+这一点是**实测验证过的**:重跑 ab4 / r2_in_vjepa / r3_vjepa_nostate,新的 `--out` json 跟
+`BEST_CKPT*/perturb_result.json` 里存的**逐位相同**。per-episode 那份写到旁边的
+`<out>.per_ep.json`,不塞进主 json——因为 `perturb_report.py` 是 glob 主 json 的,多一个顶层 key 它会炸。
+
+**2. `scripts/eval/perturb_paired.py`(新文件):配对比较。**
+关键点:**不能看「均值 ± SEM」**。10 集的原始 SEM 是 ±4.6mm(均值才 42mm),因为 episode 本身难易差别巨大,
+而这个方差是**共模**的 —— 难的那集对谁都难。而所有 ckpt 看的是**同样 10 集、同样的帧**
+(STRIDE 3 从同一个检测起点)、**同样的扰动噪声**(`RandomState` 用帧号做种子,不是用 run 序号),
+所以共模方差会抵消。有意义的量是**逐集之差**的 SEM,不是「两个均值之差」。两者均值完全一样,只有误差棒不同,
+而这批 ckpt 上配对的误差棒小一个数量级(±0.3–3mm)。
+
+判据:`|均值差| > 2×SEM` 记一个 `*`,再看 10 集里符号一致的有几集。10/10 或 9/10 且带 `*` 才算真差异,
+5/10 附近就是噪声。**用法:`python scripts/eval/perturb_paired.py A.per_ep.json B.per_ep.json`**
+(A 是基线),`scripts/eval/run_perturb_errbars.sh` 一把跑完关键的 7 个 ckpt。
+
+### 结论:五条差异,只有两条站得住
+
+单位 mm,负号 = 后者更好;`*` = 超过 2×SEM。
+
+| 比较 | clean | background | compound | 相对退化 | 判决 |
+|---|---|---|---|---|---|
+| r2_in_vjepa − ab4（换主干） | −1.3±1.8 | +0.2±3.6 | **−11.1±4.6\*** | **−9.9±3.6\* (8/10)** | **真的** |
+| ab7 − ab4（world 头打乱时序） | +0.5±0.5 | **+1.5±0.4\* (1/10)** | **+1.9±0.8\* (3/10)** | −0.4±0.8 (6/10) | **要改口径,见下** |
+| wv3 − wv2（双 target 打乱） | **+1.3±0.6\*** | −0.5±1.2 | −0.8±1.0 | **−2.5±1.0\* (8/10)** | **是比值的假象** |
+| r3_ab4_nostate − ab4（遮 98:128） | −1.9±1.9 | +0.5±1.9 | +2.3±3.3 | +1.9±1.6 (2/10) | **不显著** |
+| r3_vjepa_nostate − r2_in_vjepa | +0.6±1.7 | +2.6±1.4 | +1.5±2.6 | +3.7±3.0 (3/10) | 不显著（确认不叠加） |
+
+**要改口径的两条:**
+
+- **「world 头的收益不来自预测未来」这句话下调成「大部分不来自」。** ab7 在**整体**相对退化上确实跟 ab4 打平
+  (−0.4±0.8,6/10),这条没变;但**在最难的两个轴上 ab4 显著赢**:background +1.5±0.4(10 集里 9 集 ab4 更好)、
+  compound +1.9±0.8。也就是说打乱时序确实丢了东西,只是只值 1.5–1.9mm,而且只在重度视觉偏移下才看得见 ——
+  跟「换主干」那 11.1mm 完全不是一个量级。
+- **「wv3 反超所有正经 VAE 臂」是相对退化这个比值造出来的。** 按绝对 mm,wv3 在 clean / noise / camera /
+  occlusion 四个轴上**显著更差**(+1.1 到 +2.0,基本都是 1–2/10);它相对退化好看(−2.5±1.0),
+  纯粹因为分母(自己的 clean)本来就更差。**教训:比值类指标必须跟绝对值一起看**,不然负对照会白捡便宜。
+
+**掉下去的两条:** `r3_ab4_nostate` 那 2.5mm(clean −1.9±1.9,只有 6/10)**不显著** ——
+遮掉 98:128 到底涨不涨精度,10 集分辨不出来。但**它的部署价值一点没变**:关键结论是「遮掉不变差」,
+这条比「涨 2.5mm」弱得多也够用了,那 30 维照样不必在真机上复现。
+
 ## 四、踩过的坑,别再踩
 
 1. **磁盘会满。** accelerate 每个 checkpoint 存 `optimizer.bin`(815M) + `pytorch_model.bin`(408M) = 1.15G。
@@ -334,8 +429,9 @@ python data/eval_mpjpe_batch.py \
 
 ## 五、还没做的
 
-- **误差棒**:扰动套件只存了均值,ab4 vs ab7 那 2.6pt 的差说不清是不是噪声。改成存 per-episode 再重跑一遍(~20 分钟)。
-  第二轮 7 个 run 出来以后这件事更要紧:又是一批只差 2–3% 的数,10 集验证集分辨不了
+- ~~误差棒~~ —— 见第三之六节,2026-08-20 已补,关键的 7 个 ckpt 都跑了配对比较。
+  **仍然欠的是扩验证集**:10 集是所有结论的置信度天花板,配对之后能分辨的最小差异大约是 2mm(clean 轴),
+  比这更小的差(比如 nostate 那条)加再多 run 也说不清
 - **第二轮跑完要做的评测**:`scripts/eval/run_perturb_all.sh` 目前把 8 个 ab run 和它们各自的 yaml 写死在里面,
   第二轮那 7 个 run 得照着加进去(每个 run 必须配它**训练时**用的那个 yaml)
 - ~~V-JEPA 当 target~~ / ~~VAE target~~ / ~~输入编码器对比~~ —— 见第三之三节,2026-08-18 已开跑
