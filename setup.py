@@ -9,10 +9,12 @@ setup(
     install_requires=[
         'numpy',
         'opencv-python',
+        'imageio-ffmpeg',
         'h5py',
         'pyzed',
         'tqdm',
         'torch',
-        'matplotlib'
+        'matplotlib',
+        'pyzmq',
     ],
-) 
+)
