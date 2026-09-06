@@ -9,6 +9,7 @@ from torch import nn
 from torch.autograd import Variable
 from .backbone import build_backbone
 from .transformer import build_transformer, TransformerEncoder, TransformerEncoderLayer
+from .future_flow import FutureFlowHead, FutureFlowLoss
 
 import numpy as np
 import os
@@ -450,7 +451,7 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 
 class DETRVAE(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, backbones, transformer, encoder, state_dim, action_dim, num_queries, camera_names, image_feature_strategy, use_language_conditioning, future_dino_config=None, future_vae_config=None, zero_state_dims=None):
+    def __init__(self, backbones, transformer, encoder, state_dim, action_dim, num_queries, camera_names, image_feature_strategy, use_language_conditioning, future_dino_config=None, future_vae_config=None, future_flow_config=None, zero_state_dims=None):
         """ Initializes the model.
         Parameters:
             backbones: torch module of the backbone to be used. See backbone.py
@@ -466,6 +467,12 @@ class DETRVAE(nn.Module):
                 DINO head, so future_dino must be enabled for it to have a frame to
                 look at (set future_dino.weight = 0 for a VAE-only arm, the same way
                 ab0/ab1 keep the head attached but silent).
+            future_flow_config: config dict for EgoWAM's THIRD world target, a 3D
+                point-flow trajectory (optional). Unlike the DINO and VAE heads this
+                one needs no teacher and no future frame at train time -- the target is
+                precomputed offline by scripts/preprocess/flow_target.py and arrives
+                through conditioning_dict -- so it can be enabled entirely on its own
+                (the r5_flow arm runs it with no DINO head at all).
             zero_state_dims: (lo, hi) half-open range of NORMALIZED qpos dims to force
                 to 0 before the state ever reaches a projection, or None to leave the
                 state untouched (the default -- ab0..ab7 and r2_* are unaffected).
@@ -651,6 +658,99 @@ class DETRVAE(nn.Module):
                   f"huber_weight={self.future_vae_loss_fn.huber_weight}, "
                   f"normalize_target={self.future_vae_loss_fn.normalize_target}, "
                   f"ablation={self.future_vae_ablation}")
+
+        # ---- Third future-target species: EgoWAM 3D point flow --------------------
+        # Standalone by design. The DINO and VAE heads both need the dataloader's
+        # future *frame* and a frozen teacher; this one needs neither, because the
+        # target was computed offline. So there is no `assert self.use_future_dino_head`
+        # here -- r5_flow is a flow-only arm.
+        self.use_future_flow_head = False
+        self.future_flow_head = None
+        self.future_flow_loss_fn = None
+        self.future_flow_weight = 0.0
+        self.future_flow_ablation = 'none'
+
+        if future_flow_config and future_flow_config.get('enabled', False):
+            grid_hw = tuple(future_flow_config.get('grid_hw', (30, 40)))
+            self.use_future_flow_head = True
+            self.future_flow_head = FutureFlowHead(
+                grid_hw=grid_hw,
+                horizon=future_flow_config.get('horizon', num_queries),
+                hidden_dim=hidden_dim,
+                num_layers=future_flow_config.get('num_layers', 4),
+                num_heads=future_flow_config.get('num_heads', 8),
+                dropout=future_flow_config.get('dropout', 0.1),
+            )
+            self.future_flow_loss_fn = FutureFlowLoss(
+                huber_beta=future_flow_config.get('huber_beta', 0.01),
+                target_scale=future_flow_config.get('target_scale', 1.0),
+            )
+            self.future_flow_weight = future_flow_config.get('weight', 1.0)
+            self.future_flow_ablation = future_flow_config.get('ablation', 'none')
+            assert self.future_flow_ablation in ('none', 'shuffled')
+            # No 'current' ablation: the flow target is a displacement, and the
+            # "current" displacement is identically 0 -- a degenerate target that
+            # the zero-init output layer already sits on, so the arm would measure
+            # nothing. 'shuffled' is the negative control that matters here.
+            print(f"Future-Flow Head enabled: grid={grid_hw} "
+                  f"({self.future_flow_head.num_anchors} anchors), "
+                  f"horizon={self.future_flow_head.horizon}, "
+                  f"weight={self.future_flow_weight}, "
+                  f"huber_beta={self.future_flow_loss_fn.huber_beta}, "
+                  f"ablation={self.future_flow_ablation}")
+
+    def _future_flow_forward(self, hs, conditioning_dict):
+        """EgoWAM 3D-flow twin of the two teacher-based world blocks.
+
+        Much shorter than either because there is no teacher to run: the target is
+        already in conditioning_dict, straight off disk. Returns the loss dict, or
+        None if the dataloader did not supply a target for this batch.
+        """
+        if conditioning_dict is None or conditioning_dict.get('flow_target') is None:
+            return None
+
+        target = conditioning_dict['flow_target'].to(hs.dtype)     # [B, K, P, 3]
+        B = target.shape[0]
+
+        def _get(key):
+            v = conditioning_dict.get(key)
+            return None if v is None else v.to(hs.dtype)
+
+        anchor_valid = _get('flow_anchor_valid')                   # [B, P]
+        flow_valid = _get('flow_valid')                            # [B, K]
+
+        if self.future_flow_ablation == 'shuffled':
+            # doc S9.2, same instrument as ab7/wv3: destroy the pairing between the
+            # sample and its motion field. If the flow loss still buys clean-axis
+            # accuracy, the gain is not coming from predicting motion.
+            #
+            # The two flow masks travel with the target under ONE shared permutation.
+            # They describe which anchors of *that* field actually moved and how far
+            # into the episode it reaches, so leaving them behind would hand the head
+            # sample i's mask over sample j's field -- an incoherent target rather
+            # than a wrong one, and no longer the control we want. future_valid is
+            # left alone: it is the DINO path's frame-clamp flag, not part of this
+            # target.
+            perm = torch.randperm(B, device=target.device)
+            target = target[perm]
+            if anchor_valid is not None:
+                anchor_valid = anchor_valid[perm]
+            if flow_valid is not None:
+                flow_valid = flow_valid[perm]
+
+        pred_flow = self.future_flow_head(hat_memory=hs)           # [B, K, P, 3]
+
+        loss_dict = self.future_flow_loss_fn(
+            predicted=pred_flow,
+            target=target,
+            anchor_valid=anchor_valid,
+            flow_valid=flow_valid,
+            future_valid=_get('future_valid'),
+        )
+        # No warmup, same reasoning as the VAE head, plus the output layer is
+        # zero-init so the world gradient starts at zero by construction.
+        loss_dict['effective_weight'] = self.future_flow_weight
+        return loss_dict
 
     def get_current_step(self):
         """Get current training step."""
@@ -922,6 +1022,34 @@ class DETRVAE(nn.Module):
                 future_dino_loss_dict['vae_loss'] = vae_loss_dict['loss']
                 future_dino_loss_dict['vae_effective_weight'] = vae_loss_dict['effective_weight']
 
+        # Third target species (EgoWAM 3D flow), folded into the same dict under
+        # flow_* keys. Deliberately OUTSIDE the `use_future_dino_head` block above:
+        # this head needs no future frame and no teacher, so a flow-only arm never
+        # enters that block at all.
+        if self.use_future_flow_head:
+            flow_loss_dict = self._future_flow_forward(hs, conditioning_dict)
+            if flow_loss_dict is not None:
+                if future_dino_loss_dict is None:
+                    # Flow-only arm. policy.py reads cosine_loss/huber_loss/loss
+                    # unconditionally once the dict is non-None, so hand it a silent
+                    # zero triple rather than editing that pre-existing block. With
+                    # effective_weight 0.0 it contributes exactly nothing, and the
+                    # future_dino_* scalars logging 0 is the honest reading: there is
+                    # no DINO head in this arm.
+                    zero = a_hat.new_zeros(())
+                    future_dino_loss_dict = {
+                        'cosine_loss': zero,
+                        'huber_loss': zero,
+                        'loss': zero,
+                        'effective_weight': 0.0,
+                    }
+                future_dino_loss_dict['flow_loss'] = flow_loss_dict['loss']
+                future_dino_loss_dict['flow_huber'] = flow_loss_dict['flow_huber']
+                future_dino_loss_dict['flow_valid_frac'] = flow_loss_dict['flow_valid_frac']
+                future_dino_loss_dict['flow_gt_mag'] = flow_loss_dict['flow_gt_mag']
+                future_dino_loss_dict['flow_pred_mag'] = flow_loss_dict['flow_pred_mag']
+                future_dino_loss_dict['flow_effective_weight'] = flow_loss_dict['effective_weight']
+
         return a_hat, is_pad_hat, [mu, logvar], future_dino_loss_dict
 
 class CNNMLP(nn.Module):
@@ -1031,6 +1159,7 @@ def build(args):
     # Get Future-DINO config if available
     future_dino_config = getattr(args, 'future_dino_config', None)
     future_vae_config = getattr(args, 'future_vae_config', None)
+    future_flow_config = getattr(args, 'future_flow_config', None)
     zero_state_dims = getattr(args, 'zero_state_dims', None)
 
     model = DETRVAE(
@@ -1045,6 +1174,7 @@ def build(args):
         use_language_conditioning=args.use_language_conditioning,
         future_dino_config=future_dino_config,
         future_vae_config=future_vae_config,
+        future_flow_config=future_flow_config,
         zero_state_dims=zero_state_dims,
     )
 

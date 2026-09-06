@@ -1,0 +1,10 @@
+{
+  "train": [
+    { "dataset_path": "/home/aigc/human_policy/data/bottle_human_train", "type": "human" },
+    { "dataset_path": "/home/aigc/human_policy/data/bottle_robot_10hz_train", "type": "robot" }
+  ],
+  "val": [
+    { "dataset_path": "/home/aigc/human_policy/data/bottle_human_val", "type": "human" },
+    { "dataset_path": "/home/aigc/human_policy/data/bottle_robot_10hz_val", "type": "robot" }
+  ]
+}

@@ -47,6 +47,25 @@ def _detect_valid_start_from_actions(actions, *, check_frames=20, jump_threshold
     return min(valid_start, max(0, int(actions.shape[0]) - 1))
 
 
+def flow_target_filename(hdf_path: str) -> str:
+    """Map a source episode hdf5 to its flow-target h5 basename.
+
+    Single source of truth for the naming, imported by both this dataloader and
+    scripts/preprocess/flow_target.py so the two can never drift.
+
+    The absolute path is flattened rather than hashed: episodes come from several
+    base dirs (base_dir plus extra_base_dirs) so basenames collide, but a flattened
+    absolute path stays unique AND stays readable, which matters when a
+    "flow target not found" error needs to be traced back to one episode.
+    """
+    flat = os.path.abspath(hdf_path).lstrip(os.sep).replace(os.sep, '__')
+    for ext in ('.hdf5', '.h5'):
+        if flat.endswith(ext):
+            flat = flat[:-len(ext)]
+            break
+    return flat + '.flow.h5'
+
+
 class EpisodicDataset(torch.utils.data.Dataset):
     def __init__(self, 
                  data_config,
@@ -68,7 +87,11 @@ class EpisodicDataset(torch.utils.data.Dataset):
                  future_image_enabled=False,
                  future_horizon=0,
                  future_clip_frames=1,
-                 future_clip_stride=1):
+                 future_clip_stride=1,
+                 flow_target_enabled=False,
+                 flow_target_dir=None,
+                 flow_grid_hw=(30, 40),
+                 flow_horizon=100):
         super(EpisodicDataset).__init__()
         # Future-DINO: when disabled (default) every code path below is byte-for-byte
         # the original one and read_one() still returns the original 5-tuple.
@@ -81,6 +104,19 @@ class EpisodicDataset(torch.utils.data.Dataset):
         self.future_clip_stride = max(1, int(future_clip_stride))
         if self.future_image_enabled:
             assert self.future_horizon > 0, "future_horizon must be > 0 when future images are enabled"
+        # ---- EgoWAM 3D flow target (disabled by default) ----
+        # Read straight off disk from scripts/preprocess/flow_target.py, so unlike the
+        # DINO/VAE targets this needs no future frame and is independent of the flags
+        # above. Files are opened lazily per worker: h5py handles do not survive fork.
+        self.flow_target_enabled = bool(flow_target_enabled)
+        self.flow_target_dir = flow_target_dir
+        self.flow_grid_h, self.flow_grid_w = int(flow_grid_hw[0]), int(flow_grid_hw[1])
+        self.flow_num_anchors = self.flow_grid_h * self.flow_grid_w
+        self.flow_horizon = int(flow_horizon)
+        self._flow_handles = {}
+        if self.flow_target_enabled:
+            assert self.flow_target_dir and os.path.isdir(self.flow_target_dir), \
+                f"flow_target_dir not found: {self.flow_target_dir}"
         self.camera_names = camera_names
         self.train = train
         self.data_config = data_config
@@ -156,8 +192,9 @@ class EpisodicDataset(torch.utils.data.Dataset):
         SAMPLER_TYPE = 'norm_by_embodiment_and_task'
         self.episode_sampling_prob = self.get_episode_sampling_prob(SAMPLER_TYPE)
 
-        # Load empty language embedding from the correct path
-        import os
+        # Load empty language embedding from the correct path.
+        # 不要在这里 import os: 那会把整个 __init__ 里的 os 变成局部变量，
+        # 于是上面 flow_target_dir 那句断言（第 118 行）会先撞上 UnboundLocalError。
         empty_lang_embed_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "empty_lang_embed.pt")
         empty_lang_embedding = torch.load(empty_lang_embed_path, weights_only=True).float()
         self.cached_lang_embedding_dict[''] = empty_lang_embedding
@@ -425,6 +462,67 @@ class EpisodicDataset(torch.utils.data.Dataset):
                                          single_hdf_path)
                 for i in range(K)]
 
+    def _read_flow_target(self, index, raw_start_ts, embodiment):
+        """Fetch the precomputed 3D-flow trajectory anchored at raw frame raw_start_ts.
+
+        The h5 written by scripts/preprocess/flow_target.py is indexed by RAW frame
+        offset 1..R. The head, however, is indexed by CHUNK STEP 1..K, and for human
+        episodes those are not the same thing: human chunks are time-compressed by
+        slow_down_factor, so chunk step k lands on raw offset k / factor. Same
+        correction the DINO path applies to its single horizon (see the human branch
+        below), just applied to all K steps at once.
+
+        Returns (target [K,P,3] float32, flow_valid [K] float32, anchor_valid [P] float32).
+        """
+        path = self.dataset_paths[index]
+        handle = self._flow_handles.get(path)
+        if handle is None:
+            flow_path = os.path.join(self.flow_target_dir, flow_target_filename(path))
+            handle = h5py.File(flow_path, 'r')
+            self._flow_handles[path] = handle
+
+        raw_offsets = int(handle['flow_target'].shape[1])
+        K = self.flow_horizon
+        if "human" in embodiment:
+            factor = max(self.slow_down_factor, 1)
+            offs = np.rint(np.arange(1, K + 1) / factor).astype(np.int64)
+        else:
+            offs = np.arange(1, K + 1, dtype=np.int64)
+        # The preprocessing stores only R raw offsets, and R can be smaller than the
+        # horizon the head predicts: one tracker window covers ~39 frames ahead, and
+        # chaining more windows would pile up drift on top of an ~1cm noise floor. So
+        # chunk steps past R get MASKED, not clamped -- clamping would silently claim
+        # "nothing moves after step R", which is a false target rather than a missing
+        # one. Human episodes are unaffected: factor 4 puts step 100 at raw offset 25.
+        oob = offs > raw_offsets
+        offs = np.clip(offs, 1, raw_offsets)
+
+        T_flow = int(handle['flow_target'].shape[0])
+        t = min(int(raw_start_ts), T_flow - 1)
+
+        # One contiguous read of [R, P, 3] (~720KB at R=100, P=1200, fp16) and then
+        # index in numpy: the human offsets repeat, and h5py fancy indexing requires
+        # strictly increasing indices.
+        block = np.asarray(handle['flow_target'][t], dtype=np.float32)      # [R, P, 3]
+        valid = np.asarray(handle['flow_valid'][t], dtype=np.float32)       # [R]
+        anchor = np.asarray(handle['anchor_valid'][t], dtype=np.float32)    # [P]
+
+        target = block[offs - 1]                                            # [K, P, 3]
+        flow_valid = valid[offs - 1]                                        # [K]
+        flow_valid[oob] = 0.0
+
+        if int(raw_start_ts) >= T_flow:
+            # Preprocessing trimmed further than the trajectory sampler does (human
+            # clips lose 20 frames at each end). Zero the anchor mask instead of
+            # training on a frame whose flow we never computed.
+            anchor = np.zeros_like(anchor)
+
+        assert target.shape == (K, self.flow_num_anchors, 3), (
+            f"flow target {target.shape} != ({K}, {self.flow_num_anchors}, 3) for {path}")
+        return (torch.from_numpy(target),
+                torch.from_numpy(flow_valid),
+                torch.from_numpy(anchor))
+
     def read_one(self, index, start_ts):
         episode_len = int(self.episode_len_list[index])
         raw_start_ts = int(self.valid_start_list[index]) + int(start_ts)
@@ -602,6 +700,19 @@ class EpisodicDataset(torch.utils.data.Dataset):
             "plain_text": lang_instruction
         }
 
+        if self.flow_target_enabled:
+            # Rides in conditioning_dict, not in the return tuple, so the 5-tuple /
+            # 6-tuple contract above is untouched and a flow-only arm still takes the
+            # original 5-tuple path.
+            # 用上面关闭 root 之前已经取好的 embodiment：这里 root 早就 close 了
+            # （第 606 行），再去读它的 attrs 会得到
+            # KeyError: invalid identifier type to function。
+            flow_target, flow_valid, flow_anchor_valid = self._read_flow_target(
+                index, raw_start_ts, embodiment)
+            conditioning_dict["flow_target"] = flow_target
+            conditioning_dict["flow_valid"] = flow_valid
+            conditioning_dict["flow_anchor_valid"] = flow_anchor_valid
+
         if self.future_image_enabled:
             conditioning_dict["future_valid"] = torch.tensor(future_valid, dtype=torch.float32)
             return image_data, qpos_data, action_data, is_pad, conditioning_dict, future_image_data
@@ -776,6 +887,14 @@ def collate_fn(batch):
         elif keyword == 'plain_text':
             ret_conditioning_dict[keyword] = cur_conditioning_list
 
+    # 3D-flow target. This dict is built from an allow-list above, so keys that are
+    # not named here get silently dropped -- which is exactly how a flow arm would
+    # end up training with no world loss at all and no error to show for it.
+    if 'flow_target' in conditioning_list[0]:
+        for key in ('flow_target', 'flow_valid', 'flow_anchor_valid'):
+            ret_conditioning_dict[key] = torch.stack(
+                [conditioning[key] for conditioning in conditioning_list])
+
     if future_image_data is not None:
         ret_conditioning_dict['future_valid'] = torch.stack(
             [conditioning['future_valid'] for conditioning in conditioning_list])
@@ -801,7 +920,11 @@ def load_data(base_dir,
               future_image_enabled=False,
               future_horizon=0,
               future_clip_frames=1,
-              future_clip_stride=1):
+              future_clip_stride=1,
+              flow_target_enabled=False,
+              flow_target_dir=None,
+              flow_grid_hw=(30, 40),
+              flow_horizon=100):
 
 
     assert os.path.exists(dataset_json_path)
@@ -844,7 +967,11 @@ def load_data(base_dir,
                                     future_image_enabled=future_image_enabled,
                                     future_horizon=future_horizon,
                                     future_clip_frames=future_clip_frames,
-                                    future_clip_stride=future_clip_stride)
+                                    future_clip_stride=future_clip_stride,
+                                    flow_target_enabled=flow_target_enabled,
+                                    flow_target_dir=flow_target_dir,
+                                    flow_grid_hw=flow_grid_hw,
+                                    flow_horizon=flow_horizon)
     
     train_dataset = dataset_dict['train']
     val_dataset = dataset_dict['val']

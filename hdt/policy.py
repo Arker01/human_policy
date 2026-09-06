@@ -104,6 +104,21 @@ class ACTPolicy(nn.Module):
                         vae_weight, device=loss_dict['loss'].device, dtype=loss_dict['loss'].dtype)
                     loss_dict['loss'] = loss_dict['loss'] + vae_weight * future_dino_loss_dict['vae_loss']
 
+                # Third future-target species (EgoWAM 3D point flow). Same carrier
+                # dict, same contract. flow_valid_frac is the one to watch: the
+                # movement threshold that builds the target throws away static
+                # anchors, so if this collapses toward 0 the head is training on an
+                # empty mask and the threshold is wrong for this data.
+                if 'flow_loss' in future_dino_loss_dict:
+                    flow_weight = future_dino_loss_dict.get('flow_effective_weight', 0.0)
+                    loss_dict['future_flow_loss'] = future_dino_loss_dict['flow_loss']
+                    loss_dict['future_flow_valid_frac'] = future_dino_loss_dict['flow_valid_frac']
+                    loss_dict['future_flow_gt_mag'] = future_dino_loss_dict['flow_gt_mag']
+                    loss_dict['future_flow_pred_mag'] = future_dino_loss_dict['flow_pred_mag']
+                    loss_dict['future_flow_effective_weight'] = torch.as_tensor(
+                        flow_weight, device=loss_dict['loss'].device, dtype=loss_dict['loss'].dtype)
+                    loss_dict['loss'] = loss_dict['loss'] + flow_weight * future_dino_loss_dict['flow_loss']
+
             return loss_dict
         else: # inference time
             a_hat, _, (_, _), _ = self.model(qpos, image, env_state, conditioning_dict=conditioning_dict) # no action, sample from prior

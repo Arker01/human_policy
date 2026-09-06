@@ -1,0 +1,69 @@
+common:
+  policy_class: ACT
+  state_dim: 128
+  action_dim: 128
+  camera_names: ['top']
+
+model:
+  enc_layers: 4
+  dec_layers: 7
+  nheads: 8
+  hidden_dim: 512
+  kl_weight: 10
+  dim_feedforward: 3200
+  lr_backbone: 1e-5
+  backbone: resnet18
+  image_feature_strategy: ACT_linear
+  use_language_conditioning: False
+
+  # EgoWAM 3D point-flow world head
+  # ===============================
+  # The third world target from EgoWAM (arXiv 2607.08436), alongside Pixel VAE and
+  # DINO. EgoWAM's finding is that DINO buys OOD generalization while 3D flow buys
+  # IN-DOMAIN accuracy (+20-30%), and that the two are complementary. Our own DINO
+  # runs match the first half exactly: ab1 -> ab4 moved background/compound and left
+  # the clean axis at 43-45mm, where every run we have ever trained sits. This head
+  # is aimed at that clean axis.
+  #
+  # Trunk is resnet18 and NOT V-JEPA on purpose: resnet18 is the only trunk where a
+  # world head has ever bought anything here (2.4pt of relative degradation, ab1 11.9%
+  # -> ab4 9.5%), and it keeps this arm strictly comparable to ab1 (lambda=0) and ab4
+  # (DINO) -- EgoWAM's own controlled design, where only the world target changes.
+  future_flow:
+    enabled: true
+    # lambda_world for the flow term. 1.0 matches ab4/r4, so a difference against
+    # those runs is attributable to the target and not to the weight.
+    weight: 1.0
+    # Per-episode h5 files from scripts/preprocess/flow_target.py. There is no
+    # teacher and no train-time tracker: a dense 3D point tracker cannot run in the
+    # training loop, and unlike DINO/VAE features this target does not depend on any
+    # weights we are training, so caching it offline costs nothing in fidelity.
+    target_dir: /mnt/nvme0n1/human_policy_ckpt/flow_target_dex5
+    # Anchor grid on the 240x320 frame at stride 8 -> 1200 anchors. EgoWAM uses
+    # 28x40 = 1120 on its resolution; same stride, same idea.
+    grid_hw: [30, 40]
+    # Steps of the predicted trajectory. MUST equal chunk_size: the head cross-attends
+    # to hat_memory, whose token k is the trunk's representation of chunk step k, so
+    # flow step k and action step k line up one-to-one instead of through a bottleneck.
+    horizon: 100
+    num_layers: 4
+    num_heads: 8
+    dropout: 0.1
+    # Huber knee, in metres. Targets are metric (Track4World's DA3 backbone with
+    # --metric_scale), and 1cm is roughly where real manipulation displacement lives:
+    # genuine motion lands in the smooth quadratic regime, tracker outliers in the
+    # linear one.
+    huber_beta: 0.01
+    # Multiplier applied to BOTH prediction and target before the loss. 1.0 keeps the
+    # loss in metres, i.e. numerically small next to the L1 action term; raise it if
+    # the flow gradient turns out to be too quiet to matter.
+    target_scale: 1.0
+    # 'none' | 'shuffled'. 'shuffled' permutes the target and its two masks together
+    # across the batch -- the negative control that asks whether the gain comes from
+    # predicting MOTION or just from having an extra head. There is no 'current'
+    # option: the current displacement is identically zero, which the zero-init
+    # output layer already predicts, so that arm would measure nothing.
+    ablation: none
+
+data:
+  image_resolution_hw: [240, 320]

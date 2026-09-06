@@ -243,6 +243,21 @@ def main(args, base_dir, processed_dir=None):
         trainer_config.setdefault('model', {}).setdefault('future_vae', {})['normalize_target'] = \
             bool(args['future_vae_normalize_target'])
 
+    # Third future-target species (EgoWAM 3D point flow). Same CLI-overrides-yaml
+    # pattern. Unlike future_vae this one does NOT ride on future_dino's future frame
+    # -- its target is precomputed on disk -- so a flow-only arm is legal.
+    if args.get('use_future_flow_head'):
+        trainer_config.setdefault('model', {}).setdefault('future_flow', {})['enabled'] = True
+
+    if args.get('future_flow_weight') is not None:
+        trainer_config.setdefault('model', {}).setdefault('future_flow', {})['weight'] = args['future_flow_weight']
+
+    if args.get('future_flow_ablation') is not None:
+        trainer_config.setdefault('model', {}).setdefault('future_flow', {})['ablation'] = args['future_flow_ablation']
+
+    if args.get('future_flow_dir') is not None:
+        trainer_config.setdefault('model', {}).setdefault('future_flow', {})['target_dir'] = args['future_flow_dir']
+
     if args.get('zero_state_dims') is not None:
         trainer_config.setdefault('model', {})['zero_state_dims'] = args['zero_state_dims']
 
@@ -293,6 +308,29 @@ def main(args, base_dir, processed_dir=None):
         print(f"  Huber weight: {future_vae_cfg.get('huber_weight', 1.0)}")
         print(f"  Ablation: {future_vae_cfg.get('ablation', 'none')}")
 
+    future_flow_cfg = trainer_config.get('model', {}).get('future_flow', {}) or {}
+    future_flow_enabled = bool(future_flow_cfg.get('enabled', False))
+    future_flow_dir = future_flow_cfg.get('target_dir', None) if future_flow_enabled else None
+    future_flow_grid_hw = tuple(future_flow_cfg.get('grid_hw', (30, 40)))
+    future_flow_horizon = int(future_flow_cfg.get('horizon', args['chunk_size']))
+
+    if future_flow_enabled:
+        assert future_flow_dir, (
+            "future_flow.target_dir must point at the output of "
+            "scripts/preprocess/flow_target.py (one h5 per episode).")
+        assert future_flow_horizon == args['chunk_size'], (
+            f"future_flow.horizon ({future_flow_horizon}) must equal chunk_size "
+            f"({args['chunk_size']}): the head cross-attends to hat_memory, whose "
+            f"token k IS chunk step k, so the two trajectories are indexed together.")
+        print("Future-Flow (EgoWAM 3D point flow) target enabled:")
+        print(f"  Weight: {future_flow_cfg.get('weight', 1.0)}")
+        print(f"  Target dir: {future_flow_dir}")
+        print(f"  Anchor grid: {future_flow_grid_hw} "
+              f"({future_flow_grid_hw[0] * future_flow_grid_hw[1]} anchors)")
+        print(f"  Horizon (chunk steps): {future_flow_horizon}")
+        print(f"  Huber beta (m): {future_flow_cfg.get('huber_beta', 0.01)}")
+        print(f"  Ablation: {future_flow_cfg.get('ablation', 'none')}")
+
     policy_class = trainer_config["common"]["policy_class"]
     batch_size_train = args['batch_size']
     batch_size_val = args['batch_size']
@@ -332,6 +370,8 @@ def main(args, base_dir, processed_dir=None):
             policy_config['future_dino_config'] = future_dino_cfg
         if future_vae_enabled:
             policy_config['future_vae_config'] = future_vae_cfg
+        if future_flow_enabled:
+            policy_config['future_flow_config'] = future_flow_cfg
         if zero_state_dims is not None:
             policy_config['zero_state_dims'] = zero_state_dims
     elif policy_class == 'RDT':
@@ -411,7 +451,11 @@ def main(args, base_dir, processed_dir=None):
                                                         future_image_enabled=future_dino_enabled,
                                                         future_horizon=future_dino_horizon,
                                                         future_clip_frames=future_dino_clip_frames,
-                                                        future_clip_stride=future_dino_clip_stride)
+                                                        future_clip_stride=future_dino_clip_stride,
+                                                        flow_target_enabled=future_flow_enabled,
+                                                        flow_target_dir=future_flow_dir,
+                                                        flow_grid_hw=future_flow_grid_hw,
+                                                        flow_horizon=future_flow_horizon)
 
     if args.get("eval_ckpts", False):
         val_dataloader, policy = accelerator.prepare(val_dataloader, policy)
@@ -727,6 +771,12 @@ if __name__ == '__main__':
     parser.add_argument('--future_vae_weight', type=float, default=None, help='weight for the Future-VAE loss (overrides config)')
     parser.add_argument('--future_vae_ablation', type=str, default=None, choices=['none', 'shuffled', 'current'], help='Future-VAE ablation mode (overrides config)')
     parser.add_argument('--future_vae_normalize_target', type=int, default=None, choices=[0, 1], help='1 = normalize each Wan latent token before the loss; default 0 keeps the latent magnitude')
+    # EgoWAM 3D point flow (third world target). No --future_dino_head requirement:
+    # the target is precomputed offline, so this head stands alone.
+    parser.add_argument('--use_future_flow_head', action='store_true', help="enable EgoWAM's 3D point-flow world head; target comes from --future_flow_dir, not a teacher")
+    parser.add_argument('--future_flow_weight', type=float, default=None, help='weight for the Future-Flow loss (overrides config)')
+    parser.add_argument('--future_flow_ablation', type=str, default=None, choices=['none', 'shuffled'], help="Future-Flow ablation mode; 'shuffled' is the negative control (no 'current': the current displacement is identically 0)")
+    parser.add_argument('--future_flow_dir', type=str, default=None, help='directory of per-episode flow-target h5 files from scripts/preprocess/flow_target.py (overrides config)')
     parser.add_argument('--zero_state_dims', type=str, default=None, help='"lo:hi" half-open range of normalized qpos dims to force to 0, e.g. "100:128" to hide the dex5 robot-configuration block and match the human episodes. Default: keep the whole state.')
     args = vars(parser.parse_args())
 
