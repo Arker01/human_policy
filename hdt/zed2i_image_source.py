@@ -305,6 +305,13 @@ def latest_source_bgr():
     return cv2.imdecode(np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR)
 
 
+class ImageSourceUnavailable(RuntimeError):
+    """Transient missing, stale, or corrupt camera frame; retry is allowed."""
+
+
+RECOVERABLE_IMAGE_ERRORS = (ImageSourceUnavailable,)
+
+
 def get_images(*, camera_names, robot_state=None):
     """Return uint8 NCHW frames in ``POLICY_CHANNEL_ORDER``.
 
@@ -323,19 +330,22 @@ def get_images(*, camera_names, robot_state=None):
         timeout_s=STARTUP_TIMEOUT_S if first else 0.0
     )
     if jpeg is None:
-        raise RuntimeError(
+        raise ImageSourceUnavailable(
             f"No ZED 2i frame on {ENDPOINT} after {STARTUP_TIMEOUT_S:.0f}s. "
             "Is zed2i_sender.py running on the robot?"
         )
     age = time.monotonic() - received_at
     if age > MAX_AGE_S:
-        raise RuntimeError(
+        raise ImageSourceUnavailable(
             f"ZED 2i frame is {age:.2f}s stale (limit {MAX_AGE_S:.2f}s) after "
             f"{frames} frames; refusing to drive the policy on a frozen image"
         )
-    bgr = cv2.imdecode(np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR)
+    try:
+        bgr = cv2.imdecode(np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR)
+    except cv2.error as exc:
+        raise ImageSourceUnavailable("Failed to decode the ZED 2i JPEG payload") from exc
     if bgr is None:
-        raise RuntimeError("Failed to decode the ZED 2i JPEG payload")
+        raise ImageSourceUnavailable("Failed to decode the ZED 2i JPEG payload")
     if bgr.shape[0] != HEIGHT or bgr.shape[1] != WIDTH:
         bgr = cv2.resize(bgr, (WIDTH, HEIGHT))
     policy_image = (

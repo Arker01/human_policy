@@ -14,7 +14,9 @@ import json
 import pickle
 import signal
 import sys
+import threading
 import time
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 
@@ -23,6 +25,7 @@ import torch
 import yaml
 
 import hdt.constants as C
+from hdt.action_representation import ACTION_REPRESENTATIONS, to_absolute_chunk
 from hdt.modeling.utils import make_visual_encoder
 
 
@@ -97,16 +100,21 @@ class OnlineHATInputRecorder:
         self, *, sequence_id, source_state, origin, images,
         policy_state_raw, policy_state_normalized, action,
         image_captured_ns, inference_started_ns, inference_finished_ns,
-        chunk_generated_at_ns,
+        chunk_generated_at_ns, heading_quat_wxyz=None, history_images=None,
+        history_policy_state_raw=None, history_policy_state_normalized=None,
+        history_source_states=None, history_captured_ns=None,
     ):
         stem = f"{int(sequence_id):06d}"
         image_path = self.images_dir / f"{stem}.npz"
         action_path = self.actions_dir / f"{stem}.npy"
         images = np.asarray(images)
         action = np.asarray(action, dtype=np.float32)
+        image_payload = {"images": images}
+        if history_images is not None:
+            image_payload["history_images"] = np.asarray(history_images)
         self._atomic_save(
             image_path,
-            lambda stream: np.savez_compressed(stream, images=images),
+            lambda stream: np.savez_compressed(stream, **image_payload),
         )
         self._atomic_save(
             action_path,
@@ -131,6 +139,11 @@ class OnlineHATInputRecorder:
             "action_shape": list(action.shape),
             "head_origin": _jsonable(np.asarray(origin, dtype=np.float32)),
             "robot_state": _jsonable(source_state),
+            "initial_heading_quat_wxyz": (
+                None
+                if heading_quat_wxyz is None
+                else _jsonable(np.asarray(heading_quat_wxyz, dtype=np.float32))
+            ),
             "policy_state_raw": _jsonable(
                 np.asarray(policy_state_raw, dtype=np.float32)
             ),
@@ -138,6 +151,20 @@ class OnlineHATInputRecorder:
                 np.asarray(policy_state_normalized, dtype=np.float32)
             ),
         }
+        if history_images is not None:
+            record.update({
+                "history_image_shape": list(np.asarray(history_images).shape),
+                "history_source_state_sequence_ids": [
+                    int(item["sequence_id"]) for item in history_source_states
+                ],
+                "history_captured_ns": [int(item) for item in history_captured_ns],
+                "history_policy_state_raw": _jsonable(
+                    np.asarray(history_policy_state_raw, dtype=np.float32)
+                ),
+                "history_policy_state_normalized": _jsonable(
+                    np.asarray(history_policy_state_normalized, dtype=np.float32)
+                ),
+            })
         self._stream.write(json.dumps(record, separators=(",", ":")) + "\n")
         self._stream.flush()
 
@@ -198,6 +225,7 @@ def _quat_wxyz_to_rotation_6d(value):
 
 
 WRIST_CONVERSION_MODES = ("none", "inspire_hand_base")
+HEADING_FRAME_MODES = ("initial", "world")
 
 # Constant mount of the Inspire hand base on the G1 wrist, taken from
 # g1_29dof_inspire_hand.xml: L/R_hand_base_link sits at pos [0.0415,0,0] under
@@ -235,6 +263,35 @@ def _quat_rotate_wxyz(quat, vector):
     vector = np.broadcast_to(np.asarray(vector, dtype=np.float64), axis.shape)
     uv = np.cross(axis, vector)
     return vector + 2.0 * (scalar * uv + np.cross(axis, uv))
+
+
+def _quat_conjugate_wxyz(quat):
+    return np.asarray(quat, dtype=np.float64) * np.array([1.0, -1.0, -1.0, -1.0])
+
+
+def _heading_forward_xy(quat_wxyz):
+    """Where the body's local +x points in the world xy plane.
+
+    Sign-invariant in the quaternion (q and -q rotate identically), unlike
+    reading the yaw angle off the components, which matters because the live
+    root stream carries w < 0.
+    """
+    forward = _quat_rotate_wxyz(np.asarray(quat_wxyz, dtype=np.float64), [1.0, 0.0, 0.0])
+    xy = forward[..., :2]
+    norm = np.linalg.norm(xy, axis=-1)
+    if np.any(norm < 1e-6):
+        raise ValueError("Root +x axis is vertical; heading is undefined")
+    return xy / norm[..., None]
+
+
+def _heading_quat_wxyz(forward_xy):
+    """Yaw-only quaternion whose +x axis matches ``forward_xy``.
+
+    Same construction as ScaleBridge's ``quat_heading`` so both ends of the
+    loop agree on what "heading" means.
+    """
+    half = 0.5 * np.arctan2(forward_xy[1], forward_xy[0])
+    return np.array([np.cos(half), 0.0, 0.0, np.sin(half)], dtype=np.float64)
 
 
 def _g1_wrist_to_hand_base(pos, quat_wxyz, side):
@@ -315,46 +372,92 @@ STATE_TAIL_MODES = ("full", "qpos-only", "zero")
 
 
 class HeadOrigin:
-    """The per-episode origin every dex5 position channel is measured from.
+    """The per-episode frame every dex5 world channel is measured in.
 
     The converter subtracts the head world position of an episode's opening
-    frames from head, both wrists and the waist, and leaves rotations alone.
-    The trained statistics show it plainly: head z averages -0.08, waist -0.47
-    and the wrists -0.55, i.e. metres below a point at standing head height.
-    Feeding raw world positions puts z more than ten standard deviations out of
-    distribution, so the same offset has to be measured online.
+    frames from head, both wrists and the waist.  The trained statistics show
+    it plainly: head z averages -0.08, waist -0.47 and the wrists -0.55, i.e.
+    metres below a point at standing head height.  Feeding raw world positions
+    puts z more than ten standard deviations out of distribution, so the same
+    offset has to be measured online.
+
+    The training HDF5s additionally declare
+    ``coordinate_convention = initial_heading_frame_x_forward_y_left_z_up``:
+    every episode's root yaw starts at ~0 degrees.  The Vive/IMU world yaw is
+    arbitrary (2026-09-07 runs sat at -37..-43 degrees throughout), which put
+    the root rotation dims 3-5 sigma out of distribution.  So the opening
+    frames also lock a yaw-only heading quaternion, measured from the root the
+    same way ScaleBridge's ``quat_heading`` does, and every world pose is
+    expressed in that initial-heading frame:
+
+        p_hat = R_yaw0^-1 (p_world - head_origin)
+        R_hat = R_yaw0^-1 R_world
+
+    The output side needs no inverse of its own: ScaleBridge's protocol
+    alignment anchors each accepted chunk by
+    ``heading(measured root) * heading(predicted frame0)^-1`` about the
+    predicted frame-0 root.  With the input transform in place the predicted
+    frame-0 heading is the measured heading minus yaw0, so that anchor *is*
+    R_yaw0 (plus the model's own frame-0 heading error, which anchoring to the
+    measured root absorbs by construction).
     """
 
     def __init__(self, frames):
         self.frames = int(frames)
         self._samples = []
+        self._forward_samples = []
         self._origin = np.zeros(3, dtype=np.float32)
+        self._heading = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
 
     @property
     def locked(self):
         return len(self._samples) >= self.frames
 
-    def observe(self, head_pos_world):
-        """Accumulate opening frames and return the offset to use right now."""
+    def observe(self, head_pos_world, root_quat_world_wxyz):
+        """Accumulate opening frames; return the (origin, heading) to use now."""
         if not self.locked:
             self._samples.append(np.asarray(head_pos_world, dtype=np.float64))
             self._origin = np.mean(self._samples, axis=0).astype(np.float32)
+            # Averaging unit xy directions instead of yaw angles keeps the
+            # mean well-defined across the +/-180 degree wrap.
+            self._forward_samples.append(_heading_forward_xy(root_quat_world_wxyz))
+            mean_forward = np.mean(self._forward_samples, axis=0)
+            norm = np.linalg.norm(mean_forward)
+            if norm < 1e-6:
+                raise ValueError(
+                    "Opening root headings cancel out; cannot define the "
+                    "initial-heading frame"
+                )
+            self._heading = _heading_quat_wxyz(mean_forward / norm)
             if self.locked:
+                yaw_deg = float(
+                    np.degrees(2.0 * np.arctan2(self._heading[3], self._heading[0]))
+                )
                 print(
-                    f"[online_hat] head origin locked to {self._origin.tolist()} "
+                    f"[online_hat] head origin locked to {self._origin.tolist()}, "
+                    f"initial heading {yaw_deg:+.1f} deg, "
                     f"after {self.frames} frames",
                     flush=True,
                 )
-        return self._origin
+        return self._origin, self._heading
 
 
 def robot_state_to_policy_state(robot_state, state_tail="full", origin=None,
-                                wrist_conversion="none"):
+                                wrist_conversion="none", root_quat_mean_w=None,
+                                heading_quat_wxyz=None):
     """Build the robot embodiment's 128-D observation used during training.
 
     Every position is expressed relative to ``origin``, the session's opening
     head position, matching the converter's head-as-origin recentering.
-    Rotations stay in the world frame, as they do in the dataset.
+
+    ``heading_quat_wxyz`` is the session's opening yaw-only root heading
+    (see ``HeadOrigin``).  When given, every world position and orientation --
+    including the raw root quaternion at 103:107 -- is rotated into that
+    initial-heading frame, matching the training HDF5s'
+    ``coordinate_convention = initial_heading_frame_x_forward_y_left_z_up``.
+    Wrist-local finger keypoints and joint angles are frame-local and stay
+    untouched.  ``None`` keeps the previous behaviour of leaving rotations in
+    the Vive/IMU world frame.
 
     Dims 100:128 follow the dex5 dataset layout: ``[100:103]`` root XYZ and
     ``[103:107]`` root quaternion in w,x,y,z order, both copied from the root
@@ -365,6 +468,11 @@ def robot_state_to_policy_state(robot_state, state_tail="full", origin=None,
 
     ``state_tail`` selects how much of that block is populated: ``full``,
     ``qpos-only`` (zero 100:107, keep the joints) or ``zero`` (mask 100:128).
+
+    ``root_quat_mean_w`` is the checkpoint's ``qpos_mean[103]``; see the
+    canonicalization comment on dim 103 below.  ``None`` passes the measured
+    quaternion through verbatim, which is only correct when the caller has
+    already checked which representative the checkpoint was trained on.
     """
     if state_tail not in STATE_TAIL_MODES:
         raise ValueError(f"state_tail must be one of {STATE_TAIL_MODES}, got {state_tail!r}")
@@ -379,13 +487,28 @@ def robot_state_to_policy_state(robot_state, state_tail="full", origin=None,
         origin = np.zeros(3, dtype=np.float32)
     else:
         origin = np.asarray(origin, dtype=np.float32).reshape(3)
+    heading_inv = None
+    if heading_quat_wxyz is not None:
+        heading_inv = _quat_conjugate_wxyz(
+            np.asarray(heading_quat_wxyz, dtype=np.float64).reshape(4)
+        )
+
+    def to_initial_heading(position, quaternion):
+        position = position - origin.astype(np.float64)
+        if heading_inv is None:
+            return position, quaternion
+        return (
+            _quat_rotate_wxyz(heading_inv, position),
+            _quat_mul_wxyz(heading_inv, quaternion),
+        )
 
     def put_pose(indices, position_key, quaternion_key, wrist_side=None):
         position = np.asarray(state[position_key], dtype=np.float64)
         quaternion = np.asarray(state[quaternion_key], dtype=np.float64)
         if wrist_side is not None and wrist_conversion == "inspire_hand_base":
             position, quaternion = _g1_wrist_to_hand_base(position, quaternion, wrist_side)
-        out[indices[:3]] = position.astype(np.float32) - origin
+        position, quaternion = to_initial_heading(position, quaternion)
+        out[indices[:3]] = position.astype(np.float32)
         out[indices[3:9]] = _quat_wxyz_to_rotation_6d(quaternion)
 
     put_pose(
@@ -426,14 +549,19 @@ def robot_state_to_policy_state(robot_state, state_tail="full", origin=None,
         out[100:103] = out[C.OUTPUT_WAIST[:3]]
         # q and -q encode the same physical rotation, but this raw quaternion is
         # consumed by a linear network input (unlike the sign-invariant 6D pose
-        # blocks above).  The dex5 training converter canonicalized the nearly
-        # upright root to positive w.  The real G1 IMU commonly publishes the
-        # equivalent negative-w representative; passing that through verbatim
-        # puts qpos[103] roughly 120 standard deviations outside training.
+        # blocks above).  Which of the two representatives a checkpoint saw is a
+        # property of its training set, not something to assume: b10/c30 all
+        # report qpos_mean[103] = -0.99, so forcing w >= 0 here fed +0.99 into a
+        # dim whose std is 0.014, i.e. +137 sigma, which saturated the state
+        # encoder and collapsed the c30 models onto their action mean.  Align to
+        # the checkpoint's own mean instead.
         root_quat = np.asarray(
-            state["root_quat_world_wxyz"], dtype=np.float32
-        ).copy()
-        if root_quat[0] < 0.0:
+            state["root_quat_world_wxyz"], dtype=np.float64
+        )
+        if heading_inv is not None:
+            root_quat = _quat_mul_wxyz(heading_inv, root_quat)
+        root_quat = root_quat.astype(np.float32)
+        if root_quat_mean_w is not None and root_quat[0] * float(root_quat_mean_w) < 0.0:
             root_quat *= -1.0
         out[103:107] = root_quat
     out[107:126] = state["body_q19"]
@@ -467,11 +595,17 @@ def _load_stats(path, embodiment):
     if missing:
         raise KeyError(f"Normalization stats missing {missing}: {path}")
     result = {key: np.asarray(stats[key], dtype=np.float32) for key in required}
-    for key, value in result.items():
+    for key in required:
+        value = result[key]
         if value.shape != (C.ACTION_STATE_VEC_SIZE,):
             raise ValueError(f"{key} must be shaped (128,), got {value.shape}")
         if not np.isfinite(value).all():
             raise ValueError(f"{key} contains NaN or infinity")
+    representation = str(stats.get("action_representation", "original"))
+    if representation not in ACTION_REPRESENTATIONS:
+        raise ValueError(
+            f"Unknown action_representation={representation!r} in {path}")
+    result["action_representation"] = representation
     return result
 
 
@@ -509,6 +643,23 @@ def _parse_zero_state_dims(value):
     return tuple(int(item) for item in value)
 
 
+def _parse_history_config(config):
+    history = config.get("model", {}).get("history", {}) or {}
+    if not history.get("enabled", False):
+        return None
+    offsets = tuple(int(item) for item in history.get("offsets", ()))
+    if not offsets:
+        raise ValueError("model.history.enabled=true requires non-empty offsets")
+    if any(item <= 0 for item in offsets):
+        raise ValueError(f"History offsets must be positive, got {offsets}")
+    if len(set(offsets)) != len(offsets):
+        raise ValueError(f"History offsets must be unique, got {offsets}")
+    token_pool = int(history.get("token_pool", 2))
+    if token_pool <= 0:
+        raise ValueError(f"model.history.token_pool must be positive, got {token_pool}")
+    return {"offsets": list(offsets), "token_pool": token_pool}
+
+
 def _act_config(config, chunk_size):
     model = config["model"]
     common = config["common"]
@@ -540,12 +691,16 @@ def _act_config(config, chunk_size):
     zero_state_dims = _parse_zero_state_dims(model.get("zero_state_dims"))
     if zero_state_dims is not None:
         act_config["zero_state_dims"] = zero_state_dims
+    history_config = _parse_history_config(config)
+    if history_config is not None:
+        act_config["history_config"] = history_config
     return act_config
 
 
 class OnlineHATPolicy:
     def __init__(self, *, config_path, checkpoint, stats_path, embodiment,
-                 device="cuda", state_tail="full", wrist_conversion="none"):
+                 device="cuda", state_tail="full", wrist_conversion="none",
+                 state_ood_limit=6.0):
         self.device = torch.device(device)
         if state_tail not in STATE_TAIL_MODES:
             raise ValueError(f"state_tail must be one of {STATE_TAIL_MODES}, got {state_tail!r}")
@@ -555,12 +710,38 @@ class OnlineHATPolicy:
             )
         self.state_tail = state_tail
         self.wrist_conversion = wrist_conversion
+        self.state_ood_limit = float(state_ood_limit)
+        self._state_ood_checked = False
+        self._state_ood_warned_at = 0.0
         with open(config_path, "r", encoding="utf-8") as stream:
             self.config = yaml.safe_load(stream)
         self.policy_class = str(self.config["common"]["policy_class"]).upper()
         self.chunk_size = int(self.config["common"].get("action_chunk_size", 64))
+        # The rate the chunk's frames were sampled at during training.  Both
+        # sample_chunk() and _latency_start_frame() on the ScaleBridge side key
+        # off the fps carried in the chunk, so publishing the wrong one plays
+        # the whole reference at the wrong speed (a 30 Hz checkpoint served at
+        # --fps 10 runs the reference at a third of the intended rate).
+        chunk_fps = self.config["common"].get("chunk_fps")
+        self.chunk_fps = None if chunk_fps is None else float(chunk_fps)
         self.camera_names = tuple(self.config["common"]["camera_names"])
+        self.history_config = _parse_history_config(self.config)
+        self.history_offsets = tuple(
+            () if self.history_config is None else self.history_config["offsets"]
+        )
+        history_section = self.config.get("model", {}).get("history", {}) or {}
+        self.history_fps = float(history_section.get("fps", 30.0))
+        if self.history_offsets and self.history_fps <= 0.0:
+            raise ValueError(
+                f"model.history.fps must be positive, got {self.history_fps}"
+            )
+        if self.history_offsets and self.policy_class != "ACT":
+            raise ValueError("Online history observations are currently supported only for ACT")
+        self.zero_state_dims = _parse_zero_state_dims(
+            self.config.get("model", {}).get("zero_state_dims")
+        )
         self.stats = _load_stats(stats_path, embodiment)
+        self.action_representation = self.stats["action_representation"]
         self.policy, self.visual_preprocessor, self.is_torchscript = self._load_policy(
             Path(checkpoint)
         )
@@ -592,6 +773,11 @@ class OnlineHATPolicy:
                 if "model_state_dict" in state:
                     state = state["model_state_dict"]
                 _load_state_dict(policy, state)
+            if is_torchscript and self.history_offsets:
+                raise ValueError(
+                    "History ACT checkpoints must be loaded as eager state dicts; "
+                    "the TorchScript online signature has no history inputs"
+                )
         elif self.policy_class == "RDT":
             from hdt.modeling.modeling_hdt import HumanDiffusionTransformer
             dataset = self.config["dataset"]
@@ -616,17 +802,76 @@ class OnlineHATPolicy:
             raise ValueError(f"Online HAT supports ACT or RDT, got {self.policy_class}")
         return policy.eval().to(self.device), preprocessor, is_torchscript
 
-    def prepare_policy_state(self, robot_state, origin=None):
+    def prepare_policy_state(self, robot_state, origin=None, heading_quat_wxyz=None):
         raw = robot_state_to_policy_state(
-            robot_state, self.state_tail, origin, self.wrist_conversion
+            robot_state,
+            self.state_tail,
+            origin,
+            self.wrist_conversion,
+            root_quat_mean_w=float(self.stats["qpos_mean"][103]),
+            heading_quat_wxyz=heading_quat_wxyz,
         )
         normalized = (
             raw - self.stats["qpos_mean"]
         ) / (self.stats["qpos_std"] + 1e-6)
+        self._check_state_in_distribution(raw, normalized)
         return raw.astype(np.float32), normalized.astype(np.float32)
 
+    def _describe_state_dim(self, raw, masked, dim):
+        return (
+            f"dim {dim} {abs(float(masked[dim])):.1f} sigma "
+            f"(raw {raw[dim]:+.4f} vs train {self.stats['qpos_mean'][dim]:+.4f}"
+            f" +/- {self.stats['qpos_std'][dim]:.4f})"
+        )
+
+    def _check_state_in_distribution(self, raw, normalized):
+        """Refuse to start on a state the checkpoint's encoder cannot read.
+
+        A single dim far outside training saturates the state encoder and the
+        policy falls back on its action mean, which on a real robot looks like
+        a plausible but completely open-loop motion rather than a crash -- the
+        2026-09-06 runs walked to a memorized world pose with qpos[103] at +137
+        sigma.  The first state therefore hard-fails; later ones only warn,
+        because raising mid-episode would drop the reference while the robot is
+        moving.
+
+        The worst dims are always printed on the first state, not only on
+        failure: the online hand keypoints currently sit around 8 sigma, well
+        below the saturating class but still worth seeing every run.
+        """
+        masked = normalized.copy()
+        if self.zero_state_dims is not None:
+            masked[self.zero_state_dims[0]:self.zero_state_dims[1]] = 0.0
+        ranked = np.argsort(np.abs(masked))[::-1]
+        worst = int(ranked[0])
+        deviation = float(abs(masked[worst]))
+        first_check = not self._state_ood_checked
+        self._state_ood_checked = True
+        if first_check:
+            summary = ", ".join(
+                self._describe_state_dim(raw, masked, int(dim)) for dim in ranked[:3]
+            )
+            print(f"[online_hat] state vs training, worst dims: {summary}", flush=True)
+        if deviation <= self.state_ood_limit:
+            return
+        message = (
+            f"policy state {self._describe_state_dim(raw, masked, worst)} exceeds "
+            f"--state-ood-limit {self.state_ood_limit:.1f}"
+        )
+        if first_check:
+            raise RuntimeError(
+                message + ". The checkpoint cannot consume this observation; fix "
+                "the conversion or raise --state-ood-limit to override."
+            )
+        now = time.monotonic()
+        if now - self._state_ood_warned_at > 5.0:
+            self._state_ood_warned_at = now
+            print(f"[online_hat] WARNING: {message}", flush=True)
+
     @torch.inference_mode()
-    def infer(self, images, robot_state, origin=None, normalized_state=None):
+    def infer(self, images, robot_state, origin=None, normalized_state=None,
+              heading_quat_wxyz=None, history_images=None,
+              normalized_history_states=None, action_anchor=None):
         images = np.asarray(images)
         if (
             images.ndim != 4
@@ -638,7 +883,7 @@ class OnlineHATPolicy:
             )
         image_tensor = self.visual_preprocessor(images).float().unsqueeze(0).to(self.device)
         if normalized_state is None:
-            _, state = self.prepare_policy_state(robot_state, origin)
+            _, state = self.prepare_policy_state(robot_state, origin, heading_quat_wxyz)
         else:
             state = np.asarray(normalized_state, dtype=np.float32)
             if state.shape != (C.ACTION_STATE_VEC_SIZE,):
@@ -647,10 +892,54 @@ class OnlineHATPolicy:
                     f"({C.ACTION_STATE_VEC_SIZE},), got {state.shape}"
                 )
         qpos = torch.from_numpy(state).unsqueeze(0).to(self.device)
+        history_count = len(self.history_offsets)
+        history_conditioning = {}
+        if history_count:
+            history_images = np.asarray(history_images)
+            expected_image_prefix = (
+                history_count, len(self.camera_names), 3
+            )
+            if (
+                history_images.ndim != 5
+                or history_images.shape[:3] != expected_image_prefix
+            ):
+                raise ValueError(
+                    "history_images must be shaped "
+                    f"({history_count},camera,C,H,W), got {history_images.shape}"
+                )
+            history_states = np.asarray(
+                normalized_history_states, dtype=np.float32
+            )
+            expected_state_shape = (history_count, C.ACTION_STATE_VEC_SIZE)
+            if history_states.shape != expected_state_shape:
+                raise ValueError(
+                    "normalized_history_states must be shaped "
+                    f"{expected_state_shape}, got {history_states.shape}"
+                )
+            flat_history_images = history_images.reshape(
+                history_count * len(self.camera_names),
+                *history_images.shape[2:],
+            )
+            processed_history = self.visual_preprocessor(
+                flat_history_images
+            ).float()
+            processed_history = processed_history.reshape(
+                history_count,
+                len(self.camera_names),
+                *processed_history.shape[1:],
+            )
+            history_conditioning = {
+                "hist_image": processed_history.unsqueeze(0).to(self.device),
+                "hist_qpos": torch.from_numpy(history_states)
+                .unsqueeze(0)
+                .to(self.device),
+            }
+        elif history_images is not None or normalized_history_states is not None:
+            raise ValueError("History inputs were provided to a non-history checkpoint")
         if self.is_torchscript:
             output = self.policy(image_tensor, qpos)
         else:
-            conditioning = {}
+            conditioning = dict(history_conditioning)
             if (
                 self.policy_class == "RDT"
                 or self.config["model"].get("use_language_conditioning", False)
@@ -674,7 +963,15 @@ class OnlineHATPolicy:
             raise ValueError(f"HAT output must be shaped {expected}, got {output.shape}")
         if not np.isfinite(output).all():
             raise ValueError("HAT output contains NaN or infinity")
-        return output * self.stats["action_std"] + self.stats["action_mean"]
+        output = output * self.stats["action_std"] + self.stats["action_mean"]
+        if getattr(self, "action_representation", "original") == "relative_chunk":
+            if action_anchor is None:
+                action_anchor, _ = self.prepare_policy_state(
+                    robot_state, origin, heading_quat_wxyz
+                )
+            output = to_absolute_chunk(
+                np.asarray(action_anchor, dtype=np.float32), output)
+        return output
 
 
 def _load_callback(spec):
@@ -687,6 +984,160 @@ def _load_callback(spec):
     return function
 
 
+class RecoveringImageSource:
+    """Skip inference during declared transient camera errors, without stale reuse."""
+
+    def __init__(self, callback, recoverable_errors):
+        self.callback = callback
+        self.recoverable_errors = recoverable_errors
+        self.failed_at = None
+        self.last_warning = float("-inf")
+
+    def __call__(self, **kwargs):
+        try:
+            images = self.callback(**kwargs)
+        except self.recoverable_errors as exc:
+            now = time.monotonic()
+            if self.failed_at is None:
+                self.failed_at = now
+            if now - self.last_warning >= 5.0:
+                print(f"[online_hat] Camera unavailable: {exc}. "
+                      "Pausing chunk publication; waiting for fresh images.", flush=True)
+                self.last_warning = now
+            return None
+        if self.failed_at is not None:
+            print(f"[online_hat] Camera recovered after "
+                  f"{time.monotonic() - self.failed_at:.2f}s; resuming inference. "
+                  "If ScaleBridge latched hold, press R1 after recovery.", flush=True)
+            self.failed_at = None
+            self.last_warning = float("-inf")
+        return images
+
+
+class TimedObservationHistory:
+    """Time-indexed camera/state pairs used by history-enabled checkpoints."""
+
+    def __init__(self, offsets, fps):
+        self.offsets = tuple(int(item) for item in offsets)
+        self.fps = float(fps)
+        if self.fps <= 0.0:
+            raise ValueError(f"History fps must be positive, got {self.fps}")
+        if any(item <= 0 for item in self.offsets):
+            raise ValueError(f"History offsets must be positive, got {self.offsets}")
+        self._samples = deque()
+        self._next_id = 0
+        self._retention_ns = int(
+            (max(self.offsets, default=0) / self.fps + 1.0) * 1e9
+        )
+
+    def append(self, captured_ns, state, images):
+        captured_ns = int(captured_ns)
+        if self._samples and captured_ns < self._samples[-1]["captured_ns"]:
+            raise ValueError("Observation timestamps must be monotonic")
+        sample = {
+            "id": self._next_id,
+            "captured_ns": captured_ns,
+            "state": state,
+            "images": np.asarray(images).copy(),
+        }
+        self._next_id += 1
+        self._samples.append(sample)
+        cutoff = captured_ns - self._retention_ns
+        while len(self._samples) > 1 and self._samples[1]["captured_ns"] < cutoff:
+            self._samples.popleft()
+        return sample
+
+    def pending_after(self, sample_id):
+        return [item for item in self._samples if item["id"] > sample_id]
+
+    def select(self, current):
+        """Select configured past slots, clamping startup to the first sample."""
+        eligible = [
+            item for item in self._samples if item["id"] <= current["id"]
+        ]
+        if not eligible:
+            raise RuntimeError("Current observation is no longer in history")
+        selected = []
+        for offset in self.offsets:
+            target_ns = current["captured_ns"] - int(offset / self.fps * 1e9)
+            selected.append(
+                min(eligible, key=lambda item: abs(item["captured_ns"] - target_ns))
+            )
+        return selected
+
+
+class BackgroundObservationSource:
+    """Continuously pair robot states with camera frames during model inference."""
+
+    def __init__(self, *, subscriber_factory, endpoint, validator, image_source,
+                 camera_names, history_offsets, history_fps, monotonic_ns):
+        self.subscriber_factory = subscriber_factory
+        self.endpoint = endpoint
+        self.validator = validator
+        self.image_source = image_source
+        self.camera_names = tuple(camera_names)
+        self.monotonic_ns = monotonic_ns
+        self.history = TimedObservationHistory(history_offsets, history_fps)
+        self._condition = threading.Condition()
+        self._stop = threading.Event()
+        self._error = None
+        self._thread = threading.Thread(
+            target=self._run,
+            name="online-hat-observation-history",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def _run(self):
+        subscriber = None
+        try:
+            # The ZMQ socket is created and used in this worker only.
+            subscriber = self.subscriber_factory(self.endpoint, bind=False)
+            while not self._stop.is_set():
+                state = subscriber.receive_blocking(timeout_ms=100)
+                if state is None:
+                    continue
+                state = self.validator(state)
+                images = self.image_source(
+                    camera_names=self.camera_names, robot_state=state
+                )
+                if images is None:
+                    continue
+                with self._condition:
+                    self.history.append(self.monotonic_ns(), state, images)
+                    self._condition.notify_all()
+        except Exception as exc:
+            with self._condition:
+                self._error = exc
+                self._condition.notify_all()
+        finally:
+            if subscriber is not None:
+                subscriber.close()
+
+    def wait_for_new(self, after_id, timeout_s=1.0):
+        deadline = time.monotonic() + float(timeout_s)
+        with self._condition:
+            while True:
+                pending = self.history.pending_after(after_id)
+                if pending:
+                    current = pending[-1]
+                    return pending, current, self.history.select(current)
+                if self._error is not None:
+                    raise RuntimeError(
+                        f"Background observation source failed: {self._error}"
+                    ) from self._error
+                remaining = deadline - time.monotonic()
+                if remaining <= 0.0:
+                    return None
+                self._condition.wait(remaining)
+
+    def close(self):
+        self._stop.set()
+        with self._condition:
+            self._condition.notify_all()
+        self._thread.join(timeout=2.0)
+
+
 def main():
     global PROTOCOL_ROOT
     parser = argparse.ArgumentParser(description=__doc__)
@@ -697,7 +1148,16 @@ def main():
     parser.add_argument("--image-source", required=True, help="module:function returning (camera,C,H,W)")
     parser.add_argument("--state-endpoint", default="tcp://127.0.0.1:5561")
     parser.add_argument("--chunk-endpoint", default="tcp://127.0.0.1:5562")
-    parser.add_argument("--fps", type=float, default=30.0)
+    parser.add_argument(
+        "--fps", type=float, default=None,
+        help="chunk playback rate; defaults to the checkpoint config's "
+             "common.chunk_fps and must match it unless --allow-fps-mismatch",
+    )
+    parser.add_argument(
+        "--allow-fps-mismatch", action="store_true",
+        help="serve chunks at --fps even when the checkpoint was trained at a "
+             "different rate",
+    )
     parser.add_argument("--replan-frames", type=int, default=10)
     parser.add_argument("--device", default="cuda")
     parser.add_argument(
@@ -710,6 +1170,14 @@ def main():
         help="how many opening frames to average into the head origin every "
              "position is measured from, matching the converter's "
              "head-as-origin recentering; 0 keeps raw world positions",
+    )
+    parser.add_argument(
+        "--heading-frame", choices=HEADING_FRAME_MODES, default="initial",
+        help="'initial' (default) rotates every world pose into the frame of "
+             "the opening root heading averaged over --origin-frames, matching "
+             "the training data's initial_heading_frame convention; 'world' "
+             "keeps the pre-2026-09-08 behaviour of Vive/IMU-frame "
+             "rotations, which sat 3-5 sigma outside training",
     )
     parser.add_argument(
         "--wrist-frame-conversion", choices=WRIST_CONVERSION_MODES, default="none",
@@ -727,12 +1195,64 @@ def main():
         "--disable-recording", action="store_true",
         help="disable automatic lossless recording of HAT inputs and outputs",
     )
+    parser.add_argument(
+        "--state-ood-limit", type=float, default=10.0,
+        help="refuse to start when any policy state dim is further than this "
+             "many standard deviations from the checkpoint's training mean. The "
+             "default clears the online hand keypoints (~8 sigma today) while "
+             "still catching the encoder-saturating class; the worst dims are "
+             "printed on startup either way",
+    )
     parser.add_argument("--scalebridge-root", type=Path, default=DEFAULT_SCALEBRIDGE_ROOT)
     args = parser.parse_args()
-    if args.fps <= 0 or args.replan_frames <= 0:
-        parser.error("--fps and --replan-frames must be positive")
+    if args.fps is not None and args.fps <= 0:
+        parser.error("--fps must be positive")
+    if args.replan_frames <= 0:
+        parser.error("--replan-frames must be positive")
     if args.origin_frames < 0:
         parser.error("--origin-frames must not be negative")
+
+    # Resolved before the checkpoint is loaded so a mismatch fails immediately
+    # rather than after a minute of model loading.
+    with open(args.config, "r", encoding="utf-8") as stream:
+        checkpoint_fps = yaml.safe_load(stream)["common"].get("chunk_fps")
+    checkpoint_fps = None if checkpoint_fps is None else float(checkpoint_fps)
+    if checkpoint_fps is None:
+        if args.fps is None:
+            parser.error(
+                f"{args.config} has no common.chunk_fps, so --fps must be given "
+                "explicitly (it is the rate the checkpoint's chunk frames were "
+                "sampled at, not a display rate)"
+            )
+    elif args.fps is None:
+        args.fps = checkpoint_fps
+    elif args.fps != checkpoint_fps and not args.allow_fps_mismatch:
+        parser.error(
+            f"--fps {args.fps:g} contradicts the checkpoint's training rate "
+            f"{checkpoint_fps:g} Hz; the reference would play at "
+            f"{args.fps / checkpoint_fps:.2f}x speed. Drop --fps to use the "
+            "checkpoint's rate, or pass --allow-fps-mismatch on purpose."
+        )
+    print(
+        f"[online_hat] chunk fps: {args.fps:g}"
+        + (
+            ""
+            if checkpoint_fps is None or args.fps == checkpoint_fps
+            else f" (OVERRIDING checkpoint's {checkpoint_fps:g} Hz)"
+        ),
+        flush=True,
+    )
+    print(f"[online_hat] wrist frame conversion: {args.wrist_frame_conversion}", flush=True)
+    print(
+        f"[online_hat] heading frame: {args.heading_frame}"
+        + (
+            " (poses rotated into the opening root heading; ScaleBridge's "
+            "chunk heading anchor supplies the inverse on output)"
+            if args.heading_frame == "initial"
+            else ""
+        ),
+        flush=True,
+    )
 
     PROTOCOL_ROOT = args.scalebridge_root
     make_hat_chunk, monotonic_ns, validate_robot_state, LatestPublisher, LatestSubscriber = _install_protocol(args.scalebridge_root)
@@ -744,8 +1264,9 @@ def main():
         device=args.device,
         state_tail=args.state_tail,
         wrist_conversion=args.wrist_frame_conversion,
+        state_ood_limit=args.state_ood_limit,
     )
-    print(f"[online_hat] wrist frame conversion: {args.wrist_frame_conversion}", flush=True)
+    print(f"[online_hat] action representation: {policy.action_representation}", flush=True)
     recorder = None
     if not args.disable_recording:
         recorder_metadata = {
@@ -757,9 +1278,13 @@ def main():
             "camera_names": list(policy.camera_names),
             "state_tail": args.state_tail,
             "origin_frames": args.origin_frames,
+            "heading_frame": args.heading_frame,
             "wrist_frame_conversion": args.wrist_frame_conversion,
             "fps": args.fps,
             "replan_frames": args.replan_frames,
+            "history_offsets": list(policy.history_offsets),
+            "history_fps": policy.history_fps,
+            "action_representation": policy.action_representation,
         }
         if args.record_dir is None:
             recorder = OnlineHATInputRecorder.create_default(
@@ -769,6 +1294,10 @@ def main():
             recorder = OnlineHATInputRecorder(args.record_dir, recorder_metadata)
         print(f"[online_hat] recording inputs to {recorder.run_dir}", flush=True)
     image_source = _load_callback(args.image_source)
+    image_source_module = importlib.import_module(image_source.__module__)
+    recovering_images = RecoveringImageSource(
+        image_source, getattr(image_source_module, "RECOVERABLE_IMAGE_ERRORS", ())
+    )
     source_video_stop = None
     if recorder is not None:
         image_source_module = importlib.import_module(image_source.__module__)
@@ -789,12 +1318,33 @@ def main():
                 f"{source_video_path}",
                 flush=True,
             )
-    state_sub = LatestSubscriber(args.state_endpoint, bind=False)
     chunk_pub = LatestPublisher(args.chunk_endpoint, bind=True)
+    state_sub = None
+    observation_source = None
+    last_observation_id = -1
+    if policy.history_offsets:
+        observation_source = BackgroundObservationSource(
+            subscriber_factory=LatestSubscriber,
+            endpoint=args.state_endpoint,
+            validator=validate_robot_state,
+            image_source=recovering_images,
+            camera_names=policy.camera_names,
+            history_offsets=policy.history_offsets,
+            history_fps=policy.history_fps,
+            monotonic_ns=monotonic_ns,
+        )
+        print(
+            f"[online_hat] observation history enabled: current + offsets "
+            f"{list(policy.history_offsets)} at {policy.history_fps:g} Hz",
+            flush=True,
+        )
+    else:
+        state_sub = LatestSubscriber(args.state_endpoint, bind=False)
     head_origin = HeadOrigin(args.origin_frames)
     sequence_id = 0
     next_replan_ns = 0
     replan_ns = int(args.replan_frames / args.fps * 1e9)
+    scheduled_anchor = None
 
     def _handle_sigterm(signum, frame):
         print(
@@ -806,23 +1356,86 @@ def main():
     previous_sigterm_handler = signal.signal(signal.SIGTERM, _handle_sigterm)
     try:
         while True:
-            state = state_sub.receive_blocking(timeout_ms=1000)
-            if state is None:
-                continue
-            state = validate_robot_state(state)
-            origin = head_origin.observe(state["head_pos_world"])
-            now = monotonic_ns()
+            history_samples = []
+            if observation_source is not None:
+                observed = observation_source.wait_for_new(
+                    last_observation_id, timeout_s=1.0
+                )
+                if observed is None:
+                    continue
+                pending, current, history_samples = observed
+                last_observation_id = current["id"]
+                for item in pending:
+                    origin, opening_heading = head_origin.observe(
+                        item["state"]["head_pos_world"],
+                        item["state"]["root_quat_world_wxyz"],
+                    )
+                state = current["state"]
+                images = current["images"]
+                image_captured_ns = current["captured_ns"]
+                now = image_captured_ns
+            else:
+                state = state_sub.receive_blocking(timeout_ms=1000)
+                if state is None:
+                    continue
+                state = validate_robot_state(state)
+                origin, opening_heading = head_origin.observe(
+                    state["head_pos_world"], state["root_quat_world_wxyz"]
+                )
+                now = monotonic_ns()
+                if now < next_replan_ns:
+                    continue
+                images = recovering_images(
+                    camera_names=policy.camera_names, robot_state=state
+                )
+                if images is None:
+                    next_replan_ns = monotonic_ns() + int(0.1 * 1e9)
+                    continue
+                image_captured_ns = monotonic_ns()
+            heading = opening_heading if args.heading_frame == "initial" else None
             if now < next_replan_ns:
                 continue
-            images = image_source(camera_names=policy.camera_names, robot_state=state)
-            image_captured_ns = monotonic_ns()
             policy_state_raw, policy_state_normalized = policy.prepare_policy_state(
-                state, origin
+                state, origin, heading
             )
+            history_images = None
+            history_state_raw = None
+            history_state_normalized = None
+            if history_samples:
+                history_images = np.stack(
+                    [item["images"] for item in history_samples], axis=0
+                )
+                history_state_pairs = [
+                    policy.prepare_policy_state(item["state"], origin, heading)
+                    for item in history_samples
+                ]
+                history_state_raw = np.stack(
+                    [item[0] for item in history_state_pairs], axis=0
+                )
+                history_state_normalized = np.stack(
+                    [item[1] for item in history_state_pairs], axis=0
+                )
             inference_started_ns = monotonic_ns()
-            action = policy.infer(
-                images, state, origin, normalized_state=policy_state_normalized
+            action_anchor = (
+                scheduled_anchor
+                if policy.action_representation == "relative_chunk" and scheduled_anchor is not None
+                else policy_state_raw
             )
+            action = policy.infer(
+                images,
+                state,
+                origin,
+                normalized_state=policy_state_normalized,
+                heading_quat_wxyz=heading,
+                history_images=history_images,
+                normalized_history_states=history_state_normalized,
+                action_anchor=action_anchor,
+            )
+            if policy.action_representation == "relative_chunk":
+                # relative_chunk row 0 is t+1.  After N executed frames, row N-1
+                # is therefore the scheduled pose at the next replan anchor.
+                anchor_row = min(args.replan_frames - 1, len(action) - 1)
+                scheduled_anchor = np.array(action[anchor_row], copy=True)
             inference_finished_ns = monotonic_ns()
             chunk_generated_at_ns = monotonic_ns()
             chunk = action_chunk_to_targets(
@@ -844,6 +1457,16 @@ def main():
                     inference_started_ns=inference_started_ns,
                     inference_finished_ns=inference_finished_ns,
                     chunk_generated_at_ns=chunk_generated_at_ns,
+                    heading_quat_wxyz=heading,
+                    history_images=history_images,
+                    history_policy_state_raw=history_state_raw,
+                    history_policy_state_normalized=history_state_normalized,
+                    history_source_states=[
+                        item["state"] for item in history_samples
+                    ],
+                    history_captured_ns=[
+                        item["captured_ns"] for item in history_samples
+                    ],
                 )
             sequence_id += 1
             next_replan_ns = now + replan_ns
@@ -855,7 +1478,10 @@ def main():
             source_video_stop()
         if recorder is not None:
             recorder.close()
-        state_sub.close()
+        if observation_source is not None:
+            observation_source.close()
+        if state_sub is not None:
+            state_sub.close()
         chunk_pub.close()
 
 

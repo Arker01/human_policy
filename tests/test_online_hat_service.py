@@ -3,6 +3,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import Mock
+
+import torch
 
 from hdt import constants as C
 from hdt.online_hat_service import (
@@ -13,7 +16,9 @@ from hdt.online_hat_service import (
     _rotation_6d_to_quat_wxyz,
     action_chunk_to_targets,
     OnlineHATInputRecorder,
+    OnlineHATPolicy,
     robot_state_to_policy_state,
+    TimedObservationHistory,
 )
 
 
@@ -112,6 +117,73 @@ class OnlineHATServiceTest(unittest.TestCase):
         )
         self.assertNotIn("zero_state_dims", _act_config(trainer_config(), 100))
 
+    def test_history_config_reaches_the_built_model(self):
+        config = _act_config(
+            trainer_config(history={
+                "enabled": True,
+                "offsets": [5, 10],
+                "token_pool": 2,
+            }),
+            100,
+        )
+        self.assertEqual(
+            config["history_config"],
+            {"offsets": [5, 10], "token_pool": 2},
+        )
+        self.assertNotIn("history_config", _act_config(trainer_config(), 100))
+
+    def test_timed_history_selects_training_offsets_and_clamps_startup(self):
+        history = TimedObservationHistory([5, 10], fps=30)
+        samples = []
+        for frame in range(13):
+            samples.append(history.append(
+                round(frame / 30 * 1e9),
+                {"sequence_id": frame},
+                np.full((1, 3, 2, 2), frame, dtype=np.uint8),
+            ))
+        self.assertEqual(
+            [item["state"]["sequence_id"] for item in history.select(samples[-1])],
+            [7, 2],
+        )
+
+        startup = TimedObservationHistory([5, 10], fps=30)
+        first = startup.append(
+            123, {"sequence_id": 9}, np.zeros((1, 3, 2, 2), dtype=np.uint8)
+        )
+        self.assertEqual(
+            [item["state"]["sequence_id"] for item in startup.select(first)],
+            [9, 9],
+        )
+
+    def test_history_infer_builds_training_tensor_layout(self):
+        runner = OnlineHATPolicy.__new__(OnlineHATPolicy)
+        runner.device = torch.device("cpu")
+        runner.camera_names = ("top",)
+        runner.history_offsets = (5, 10)
+        runner.chunk_size = 3
+        runner.is_torchscript = False
+        runner.policy_class = "ACT"
+        runner.config = {"model": {"use_language_conditioning": False}}
+        runner.visual_preprocessor = lambda value: torch.from_numpy(value).float()
+        runner.stats = {
+            "action_mean": np.zeros(128, dtype=np.float32),
+            "action_std": np.ones(128, dtype=np.float32),
+        }
+        runner.policy = Mock(return_value=torch.zeros((1, 3, 128)))
+
+        output = runner.infer(
+            np.zeros((1, 3, 2, 2), dtype=np.uint8),
+            None,
+            normalized_state=np.zeros(128, dtype=np.float32),
+            history_images=np.zeros((2, 1, 3, 2, 2), dtype=np.uint8),
+            normalized_history_states=np.zeros((2, 128), dtype=np.float32),
+        )
+
+        self.assertEqual(output.shape, (3, 128))
+        conditioning = runner.policy.call_args.kwargs["conditioning_dict"]
+        self.assertEqual(conditioning["hist_image"].shape, (1, 2, 1, 3, 2, 2))
+        self.assertEqual(conditioning["hist_qpos"].shape, (1, 2, 128))
+
     def test_degenerate_rotation_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "degenerate"):
             _rotation_6d_to_quat_wxyz([[0, 0, 0, 0, 0, 0]])
@@ -148,7 +220,21 @@ class OnlineHATServiceTest(unittest.TestCase):
         negative["root_quat_world_wxyz"] = [
             -0.9238795, 0.0, 0.0, -0.3826834
         ]
-        output = robot_state_to_policy_state(negative)
+        # Without a checkpoint mean there is nothing to canonicalize against,
+        # so the measured representative is passed through untouched.
+        np.testing.assert_allclose(
+            robot_state_to_policy_state(negative)[103:107],
+            [-0.9238795, 0.0, 0.0, -0.3826834],
+            atol=1e-7,
+        )
+        # b10/c30 all train on the negative-w representative: keep it.
+        np.testing.assert_allclose(
+            robot_state_to_policy_state(negative, root_quat_mean_w=-0.99)[103:107],
+            [-0.9238795, 0.0, 0.0, -0.3826834],
+            atol=1e-7,
+        )
+        # A checkpoint trained on the positive-w representative flips it.
+        output = robot_state_to_policy_state(negative, root_quat_mean_w=0.99)
         np.testing.assert_allclose(
             output[103:107], [0.9238795, 0.0, 0.0, 0.3826834], atol=1e-7
         )
@@ -216,6 +302,53 @@ class OnlineHATServiceTest(unittest.TestCase):
         np.testing.assert_allclose(result["position_origin_world"], origin)
         np.testing.assert_allclose(result["left_fingertip_local"][0], left[1:])
         np.testing.assert_allclose(result["right_fingertip_local"][0], right[1:])
+
+    def test_initial_heading_frame_matches_training_convention(self):
+        # The training HDF5s declare coordinate_convention =
+        # initial_heading_frame_x_forward_y_left_z_up, i.e. every episode's
+        # opening root yaw is ~0.  A session whose whole world is yawed must
+        # therefore produce the same policy state as the unrotated session,
+        # once the opening heading is supplied.  Frame-local channels (finger
+        # keypoints, joint angles) must not change at all.
+        from hdt.online_hat_service import (
+            _quat_mul_wxyz,
+            _quat_rotate_wxyz,
+            HeadOrigin,
+        )
+
+        yaw = np.deg2rad(-37.0)
+        heading = np.array([np.cos(yaw / 2), 0.0, 0.0, np.sin(yaw / 2)])
+        base = state()
+        rotated = state()
+        for key in ("root", "head", "left_wrist", "right_wrist"):
+            position = np.asarray(base[f"{key}_pos_world"], dtype=np.float64)
+            quaternion = np.asarray(base[f"{key}_quat_world_wxyz"], dtype=np.float64)
+            rotated[f"{key}_pos_world"] = _quat_rotate_wxyz(heading, position)
+            rotated[f"{key}_quat_world_wxyz"] = _quat_mul_wxyz(heading, quaternion)
+        origin = np.array([0.02, -0.01, 1.19])
+        np.testing.assert_allclose(
+            robot_state_to_policy_state(
+                rotated,
+                origin=_quat_rotate_wxyz(heading, origin),
+                heading_quat_wxyz=heading,
+            ),
+            robot_state_to_policy_state(base, origin=origin),
+            atol=1e-6,
+        )
+
+        # HeadOrigin locks both halves of the episode frame from the same
+        # opening window; the live root stream carries w < 0, and heading
+        # extraction must be invariant to that representative.
+        head_origin = HeadOrigin(2)
+        for _ in range(2):
+            locked_origin, locked_heading = head_origin.observe(
+                rotated["head_pos_world"],
+                -np.asarray(rotated["root_quat_world_wxyz"]),
+            )
+        self.assertTrue(head_origin.locked)
+        np.testing.assert_allclose(locked_origin, rotated["head_pos_world"], atol=1e-6)
+        locked_yaw = 2.0 * np.arctan2(locked_heading[3], locked_heading[0])
+        self.assertAlmostEqual(np.degrees(locked_yaw), -37.0, places=4)
 
 
 if __name__ == "__main__":
