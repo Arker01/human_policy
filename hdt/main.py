@@ -272,6 +272,28 @@ def main(args, base_dir, processed_dir=None):
         print(f"\n=== State ablation: normalized qpos[{zero_state_dims[0]}:{zero_state_dims[1]}] "
               f"forced to 0 for every embodiment ===")
 
+    action_representation = (
+        args.get('action_representation')
+        or trainer_config.get('data', {}).get('action_representation', 'original')
+    )
+    if action_representation not in ('original', 'relative_chunk'):
+        raise ValueError(
+            "action_representation must be 'original' or 'relative_chunk', got "
+            f"{action_representation!r}")
+    trainer_config.setdefault('data', {})['action_representation'] = action_representation
+    print(f"Action representation: {action_representation}")
+
+    # Every training entry point normalizes explicitly tagged high-rate robot
+    # teleoperation onto the common 30fps timeline.  The opt-out exists for old-run
+    # reproduction; missing fps metadata is treated as the historical 30fps format.
+    robot_target_fps = None if args.get('no_robot_fps_resample') else float(
+        args.get('robot_target_fps', 30.0))
+    trainer_config['data']['robot_target_fps'] = robot_target_fps
+    if robot_target_fps is None:
+        print("Robot teleop FPS normalization: disabled")
+    else:
+        print(f"Robot teleop FPS normalization: enabled, target={robot_target_fps:g}fps")
+
     future_vae_cfg = trainer_config.get('model', {}).get('future_vae', {}) or {}
     future_vae_enabled = bool(future_vae_cfg.get('enabled', False))
 
@@ -331,6 +353,66 @@ def main(args, base_dir, processed_dir=None):
         print(f"  Huber beta (m): {future_flow_cfg.get('huber_beta', 0.01)}")
         print(f"  Ablation: {future_flow_cfg.get('ablation', 'none')}")
 
+    # ---- Real observation history (disabled by default) ----
+    history_cfg = trainer_config.get('model', {}).get('history', {}) or {}
+    history_offsets = list(history_cfg.get('offsets', [])) if history_cfg.get('enabled', False) else []
+    if history_offsets:
+        assert all(o > 0 for o in history_offsets), (
+            "history.offsets are 30fps logical frames back from t and must be > 0; "
+            "slot 0 (the current frame) is always included and is not listed here.")
+        print("Real observation history enabled:")
+        print(f"  Offsets (30fps logical frames back): {history_offsets}")
+        print(f"  At 30fps that is: {[round(o / 30.0, 3) for o in history_offsets]} s ago")
+        print(f"  Slots fed to the trunk: {1 + len(history_offsets)} "
+              f"(current + history), same backbone, learned per-slot time embedding")
+        print(f"  History token pooling: {history_cfg.get('token_pool', 2)}x "
+              f"(current frame not pooled)")
+
+    # ---- Execution-lag state augmentation (disabled by default) ----
+    lag_aug_config = None
+    if args.get('lag_aug'):
+        lag_aug_config = {
+            'prob': float(args['lag_aug_prob']),
+            'min_m': float(args['lag_aug_min_m']),
+            'max_m': float(args['lag_aug_max_m']),
+            'search_frames': int(args['lag_aug_search_frames']),
+            'offset_prob': float(args['lag_aug_offset_prob']),
+            'offset_sigma_m': float(args['lag_aug_offset_sigma_m']),
+            'offset_clip_m': float(args['lag_aug_offset_clip_m']),
+            'finger_prob': float(args['lag_aug_finger_prob']),
+            'finger_scale': float(args['lag_aug_finger_scale']),
+        }
+        assert 0.0 <= lag_aug_config['min_m'] <= lag_aug_config['max_m'], \
+            "lag_aug_min_m must be <= lag_aug_max_m"
+        print("Execution-lag state augmentation enabled (train split only):")
+        print(f"  Backtrack prob: {lag_aug_config['prob']} "
+              f"over {lag_aug_config['min_m'] * 100:.0f}-{lag_aug_config['max_m'] * 100:.0f} cm "
+              f"(search window {lag_aug_config['search_frames']} frames)")
+        print(f"  Random 3D offset prob: {lag_aug_config['offset_prob']} "
+              f"sigma={lag_aug_config['offset_sigma_m'] * 100:.1f} cm/axis "
+              f"clip={lag_aug_config['offset_clip_m'] * 100:.1f} cm")
+        print(f"  Finger-wrist desync prob: {lag_aug_config['finger_prob']} "
+              f"finger lag = U(0, {lag_aug_config['finger_scale']}) x wrist lag")
+        print("  Action-chunk labels are NOT perturbed.")
+
+    # ---- Visual localization augmentation (disabled by default) ----
+    visual_aug_config = None
+    if args.get('visual_aug'):
+        _res = trainer_config["data"]["image_resolution_hw"]
+        _native = float(_res[1]) / float(_res[0])
+        _j = float(args['visual_aug_ratio_jitter'])
+        assert 0.0 < _j <= 1.0, "visual_aug_ratio_jitter must be in (0, 1]"
+        visual_aug_config = {
+            'scale': (float(args['visual_aug_scale_min']), float(args['visual_aug_scale_max'])),
+            'ratio': (_native * _j, _native / _j),
+        }
+        print("Visual localization augmentation enabled (train split only):")
+        print(f"  RandomResizedCrop -> {_res[0]}x{_res[1]} (unchanged resolution)")
+        print(f"  Area scale: {visual_aug_config['scale']}")
+        print(f"  Aspect ratio: {tuple(round(r, 4) for r in visual_aug_config['ratio'])} "
+              f"(native {_native:.4f})")
+        print("  Sampled once per stack, so current/history/future frames share the crop.")
+
     policy_class = trainer_config["common"]["policy_class"]
     batch_size_train = args['batch_size']
     batch_size_val = args['batch_size']
@@ -372,6 +454,11 @@ def main(args, base_dir, processed_dir=None):
             policy_config['future_vae_config'] = future_vae_cfg
         if future_flow_enabled:
             policy_config['future_flow_config'] = future_flow_cfg
+        if history_offsets:
+            policy_config['history_config'] = {
+                'offsets': history_offsets,
+                'token_pool': int(history_cfg.get('token_pool', 2)),
+            }
         if zero_state_dims is not None:
             policy_config['zero_state_dims'] = zero_state_dims
     elif policy_class == 'RDT':
@@ -409,6 +496,8 @@ def main(args, base_dir, processed_dir=None):
         'task_name': task_name,
         'exptid': args['exptid'],
         'load_pretrained_path': args['load_pretrained_path'],
+        'action_representation': action_representation,
+        'robot_target_fps': robot_target_fps,
     }
     mode = "disabled" if args["no_wandb"] or args["val_and_jit_trace"] else "online"
     if True:
@@ -455,7 +544,12 @@ def main(args, base_dir, processed_dir=None):
                                                         flow_target_enabled=future_flow_enabled,
                                                         flow_target_dir=future_flow_dir,
                                                         flow_grid_hw=future_flow_grid_hw,
-                                                        flow_horizon=future_flow_horizon)
+                                                        flow_horizon=future_flow_horizon,
+                                                        history_offsets=history_offsets,
+                                                        lag_aug_config=lag_aug_config,
+                                                        visual_aug_config=visual_aug_config,
+                                                        action_representation=action_representation,
+                                                        robot_target_fps=robot_target_fps)
 
     if args.get("eval_ckpts", False):
         val_dataloader, policy = accelerator.prepare(val_dataloader, policy)
@@ -778,6 +872,28 @@ if __name__ == '__main__':
     parser.add_argument('--future_flow_ablation', type=str, default=None, choices=['none', 'shuffled'], help="Future-Flow ablation mode; 'shuffled' is the negative control (no 'current': the current displacement is identically 0)")
     parser.add_argument('--future_flow_dir', type=str, default=None, help='directory of per-episode flow-target h5 files from scripts/preprocess/flow_target.py (overrides config)')
     parser.add_argument('--zero_state_dims', type=str, default=None, help='"lo:hi" half-open range of normalized qpos dims to force to 0, e.g. "100:128" to hide the dex5 robot-configuration block and match the human episodes. Default: keep the whole state.')
+    parser.add_argument('--action_representation', choices=['original', 'relative_chunk'], default=None, help='action label representation; default comes from data.action_representation in the model yaml, then falls back to original')
+    parser.add_argument('--robot_target_fps', type=float, default=30.0, help='default logical fps for explicitly tagged high-rate robot teleoperation data')
+    parser.add_argument('--no_robot_fps_resample', action='store_true', help='reproduce legacy runs without automatic high-rate robot teleop -> 30fps timeline conversion')
+
+    # Execution-lag state augmentation. Pure dataloader change: perturbs the INPUT
+    # wrist state, never the action label. Train split only.
+    parser.add_argument('--lag_aug', action='store_true', help='augment the input wrist state by backtracking it along the demo trajectory (simulates the BFM not keeping up); action labels are unchanged')
+    parser.add_argument('--lag_aug_prob', type=float, default=0.5, help='probability a sample gets the trajectory backtrack')
+    parser.add_argument('--lag_aug_min_m', type=float, default=0.02, help='minimum backtrack distance in metres')
+    parser.add_argument('--lag_aug_max_m', type=float, default=0.08, help='maximum backtrack distance in metres')
+    parser.add_argument('--lag_aug_search_frames', type=int, default=450, help='how far back to search for the backtrack frame; the robot arm moves slowly enough that 8cm can be ~380 frames back')
+    parser.add_argument('--lag_aug_offset_prob', type=float, default=0.25, help='probability of an additional random 3D offset on the wrist position')
+    parser.add_argument('--lag_aug_offset_sigma_m', type=float, default=0.02, help='per-axis sigma of that random 3D offset, in metres')
+    parser.add_argument('--lag_aug_offset_clip_m', type=float, default=0.08, help='norm cap on the random 3D offset, in metres; 0 disables the cap')
+    parser.add_argument('--lag_aug_finger_prob', type=float, default=0.25, help='probability the fingertip block is read at a different lag than the wrist (finger-vs-wrist progress desync)')
+    parser.add_argument('--lag_aug_finger_scale', type=float, default=2.0, help='finger lag is U(0, scale) x the wrist lag; >1 lets the fingers lag more than the wrist as well as less')
+
+    # Visual localization augmentation. Also a pure dataloader change.
+    parser.add_argument('--visual_aug', action='store_true', help='add RandomResizedCrop (crop + zoom + translation jitter, same output resolution) to the training image transforms, forcing the model to localize the bottle instead of memorizing scene layout')
+    parser.add_argument('--visual_aug_scale_min', type=float, default=0.75, help='minimum area fraction kept by the random crop')
+    parser.add_argument('--visual_aug_scale_max', type=float, default=1.0, help='maximum area fraction kept by the random crop')
+    parser.add_argument('--visual_aug_ratio_jitter', type=float, default=0.9, help='aspect-ratio jitter around the native aspect: ratio range is (native*j, native/j)')
     args = vars(parser.parse_args())
 
     if args.get('base_dir'):

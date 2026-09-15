@@ -451,7 +451,7 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 
 class DETRVAE(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, backbones, transformer, encoder, state_dim, action_dim, num_queries, camera_names, image_feature_strategy, use_language_conditioning, future_dino_config=None, future_vae_config=None, future_flow_config=None, zero_state_dims=None):
+    def __init__(self, backbones, transformer, encoder, state_dim, action_dim, num_queries, camera_names, image_feature_strategy, use_language_conditioning, future_dino_config=None, future_vae_config=None, future_flow_config=None, history_config=None, zero_state_dims=None):
         """ Initializes the model.
         Parameters:
             backbones: torch module of the backbone to be used. See backbone.py
@@ -519,6 +519,20 @@ class DETRVAE(nn.Module):
             self.input_proj_robot_state = nn.Linear(state_dim + 4096 * 2, hidden_dim)
         else:
             self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
+
+        # Historical observations use the same visual backbone. A learned slot
+        # embedding marks time for image tokens, while states are concatenated
+        # in the fixed [current, configured offsets...] order.
+        self.history_offsets = list((history_config or {}).get('offsets', []))
+        self.use_history = len(self.history_offsets) > 0
+        if self.use_history:
+            assert not self.use_language_conditioning, \
+                "history + language conditioning share input_proj_robot_state; not wired"
+            n_slot = len(self.history_offsets) + 1
+            self.hist_time_embed = nn.Embedding(n_slot, hidden_dim)
+            nn.init.zeros_(self.hist_time_embed.weight)
+            self.input_proj_robot_state = nn.Linear(state_dim * n_slot, hidden_dim)
+            self.history_pool = int((history_config or {}).get('token_pool', 2))
 
         # encoder extra parameters
         self.latent_dim = 32 # final size of latent z # TODO tune
@@ -853,6 +867,48 @@ class DETRVAE(nn.Module):
 
         return src, pos
 
+    def get_features_and_pos_with_history(self, image, hist_image):
+        """Project current and historical image slots through one backbone."""
+        B, num_cam, C, H, W = image.shape
+        n_hist = hist_image.shape[1]
+        if n_hist != len(self.history_offsets):
+            raise ValueError(
+                f"Expected {len(self.history_offsets)} history image slots, got {n_hist}"
+            )
+        stacked = torch.cat([image.unsqueeze(1), hist_image], dim=1)
+        n_slot = stacked.shape[1]
+        featuress, poss = self.backbones[0](
+            stacked.reshape(B * n_slot * num_cam, C, H, W)
+        )
+
+        assert self.image_feature_strategy in ['ACT_linear', 'linear', 'linear4'], \
+            f"Strategy {self.image_feature_strategy} not supported with history"
+        featuress = featuress[-1]
+        pos = poss[-1]
+        _, output_C, output_H, output_W = featuress.shape
+        featuress = featuress.view(
+            B, n_slot, num_cam, output_C, output_H, output_W
+        )
+        pos = pos[:1]
+
+        all_features, all_pos = [], []
+        block = 0
+        for slot in range(n_slot):
+            t_embed = self.hist_time_embed.weight[slot].view(1, -1, 1, 1)
+            for cam_id in range(num_cam):
+                projected = self.input_proj(featuress[:, slot, cam_id]) + t_embed
+                p = pos
+                if slot > 0 and self.history_pool > 1:
+                    projected = F.avg_pool2d(projected, self.history_pool)
+                    p = F.avg_pool2d(p, self.history_pool)
+                # Flatten every block because pooled history slots no longer
+                # share the current frame's spatial dimensions.
+                all_features.append(projected.flatten(2).unsqueeze(2))
+                all_pos.append((p / 2 + block - 0.5).flatten(2).unsqueeze(2))
+                block += 1
+
+        return torch.cat(all_features, axis=3), torch.cat(all_pos, axis=3)
+
     def forward(self, qpos, image, env_state, actions=None, is_pad=None, conditioning_dict=None, future_image=None):
         """
         qpos: batch, qpos_dim
@@ -897,12 +953,32 @@ class DETRVAE(nn.Module):
             latent_input = self.latent_out_proj(latent_sample)
 
         assert self.backbones is not None
-        src, pos = self.get_features_and_pos(image)
+        if self.use_history:
+            if conditioning_dict is None:
+                raise ValueError("History model requires conditioning_dict")
+            src, pos = self.get_features_and_pos_with_history(
+                image, conditioning_dict['hist_image']
+            )
+        else:
+            src, pos = self.get_features_and_pos(image)
 
         # proprioception features
         if self.use_language_conditioning:
             language_embedding = conditioning_dict['language_embeddings'].flatten(start_dim=1)
             state_input = torch.cat([qpos, language_embedding], axis=1)
+            proprio_input = self.input_proj_robot_state(state_input)
+        elif self.use_history:
+            hist_qpos = conditioning_dict['hist_qpos']
+            if hist_qpos.shape[1] != len(self.history_offsets):
+                raise ValueError(
+                    f"Expected {len(self.history_offsets)} history state slots, "
+                    f"got {hist_qpos.shape[1]}"
+                )
+            if self.zero_state_dims is not None:
+                hist_qpos = hist_qpos * self.state_keep_mask.to(hist_qpos.dtype)
+            state_input = torch.cat(
+                [qpos, hist_qpos.flatten(start_dim=1)], axis=1
+            )
             proprio_input = self.input_proj_robot_state(state_input)
         else:
             proprio_input = self.input_proj_robot_state(qpos)
@@ -1160,6 +1236,7 @@ def build(args):
     future_dino_config = getattr(args, 'future_dino_config', None)
     future_vae_config = getattr(args, 'future_vae_config', None)
     future_flow_config = getattr(args, 'future_flow_config', None)
+    history_config = getattr(args, 'history_config', None)
     zero_state_dims = getattr(args, 'zero_state_dims', None)
 
     model = DETRVAE(
@@ -1175,6 +1252,7 @@ def build(args):
         future_dino_config=future_dino_config,
         future_vae_config=future_vae_config,
         future_flow_config=future_flow_config,
+        history_config=history_config,
         zero_state_dims=zero_state_dims,
     )
 
@@ -1204,4 +1282,3 @@ def build_cnnmlp(args):
     print("number of parameters: %.2fM" % (n_parameters/1e6,))
 
     return model
-

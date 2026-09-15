@@ -38,6 +38,13 @@ class ACTPolicy(nn.Module):
         env_state = None
             
         image = self.transform(image)
+        # History frames use the exact same deterministic resize and
+        # normalization as the current frame.
+        if conditioning_dict is not None and 'hist_image' in conditioning_dict:
+            conditioning_dict = dict(conditioning_dict)
+            conditioning_dict['hist_image'] = self.transform(
+                conditioning_dict['hist_image']
+            )
         future_image_transformed = None
         if future_image is not None:
             future_image_transformed = self.transform(future_image)
