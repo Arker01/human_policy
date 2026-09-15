@@ -78,6 +78,26 @@ inverse transform 已接入 `data/eval_mpjpe_batch.py`、
 部署端第一个 chunk 用 robot actual pose 启动，之后用上一个 chunk 在
 replan 时刻的 scheduled pose 做 anchor，避免 robot 短时 lag 持续改写计划坐标系。
 
+实际选择不是固定取 `replan_frames - 1`：服务根据相邻 RobotState 的
+`timestamp_ns` 从上一条 absolute chunk 选择对应 scheduled row。首次、opening
+坐标尚未锁定、时间倒退或超过上一 chunk horizon 时使用 actual pose 重新建立
+计划链。
+
+可选安全阈值：
+
+```bash
+--scheduled-anchor-max-error-m 0.10
+```
+
+它比较 scheduled 与 actual 的 head、左右腕、waist 位置，最大误差超限时本轮
+立即 actual re-anchor。默认 `0`（阈值关闭，等待真机标定），但 anchor 来源、
+scheduled row 和逐部位误差始终记录在 `inference_inputs.jsonl`。
+
+chunk 协议携带 `action_representation`。ScaleBFM 收到 `relative_chunk` 时默认
+令 `relative_chunk_min_execution_fraction=0.0`，按 HAT replan 节拍消费，而不是
+沿用 original checkpoint 的长 chunk hold；RTC 和 phase alignment 继续作用于
+已经恢复出的 absolute chunk。
+
 ## 与 30fps、lag、vis 同时使用
 
 机器人遥操 HDF5 如果明确带有 `fps > 30` attr，dataloader 默认使用与

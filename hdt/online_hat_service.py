@@ -103,6 +103,7 @@ class OnlineHATInputRecorder:
         chunk_generated_at_ns, heading_quat_wxyz=None, history_images=None,
         history_policy_state_raw=None, history_policy_state_normalized=None,
         history_source_states=None, history_captured_ns=None,
+        action_anchor=None, action_anchor_info=None,
     ):
         stem = f"{int(sequence_id):06d}"
         image_path = self.images_dir / f"{stem}.npz"
@@ -151,6 +152,11 @@ class OnlineHATInputRecorder:
                 np.asarray(policy_state_normalized, dtype=np.float32)
             ),
         }
+        if action_anchor is not None:
+            record["action_anchor"] = _jsonable(
+                np.asarray(action_anchor, dtype=np.float32)
+            )
+            record["action_anchor_info"] = _jsonable(action_anchor_info)
         if history_images is not None:
             record.update({
                 "history_image_shape": list(np.asarray(history_images).shape),
@@ -313,11 +319,17 @@ def _hand_base_to_g1_wrist(pos, quat_wxyz, side):
 
 
 def action_chunk_to_targets(action, source_state, fps, sequence_id, generated_at_ns,
-                            wrist_conversion="none", position_origin_world=None):
+                            wrist_conversion="none", position_origin_world=None,
+                            action_representation="original"):
     """Extract only the HAT fields consumed by online ScaleBFM."""
     if wrist_conversion not in WRIST_CONVERSION_MODES:
         raise ValueError(
             f"wrist_conversion must be one of {WRIST_CONVERSION_MODES}, got {wrist_conversion!r}"
+        )
+    if action_representation not in ACTION_REPRESENTATIONS:
+        raise ValueError(
+            f"action_representation must be one of {ACTION_REPRESENTATIONS}, "
+            f"got {action_representation!r}"
         )
     make_hat_chunk, _, validate_robot_state, _, _ = _install_protocol(PROTOCOL_ROOT)
     state = validate_robot_state(source_state)
@@ -349,6 +361,7 @@ def action_chunk_to_targets(action, source_state, fps, sequence_id, generated_at
         generated_at_ns=int(generated_at_ns),
         fps=float(fps),
         frame_count=int(n),
+        action_representation=action_representation,
         root_pos=root_pos,
         root_quat_wxyz=root_quat,
         head_pos=head_pos,
@@ -1138,6 +1151,110 @@ class BackgroundObservationSource:
         self._thread.join(timeout=2.0)
 
 
+SCHEDULED_ANCHOR_POSITION_BLOCKS = (
+    ("head", C.OUTPUT_HEAD_EEF[:3]),
+    ("left_wrist", C.OUTPUT_LEFT_EEF[:3]),
+    ("right_wrist", C.OUTPUT_RIGHT_EEF[:3]),
+    ("waist", C.OUTPUT_WAIST[:3]),
+)
+
+
+class ScheduledAnchorPlanner:
+    """Choose HuMI's inverse anchor from the previous absolute plan.
+
+    Relative chunk row zero represents ``t+1``. The next observation can be
+    early or late because camera and inference latency vary, so its anchor is
+    selected from the previous chunk using RobotState timestamps rather than
+    a fixed ``replan_frames - 1`` row. Missing or out-of-horizon timing falls
+    back to the measured pose instead of extrapolating a stale plan.
+
+    A zero ``max_position_error_m`` leaves the real-robot threshold disabled
+    until it has been tuned. A positive value compares head, both wrists and
+    waist. Neck is excluded because the online state does not populate that
+    training-only block, and wrist-local finger points are not world tracking
+    errors. Crossing the limit re-anchors this replan to actual state.
+    """
+
+    def __init__(self, fps, max_position_error_m=0.0):
+        self.fps = float(fps)
+        self.max_position_error_m = float(max_position_error_m)
+        if self.fps <= 0.0:
+            raise ValueError(f"Scheduled-anchor fps must be positive, got {self.fps}")
+        if self.max_position_error_m < 0.0:
+            raise ValueError(
+                "scheduled-anchor max position error must be non-negative"
+            )
+        self.reset()
+
+    def reset(self):
+        self.previous_action = None
+        self.previous_source_timestamp_ns = None
+
+    @staticmethod
+    def _state_row(value, name):
+        value = np.asarray(value, dtype=np.float32)
+        if value.shape != (C.ACTION_STATE_VEC_SIZE,):
+            raise ValueError(f"{name} must be shaped (128,), got {value.shape}")
+        if not np.isfinite(value).all():
+            raise ValueError(f"{name} contains NaN or infinity")
+        return value
+
+    @staticmethod
+    def _actual(actual, mode, **details):
+        return np.array(actual, copy=True), {"mode": mode, **details}
+
+    def select(self, actual, source_timestamp_ns):
+        actual = self._state_row(actual, "actual anchor")
+        source_timestamp_ns = int(source_timestamp_ns)
+        if self.previous_action is None:
+            return self._actual(actual, "actual_first")
+
+        elapsed_frames = (
+            source_timestamp_ns - self.previous_source_timestamp_ns
+        ) * 1e-9 * self.fps
+        anchor_row = int(np.floor(elapsed_frames + 0.5)) - 1
+        timing = {
+            "elapsed_frames": float(elapsed_frames),
+            "scheduled_row": int(anchor_row),
+            "previous_source_timestamp_ns": int(
+                self.previous_source_timestamp_ns
+            ),
+        }
+        if anchor_row < 0 or anchor_row >= len(self.previous_action):
+            return self._actual(actual, "actual_timing_reanchor", **timing)
+
+        scheduled = self._state_row(
+            self.previous_action[anchor_row], "scheduled anchor"
+        )
+        errors = {
+            name: float(np.linalg.norm(scheduled[indices] - actual[indices]))
+            for name, indices in SCHEDULED_ANCHOR_POSITION_BLOCKS
+        }
+        maximum = max(errors.values(), default=0.0)
+        details = {
+            **timing,
+            "position_errors_m": errors,
+            "max_position_error_m": float(maximum),
+        }
+        if self.max_position_error_m > 0.0 and maximum > self.max_position_error_m:
+            details["limit_m"] = self.max_position_error_m
+            return self._actual(actual, "actual_safety_reanchor", **details)
+        return np.array(scheduled, copy=True), {"mode": "scheduled", **details}
+
+    def update(self, absolute_action, source_timestamp_ns):
+        action = np.asarray(absolute_action, dtype=np.float32)
+        if action.ndim != 2 or action.shape[1:] != (C.ACTION_STATE_VEC_SIZE,):
+            raise ValueError(
+                f"absolute scheduled action must be shaped (N,128), got {action.shape}"
+            )
+        if len(action) == 0:
+            raise ValueError("absolute scheduled action must contain at least one row")
+        if not np.isfinite(action).all():
+            raise ValueError("absolute scheduled action contains NaN or infinity")
+        self.previous_action = np.array(action, copy=True)
+        self.previous_source_timestamp_ns = int(source_timestamp_ns)
+
+
 def main():
     global PROTOCOL_ROOT
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1203,6 +1320,12 @@ def main():
              "still catching the encoder-saturating class; the worst dims are "
              "printed on startup either way",
     )
+    parser.add_argument(
+        "--scheduled-anchor-max-error-m", type=float, default=0.0,
+        help="relative_chunk only: re-anchor to the measured pose when the "
+             "largest head/wrist/waist position error against the scheduled "
+             "anchor exceeds this distance; 0 disables the untuned threshold",
+    )
     parser.add_argument("--scalebridge-root", type=Path, default=DEFAULT_SCALEBRIDGE_ROOT)
     args = parser.parse_args()
     if args.fps is not None and args.fps <= 0:
@@ -1211,6 +1334,8 @@ def main():
         parser.error("--replan-frames must be positive")
     if args.origin_frames < 0:
         parser.error("--origin-frames must not be negative")
+    if args.scheduled_anchor_max_error_m < 0.0:
+        parser.error("--scheduled-anchor-max-error-m must not be negative")
 
     # Resolved before the checkpoint is loaded so a mismatch fails immediately
     # rather than after a minute of model loading.
@@ -1267,6 +1392,16 @@ def main():
         state_ood_limit=args.state_ood_limit,
     )
     print(f"[online_hat] action representation: {policy.action_representation}", flush=True)
+    if policy.action_representation == "relative_chunk":
+        print(
+            "[online_hat] scheduled-anchor safety: "
+            + (
+                f"re-anchor above {args.scheduled_anchor_max_error_m:.3f} m"
+                if args.scheduled_anchor_max_error_m > 0.0
+                else "distance threshold disabled; errors are still recorded"
+            ),
+            flush=True,
+        )
     recorder = None
     if not args.disable_recording:
         recorder_metadata = {
@@ -1285,6 +1420,7 @@ def main():
             "history_offsets": list(policy.history_offsets),
             "history_fps": policy.history_fps,
             "action_representation": policy.action_representation,
+            "scheduled_anchor_max_error_m": args.scheduled_anchor_max_error_m,
         }
         if args.record_dir is None:
             recorder = OnlineHATInputRecorder.create_default(
@@ -1344,7 +1480,9 @@ def main():
     sequence_id = 0
     next_replan_ns = 0
     replan_ns = int(args.replan_frames / args.fps * 1e9)
-    scheduled_anchor = None
+    scheduled_anchor_planner = ScheduledAnchorPlanner(
+        args.fps, args.scheduled_anchor_max_error_m
+    )
 
     def _handle_sigterm(signum, frame):
         print(
@@ -1416,11 +1554,24 @@ def main():
                     [item[1] for item in history_state_pairs], axis=0
                 )
             inference_started_ns = monotonic_ns()
-            action_anchor = (
-                scheduled_anchor
-                if policy.action_representation == "relative_chunk" and scheduled_anchor is not None
-                else policy_state_raw
-            )
+            action_anchor = None
+            action_anchor_info = None
+            if policy.action_representation == "relative_chunk":
+                if not head_origin.locked:
+                    # Never carry a scheduled row across a moving origin or
+                    # opening-heading estimate.
+                    scheduled_anchor_planner.reset()
+                action_anchor, action_anchor_info = scheduled_anchor_planner.select(
+                    policy_state_raw, state["timestamp_ns"]
+                )
+                if action_anchor_info["mode"] in (
+                    "actual_timing_reanchor", "actual_safety_reanchor"
+                ):
+                    print(
+                        f"[online_hat] HuMI {action_anchor_info['mode']}: "
+                        f"{action_anchor_info}",
+                        flush=True,
+                    )
             action = policy.infer(
                 images,
                 state,
@@ -1432,16 +1583,17 @@ def main():
                 action_anchor=action_anchor,
             )
             if policy.action_representation == "relative_chunk":
-                # relative_chunk row 0 is t+1.  After N executed frames, row N-1
-                # is therefore the scheduled pose at the next replan anchor.
-                anchor_row = min(args.replan_frames - 1, len(action) - 1)
-                scheduled_anchor = np.array(action[anchor_row], copy=True)
+                if head_origin.locked:
+                    scheduled_anchor_planner.update(action, state["timestamp_ns"])
+                else:
+                    scheduled_anchor_planner.reset()
             inference_finished_ns = monotonic_ns()
             chunk_generated_at_ns = monotonic_ns()
             chunk = action_chunk_to_targets(
                 action, state, args.fps, sequence_id, chunk_generated_at_ns,
                 wrist_conversion=args.wrist_frame_conversion,
                 position_origin_world=origin,
+                action_representation=policy.action_representation,
             )
             chunk_pub.send(chunk)
             if recorder is not None:
@@ -1467,6 +1619,8 @@ def main():
                     history_captured_ns=[
                         item["captured_ns"] for item in history_samples
                     ],
+                    action_anchor=action_anchor,
+                    action_anchor_info=action_anchor_info,
                 )
             sequence_id += 1
             next_replan_ns = now + replan_ns

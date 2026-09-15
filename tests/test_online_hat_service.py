@@ -18,6 +18,7 @@ from hdt.online_hat_service import (
     OnlineHATInputRecorder,
     OnlineHATPolicy,
     robot_state_to_policy_state,
+    ScheduledAnchorPlanner,
     TimedObservationHistory,
 )
 
@@ -62,6 +63,45 @@ def state():
 
 
 class OnlineHATServiceTest(unittest.TestCase):
+    def test_scheduled_anchor_uses_robot_state_time_not_fixed_replan_row(self):
+        planner = ScheduledAnchorPlanner(fps=30.0)
+        actual = np.zeros(128, dtype=np.float32)
+        action = np.repeat(actual[None], 20, axis=0)
+        action[:, C.OUTPUT_RIGHT_EEF[0]] = np.arange(20, dtype=np.float32)
+
+        first, first_info = planner.select(actual, 1_000_000_000)
+        np.testing.assert_array_equal(first, actual)
+        self.assertEqual(first_info["mode"], "actual_first")
+        planner.update(action, 1_000_000_000)
+
+        # 11 source frames elapsed, so row 10 (t+11) is the scheduled pose.
+        anchor, info = planner.select(actual, 1_366_666_667)
+        self.assertEqual(info["mode"], "scheduled")
+        self.assertEqual(info["scheduled_row"], 10)
+        self.assertEqual(anchor[C.OUTPUT_RIGHT_EEF[0]], 10.0)
+
+    def test_scheduled_anchor_safety_reanchors_to_actual(self):
+        planner = ScheduledAnchorPlanner(fps=30.0, max_position_error_m=0.10)
+        actual = np.zeros(128, dtype=np.float32)
+        action = np.repeat(actual[None], 20, axis=0)
+        action[:, C.OUTPUT_RIGHT_EEF[0]] = 0.11
+        planner.update(action, 1_000_000_000)
+
+        anchor, info = planner.select(actual, 1_333_333_333)
+        np.testing.assert_array_equal(anchor, actual)
+        self.assertEqual(info["mode"], "actual_safety_reanchor")
+        self.assertAlmostEqual(info["max_position_error_m"], 0.11, places=6)
+        self.assertEqual(info["scheduled_row"], 9)
+
+    def test_scheduled_anchor_timing_gap_reanchors_to_actual(self):
+        planner = ScheduledAnchorPlanner(fps=30.0)
+        actual = np.ones(128, dtype=np.float32)
+        planner.update(np.zeros((5, 128), dtype=np.float32), 1_000_000_000)
+
+        anchor, info = planner.select(actual, 2_000_000_000)
+        np.testing.assert_array_equal(anchor, actual)
+        self.assertEqual(info["mode"], "actual_timing_reanchor")
+
     def test_lossless_inference_record_links_image_state_and_action(self):
         with tempfile.TemporaryDirectory() as directory:
             run_dir = Path(directory) / "run"
@@ -84,6 +124,8 @@ class OnlineHATServiceTest(unittest.TestCase):
                 inference_started_ns=20,
                 inference_finished_ns=30,
                 chunk_generated_at_ns=31,
+                action_anchor=raw,
+                action_anchor_info={"mode": "actual_first"},
             )
             recorder.close()
 
@@ -104,6 +146,8 @@ class OnlineHATServiceTest(unittest.TestCase):
             np.testing.assert_allclose(
                 record["policy_state_normalized"], normalized
             )
+            np.testing.assert_allclose(record["action_anchor"], raw)
+            self.assertEqual(record["action_anchor_info"]["mode"], "actual_first")
 
     def test_state_ablation_range_reaches_the_built_model(self):
         # The mask is a checkpoint buffer, so dropping it here loads cleanly
@@ -296,9 +340,11 @@ class OnlineHATServiceTest(unittest.TestCase):
         result = action_chunk_to_targets(
             action, state(), 30.0, 9, 123,
             position_origin_world=origin,
+            action_representation="relative_chunk",
         )
         self.assertEqual(result["frame_count"], 64)
         self.assertEqual(result["source_state_sequence_id"], 4)
+        self.assertEqual(result["action_representation"], "relative_chunk")
         np.testing.assert_allclose(result["position_origin_world"], origin)
         np.testing.assert_allclose(result["left_fingertip_local"][0], left[1:])
         np.testing.assert_allclose(result["right_fingertip_local"][0], right[1:])
