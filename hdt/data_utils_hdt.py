@@ -470,11 +470,12 @@ class EpisodicDataset(torch.utils.data.Dataset):
         alpha = (positions - lo).astype(np.float32)[:, None]
         return block[lo - first] * (1.0 - alpha) + block[hi - first] * alpha
 
-    def _read_action_chunk(self, index, logical_ts, states, actions):
+    def _read_action_chunk(self, index, logical_ts, states, actions, *, anchor_override=None):
         """Return an unpadded action chunk and its current absolute anchor."""
         embodiment = self.source_embodiment_list[index]
         raw_start = self._raw_index(index, logical_ts)
-        anchor = np.asarray(states[raw_start], dtype=np.float32)
+        anchor = np.asarray(states[raw_start] if anchor_override is None
+                            else anchor_override, dtype=np.float32)
         remaining = int(self.episode_len_list[index]) - int(logical_ts)
 
         if self.action_representation == 'relative_chunk':
@@ -516,6 +517,11 @@ class EpisodicDataset(torch.utils.data.Dataset):
 
     @staticmethod
     def _finish_moments(accumulator):
+        """Return empirical statistics without inventing scale for constant channels.
+
+        Normalization already adds a numerical epsilon to its denominator;
+        the physical denormalization scale must remain the measured std.
+        """
         count = accumulator['count']
         if count == 0:
             raise ValueError("Cannot compute normalization statistics from zero rows")
@@ -527,7 +533,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
         else:
             variance = np.zeros_like(mean)
         std = np.sqrt(np.maximum(variance, 0.0))
-        return mean.astype(np.float32), np.maximum(std, 1e-2).astype(np.float32)
+        return mean.astype(np.float32), std.astype(np.float32)
 
     def get_norm_stats(self):
         if hasattr(self, 'norm_stats'):
@@ -605,6 +611,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
                 'qpos_std': qpos_std,
                 'action_representation': self.action_representation,
                 'robot_target_fps': self.robot_target_fps,
+                'normalization_std_policy': 'empirical_no_floor',
             })
 
         return norm_stats_dict, list(self.source_embodiment_list)
@@ -800,14 +807,16 @@ class EpisodicDataset(torch.utils.data.Dataset):
         else:
             root = h5py.File(single_hdf_path, 'r')
 
-        # Build the label from the clean current pose before lag augmentation.  Lag
-        # changes only what the policy observes; it must not move the demonstration
-        # trajectory or its HuMI anchor.
-        all_time_action, _ = self._read_action_chunk(
-            index, start_ts, root['observation.state'], root[self.action_str])
         qpos = root['observation.state'][raw_start_ts]
         if self.lag_aug is not None and self.train:
             qpos = self._apply_lag_aug(root, index, raw_start_ts, qpos)
+        # Keep the demonstrated absolute future unchanged, but express relative
+        # labels against the state actually supplied to the encoder/decoder.
+        # A clean-anchor label decoded from a wrist augmented 6cm backward
+        # misses every future target by 6cm even for a perfect predictor.
+        all_time_action, _ = self._read_action_chunk(
+            index, start_ts, root['observation.state'], root[self.action_str],
+            anchor_override=qpos)
 
         image_dict = dict()
         for cam_name in self.camera_names:

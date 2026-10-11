@@ -25,7 +25,10 @@ import torch
 import yaml
 
 import hdt.constants as C
-from hdt.action_representation import ACTION_REPRESENTATIONS, to_absolute_chunk
+from hdt.action_representation import (
+    ACTION_REPRESENTATIONS, POSE_BLOCKS, POINT_BLOCKS,
+    matrix_to_rotation_6d, rotation_6d_to_matrix, to_absolute_chunk,
+)
 from hdt.modeling.utils import make_visual_encoder
 
 
@@ -320,7 +323,7 @@ def _hand_base_to_g1_wrist(pos, quat_wxyz, side):
 
 def action_chunk_to_targets(action, source_state, fps, sequence_id, generated_at_ns,
                             wrist_conversion="none", position_origin_world=None,
-                            action_representation="original"):
+                            action_representation="original", frame_heading_world_wxyz=None):
     """Extract only the HAT fields consumed by online ScaleBFM."""
     if wrist_conversion not in WRIST_CONVERSION_MODES:
         raise ValueError(
@@ -377,6 +380,10 @@ def action_chunk_to_targets(action, source_state, fps, sequence_id, generated_at
     if position_origin_world is not None:
         fields["position_origin_world"] = np.asarray(
             position_origin_world, dtype=np.float32
+        )
+    if frame_heading_world_wxyz is not None:
+        fields["frame_heading_world_wxyz"] = np.asarray(
+            frame_heading_world_wxyz, dtype=np.float32
         )
     return make_hat_chunk(**fields)
 
@@ -713,8 +720,11 @@ def _act_config(config, chunk_size):
 class OnlineHATPolicy:
     def __init__(self, *, config_path, checkpoint, stats_path, embodiment,
                  device="cuda", state_tail="full", wrist_conversion="none",
-                 state_ood_limit=6.0):
+                 state_ood_limit=6.0, left_hand_state_mode="actual"):
         self.device = torch.device(device)
+        if left_hand_state_mode not in ("actual", "train_mean"):
+            raise ValueError("left_hand_state_mode must be actual or train_mean")
+        self.left_hand_state_mode = left_hand_state_mode
         if state_tail not in STATE_TAIL_MODES:
             raise ValueError(f"state_tail must be one of {STATE_TAIL_MODES}, got {state_tail!r}")
         if wrist_conversion not in WRIST_CONVERSION_MODES:
@@ -824,11 +834,25 @@ class OnlineHATPolicy:
             root_quat_mean_w=float(self.stats["qpos_mean"][103]),
             heading_quat_wxyz=heading_quat_wxyz,
         )
-        normalized = (
-            raw - self.stats["qpos_mean"]
-        ) / (self.stats["qpos_std"] + 1e-6)
+        normalized = self.normalize_policy_state(raw)
         self._check_state_in_distribution(raw, normalized)
         return raw.astype(np.float32), normalized.astype(np.float32)
+
+    def normalize_policy_state(self, raw):
+        """Normalize encoder input while preserving measured action anchors.
+
+        The single-arm dex5 bottle demonstrations have essentially constant
+        left fingertips. Live left fingertips can sit 8--9 sigma outside that
+        distribution and suppress the learned right-arm approach. The explicit
+        train_mean option changes only those encoder channels, never measured
+        poses, right fingertips, or the relative decoder's anchor.
+        """
+        normalized = (np.asarray(raw) - self.stats["qpos_mean"]) / (
+            self.stats["qpos_std"] + 1e-6)
+        if getattr(self, "left_hand_state_mode", "actual") == "train_mean":
+            normalized = normalized.copy()
+            normalized[..., C.OUTPUT_LEFT_KEYPOINTS] = 0.0
+        return normalized
 
     def _describe_state_dim(self, raw, masked, dim):
         return (
@@ -1157,10 +1181,23 @@ SCHEDULED_ANCHOR_POSITION_BLOCKS = (
     ("right_wrist", C.OUTPUT_RIGHT_EEF[:3]),
     ("waist", C.OUTPUT_WAIST[:3]),
 )
+RELATIVE_ANCHOR_MODES = ("scheduled", "actual", "real", "real_wrist")
 
 
 class ScheduledAnchorPlanner:
-    """Choose HuMI's inverse anchor from the previous absolute plan.
+    """Choose a relative decoder anchor from the plan or input observation.
+
+    ``actual`` snapshots the measured policy input before inference and never
+    carries a previous plan. ``scheduled`` preserves the previous plan path.
+    ``real`` decodes from that same input snapshot, then aligns the new and old
+    trajectories at the post-inference timestamp: positions carry over the new
+    prediction's own displacement from that timestamp. Wrist rotations use
+    the measured input attitude at the seam, so unexecuted rotations from the
+    previous plan do not accumulate. Other poses retain their plan alignment.
+    Wrist-local finger points keep the prediction decoded from measured input;
+    they never inherit the previous plan's finger targets in these real modes.
+    ``real_wrist`` uses the same alignment for the hands, but every head/root
+    target is the input observation's measured FK pose, including rotation.
 
     Relative chunk row zero represents ``t+1``. The next observation can be
     early or late because camera and inference latency vary, so its anchor is
@@ -1175,9 +1212,12 @@ class ScheduledAnchorPlanner:
     errors. Crossing the limit re-anchors this replan to actual state.
     """
 
-    def __init__(self, fps, max_position_error_m=0.0):
+    def __init__(self, fps, max_position_error_m=0.0, *, anchor_mode="scheduled"):
         self.fps = float(fps)
         self.max_position_error_m = float(max_position_error_m)
+        if anchor_mode not in RELATIVE_ANCHOR_MODES:
+            raise ValueError(f"anchor_mode must be one of {RELATIVE_ANCHOR_MODES}")
+        self.anchor_mode = anchor_mode
         if self.fps <= 0.0:
             raise ValueError(f"Scheduled-anchor fps must be positive, got {self.fps}")
         if self.max_position_error_m < 0.0:
@@ -1189,6 +1229,7 @@ class ScheduledAnchorPlanner:
     def reset(self):
         self.previous_action = None
         self.previous_source_timestamp_ns = None
+        self.previous_plan_epoch = None
 
     @staticmethod
     def _state_row(value, name):
@@ -1203,9 +1244,27 @@ class ScheduledAnchorPlanner:
     def _actual(actual, mode, **details):
         return np.array(actual, copy=True), {"mode": mode, **details}
 
-    def select(self, actual, source_timestamp_ns):
+    def select(self, actual, source_timestamp_ns, *, plan_active=True, plan_epoch=None):
         actual = self._state_row(actual, "actual anchor")
         source_timestamp_ns = int(source_timestamp_ns)
+        if self.anchor_mode == "actual":
+            # Snapshot the raw pose used to construct THIS inference input.
+            # Never read a newer RobotState after inference, or inherit any
+            # position/rotation from a previous predicted plan.
+            self.reset()
+            return self._actual(
+                actual, "actual_observation",
+                source_state_timestamp_ns=source_timestamp_ns,
+            )
+        if not plan_active:
+            self.reset()
+            return self._actual(actual, "actual_hold")
+        if plan_epoch != self.previous_plan_epoch:
+            self.reset()
+            self.previous_plan_epoch = plan_epoch
+        if self.anchor_mode in ("real", "real_wrist"):
+            return self._actual(actual, self.anchor_mode + "_observation",
+                                source_state_timestamp_ns=source_timestamp_ns)
         if self.previous_action is None:
             return self._actual(actual, "actual_first")
 
@@ -1241,7 +1300,119 @@ class ScheduledAnchorPlanner:
             return self._actual(actual, "actual_safety_reanchor", **details)
         return np.array(scheduled, copy=True), {"mode": "scheduled", **details}
 
-    def update(self, absolute_action, source_timestamp_ns):
+    def _sample_at(self, action, source_timestamp_ns, query_timestamp_ns):
+        """Interpolate a t+1-first chunk, holding endpoints outside its horizon.
+
+        Pose translations and local finger points use linear interpolation;
+        valid pose rotations use SLERP. The unused online neck rotation is
+        zero-filled, so it is excluded from rotation interpolation.
+        """
+        from scipy.spatial.transform import Rotation, Slerp
+
+        frame = np.clip(
+            (int(query_timestamp_ns) - int(source_timestamp_ns)) * 1e-9 * self.fps - 1,
+            0, len(action) - 1,
+        )
+        lo = int(np.floor(frame))
+        hi = min(lo + 1, len(action) - 1)
+        weight = float(frame - lo)
+        sampled = ((1 - weight) * action[lo] + weight * action[hi]).copy()
+        for indices in POSE_BLOCKS:
+            if np.array_equal(indices, C.OUTPUT_NECK):
+                continue
+            rotations = rotation_6d_to_matrix(action[[lo, hi]][:, indices[3:9]])
+            rotation = (rotations[0] if hi == lo else
+                        Slerp([0., 1.], Rotation.from_matrix(rotations))([weight]).as_matrix()[0])
+            sampled[indices[3:9]] = matrix_to_rotation_6d(rotation)
+        return sampled
+
+    def align_real(self, action, actual, source_timestamp_ns, alignment_timestamp_ns,
+                   *, plan_active=True):
+        """Align new predictions to the previous plan at one common timestamp.
+
+        Args:
+            action: Absolute chunk decoded from the input observation (N,128).
+            actual: That same input observation's policy state (128,).
+            source_timestamp_ns: Input observation time; row0 is one step later.
+            alignment_timestamp_ns: Post-inference time used for both trajectories.
+            plan_active: Whether to continue the accepted plan.
+
+        Returns:
+            Aligned chunk, target anchor, and recorder metadata. Published
+            positions follow p_old(t_a) + p_new(t) - p_new(t_a), matching the
+            world-frame position differences the labels are built from, and
+            wrist rotations follow R_actual @ inverse(R_new(t_a)) @ R_new(t).
+            R_actual is the input observation, not a post-inference measurement.
+            Other rotations retain the previous plan's seam attitude. Finger
+            points remain the decoded wrist-local prediction, with no rebasing
+            against the previous plan's finger targets.
+
+        Raises:
+            ValueError: If used in another mode or given malformed action data.
+        """
+        if self.anchor_mode not in ("real", "real_wrist"):
+            raise ValueError("align_real requires relative-anchor-mode real or real_wrist")
+        action = np.asarray(action, dtype=np.float32)
+        if action.ndim != 2 or action.shape[1] != C.ACTION_STATE_VEC_SIZE or not len(action):
+            raise ValueError("real action must be shaped (N,128) with N > 0")
+        if not np.isfinite(action).all():
+            raise ValueError("real action contains NaN or infinity")
+        actual = self._state_row(actual, "real observation")
+        source = self._sample_at(action, source_timestamp_ns, alignment_timestamp_ns)
+        has_previous = plan_active and self.previous_action is not None
+        target = (self._sample_at(self.previous_action, self.previous_source_timestamp_ns,
+                                  alignment_timestamp_ns) if has_previous else actual.copy())
+        for indices in (C.OUTPUT_LEFT_EEF, C.OUTPUT_RIGHT_EEF):
+            target[indices[3:9]] = actual[indices[3:9]]
+        aligned = action.copy()
+        for indices in POSE_BLOCKS:
+            displacement = action[:, indices[:3]] - source[indices[:3]]
+            aligned[:, indices[:3]] = target[indices[:3]] + displacement
+            if np.array_equal(indices, C.OUTPUT_NECK):
+                # This training-only pose has no measured online rotation.
+                continue
+            # The seam is a pure translation on position. `to_relative_chunk`
+            # stores positions as plain world-frame differences, so this chunk's
+            # own displacement from its alignment sample is already expressed in
+            # the frame the plan lives in. Rotating it by the seam attitude error
+            # would only be right for HuMI's anchor-local position representation
+            # (inv(T_current) @ T_future); here it steers the published motion by
+            # however much the old plan's and the new prediction's attitudes
+            # disagree, which reached 167 deg of seam error and turned reaching
+            # into 135 deg of wrong-direction travel on 2026-10-05.
+            rotation = (rotation_6d_to_matrix(target[indices[3:9]]) @
+                        rotation_6d_to_matrix(source[indices[3:9]]).T)
+            aligned[:, indices[3:9]] = matrix_to_rotation_6d(
+                rotation @ rotation_6d_to_matrix(action[:, indices[3:9]]))
+        for indices in POINT_BLOCKS:
+            # The decoder already added this observation's measured local
+            # points. Carrying the old finger plan here integrates unexecuted
+            # shape changes and can move targets far outside the hand workspace.
+            # Keep the decoded points and report their unchanged seam sample.
+            target[indices] = source[indices]
+        if self.anchor_mode == "real_wrist":
+            # These are already in the same policy frame as the wrist plan.
+            # Use pure measured FK poses, not actual + predicted displacement.
+            # Store this published plan too, so torso predictions never persist.
+            for indices in (C.OUTPUT_HEAD_EEF, C.OUTPUT_WAIST):
+                aligned[:, indices] = actual[indices]
+                target[indices] = actual[indices]
+        return aligned, target, {
+            "mode": self.anchor_mode + ("" if has_previous else "_first" if plan_active else "_hold"),
+            "alignment_timestamp_ns": int(alignment_timestamp_ns),
+            "source_state_timestamp_ns": int(source_timestamp_ns),
+            "new_alignment_frame": float(
+                (int(alignment_timestamp_ns) - int(source_timestamp_ns)) * 1e-9 * self.fps - 1),
+            "previous_source_timestamp_ns": self.previous_source_timestamp_ns if has_previous else None,
+            "new_alignment_state": source.tolist(),
+            "wrist_rotation_anchor": "measured_input",
+            "finger_point_anchor": "decoded_prediction",
+        }
+
+    def update(self, absolute_action, source_timestamp_ns, *, plan_active=True):
+        if self.anchor_mode == "actual" or not plan_active:
+            self.reset()
+            return
         action = np.asarray(absolute_action, dtype=np.float32)
         if action.ndim != 2 or action.shape[1:] != (C.ACTION_STATE_VEC_SIZE,):
             raise ValueError(
@@ -1313,12 +1484,28 @@ def main():
         help="disable automatic lossless recording of HAT inputs and outputs",
     )
     parser.add_argument(
+        "--left-hand-state-mode", choices=("actual", "train_mean"), default="actual",
+        help="encoder input only: train_mean uses the checkpoint mean for left "
+             "finger keypoints in single-arm tasks; measured poses and decoding "
+             "anchors remain actual",
+    )
+    parser.add_argument(
         "--state-ood-limit", type=float, default=10.0,
         help="refuse to start when any policy state dim is further than this "
              "many standard deviations from the checkpoint's training mean. The "
              "default clears the online hand keypoints (~8 sigma today) while "
              "still catching the encoder-saturating class; the worst dims are "
              "printed on startup either way",
+    )
+    parser.add_argument(
+        "--relative-anchor-mode", choices=RELATIVE_ANCHOR_MODES, default="scheduled",
+        help="relative_chunk only: 'scheduled' continues the previous plan; "
+             "'actual' decodes each prediction from the measured pose in its "
+             "own input observation; 'real' aligns new and old trajectories at "
+             "the same post-inference time, retaining planned positions but "
+             "anchoring wrist rotations to the measured input pose and keeping "
+             "decoded wrist-local finger targets without plan inheritance; "
+             "'real_wrist' keeps that hand plan but uses measured FK head/root poses",
     )
     parser.add_argument(
         "--scheduled-anchor-max-error-m", type=float, default=0.0,
@@ -1390,9 +1577,12 @@ def main():
         state_tail=args.state_tail,
         wrist_conversion=args.wrist_frame_conversion,
         state_ood_limit=args.state_ood_limit,
+        left_hand_state_mode=args.left_hand_state_mode,
     )
     print(f"[online_hat] action representation: {policy.action_representation}", flush=True)
     if policy.action_representation == "relative_chunk":
+        print(f"[online_hat] relative anchor mode: {args.relative_anchor_mode}", flush=True)
+    if policy.action_representation == "relative_chunk" and args.relative_anchor_mode == "scheduled":
         print(
             "[online_hat] scheduled-anchor safety: "
             + (
@@ -1412,6 +1602,7 @@ def main():
             "image_source": args.image_source,
             "camera_names": list(policy.camera_names),
             "state_tail": args.state_tail,
+            "left_hand_state_mode": args.left_hand_state_mode,
             "origin_frames": args.origin_frames,
             "heading_frame": args.heading_frame,
             "wrist_frame_conversion": args.wrist_frame_conversion,
@@ -1420,6 +1611,7 @@ def main():
             "history_offsets": list(policy.history_offsets),
             "history_fps": policy.history_fps,
             "action_representation": policy.action_representation,
+            "relative_anchor_mode": args.relative_anchor_mode,
             "scheduled_anchor_max_error_m": args.scheduled_anchor_max_error_m,
         }
         if args.record_dir is None:
@@ -1481,7 +1673,8 @@ def main():
     next_replan_ns = 0
     replan_ns = int(args.replan_frames / args.fps * 1e9)
     scheduled_anchor_planner = ScheduledAnchorPlanner(
-        args.fps, args.scheduled_anchor_max_error_m
+        args.fps, args.scheduled_anchor_max_error_m,
+        anchor_mode=args.relative_anchor_mode,
     )
 
     def _handle_sigterm(signum, frame):
@@ -1562,7 +1755,9 @@ def main():
                     # opening-heading estimate.
                     scheduled_anchor_planner.reset()
                 action_anchor, action_anchor_info = scheduled_anchor_planner.select(
-                    policy_state_raw, state["timestamp_ns"]
+                    policy_state_raw, state["timestamp_ns"],
+                    plan_active=state.get("reference_plan_active", False),
+                    plan_epoch=state.get("reference_plan_epoch"),
                 )
                 if action_anchor_info["mode"] in (
                     "actual_timing_reanchor", "actual_safety_reanchor"
@@ -1582,9 +1777,18 @@ def main():
                 normalized_history_states=history_state_normalized,
                 action_anchor=action_anchor,
             )
+            if (policy.action_representation == "relative_chunk"
+                    and args.relative_anchor_mode in ("real", "real_wrist")):
+                action, action_anchor, action_anchor_info = scheduled_anchor_planner.align_real(
+                    action, policy_state_raw, state["timestamp_ns"], monotonic_ns(),
+                    plan_active=state.get("reference_plan_active", False),
+                )
             if policy.action_representation == "relative_chunk":
                 if head_origin.locked:
-                    scheduled_anchor_planner.update(action, state["timestamp_ns"])
+                    scheduled_anchor_planner.update(
+                        action, state["timestamp_ns"],
+                        plan_active=state.get("reference_plan_active", False),
+                    )
                 else:
                     scheduled_anchor_planner.reset()
             inference_finished_ns = monotonic_ns()
@@ -1594,6 +1798,9 @@ def main():
                 wrist_conversion=args.wrist_frame_conversion,
                 position_origin_world=origin,
                 action_representation=policy.action_representation,
+                frame_heading_world_wxyz=(
+                    heading if heading is not None else [1.0, 0.0, 0.0, 0.0]
+                ) if policy.action_representation == "relative_chunk" else None,
             )
             chunk_pub.send(chunk)
             if recorder is not None:

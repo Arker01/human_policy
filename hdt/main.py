@@ -393,7 +393,7 @@ def main(args, base_dir, processed_dir=None):
               f"clip={lag_aug_config['offset_clip_m'] * 100:.1f} cm")
         print(f"  Finger-wrist desync prob: {lag_aug_config['finger_prob']} "
               f"finger lag = U(0, {lag_aug_config['finger_scale']}) x wrist lag")
-        print("  Action-chunk labels are NOT perturbed.")
+        print("  Absolute demonstration targets are unchanged; relative labels use the augmented input anchor.")
 
     # ---- Visual localization augmentation (disabled by default) ----
     visual_aug_config = None
