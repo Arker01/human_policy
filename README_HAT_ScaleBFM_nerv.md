@@ -367,3 +367,34 @@ HAT 记录里的 `action_anchor` 也不是经过 RTC、混合或腕补偿后的�
 
 
 所以你最关心的两个“知道不知道”，目前答案是：它不知道手是否真正包围了瓶子，也不知道瓶子是否真正抓住了；它现在用预测入口决定何时允许收紧，用手指反馈决定收紧是否完成。
+
+### 1011 在线 FOCUS 入口/出口 A/B 参数
+
+修改前代码已保存：ScaleBFM `a6bbf3e`，human_policy `4f8fe3a`。
+在上面的 ScaleBridge 启动命令里保留 `env.config.focus_handoff_enabled=true`，
+再加下面其中一个参数，重启 ScaleBridge 后生效：
+
+```bash
+# A：保存的原入口、原出口（默认）
+env.config.focus_handoff_version=legacy
+# B：新入口、去掉预测目标接近判据的出口
+env.config.focus_handoff_version=v2
+```
+
+这个开关是在线交接逻辑的版本，与上面的 ScaleBFM 训练标签“新/旧 focus”分开。
+做对比时保持 HAT/ScaleBFM 权重、`focus_handoff_finger_mode` 和其余参数一致。
+
+v2 抓取入口要求：chunk 第一帧至少两个弯曲通道预测 action ≤ 0.9，
+且比实测 action 小至少 0.03；前 0.3 秒至少两个通道继续减小 action ≥ 0.05；
+预测手腕从第一帧到 0.3 秒的位移 ≤ 1.2 cm；至少两个连续 chunk 序号均满足，
+并通过原来的入口姿态一致性检查。仍需实际手腕距入口 ≤ 3 cm、角度差 ≤ 10°，
+等待到位后的新状态 chunk，才解锁。这里仍没有视觉确认瓶子已进入手掌。
+
+v2 抓取完成只保留实测判据：至少两个弯曲通道从到位基线继续收紧 ≥ 0.05，
+并达到 action ≤ 0.5，连续保持 1 秒；删除“距预测目标 ≤ 0.12 就结束”的捷径。
+松手仍要求实测开度阈值（closure < 0.45，即 action > 0.55）及实际运动，
+也不使用预测目标接近捷径。原 5 秒超时保留，记录为 `timeout`，不算完成。
+保持时间与超时仍可用已有参数调整。
+
+启动日志打印 `FOCUS handoff version: legacy/v2`；
+`wrist_compensation_trace.jsonl` 的 `focus_handoff_hands` 中记录每只手的 `version`。
