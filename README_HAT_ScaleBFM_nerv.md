@@ -398,3 +398,29 @@ v2 抓取完成只保留实测判据：至少两个弯曲通道从到位基线�
 
 启动日志打印 `FOCUS handoff version: legacy/v2`；
 `wrist_compensation_trace.jsonl` 的 `focus_handoff_hands` 中记录每只手的 `version`。
+
+### 1012 右手腕轨迹段 continuity 对比
+
+在 ScaleBridge 命令里替换原来的 `chunk_start_reference_continuity` 参数，
+重启 ScaleBridge 后生效：
+
+```bash
+# 原有全身位置/姿态/局部速度选帧，保留原实现
+env.config.chunk_start_reference_continuity=true
+# 新增右腕轨迹段进度匹配
+env.config.chunk_start_reference_continuity=trajectory
+```
+
+新选项匹配上一 chunk 已消耗的原始右腕 XYZ、姿态和速度序列，
+在新 chunk 找到同样时长的轨迹段，从其末尾继续；接入点锚定当前下发参考。
+匹配使用 RTC/锚定之前的原始预测，避免把平滑后的停滞当作预测进度。
+扫描可用预测段，不受旧 `continuity_search_ahead_s=1.0` 限制，
+保留至少 0.5 秒（或 `chunk_end_margin_s`）后续轨迹。
+缺少历史或匹配差于 3 cm 位置 RMS / 10° 姿态 RMS 时，该次回退原选帧方式。
+已有 FOCUS 到位、解锁、结束逻辑保持各自版本；FOCUS 接管时使用原接管路径。
+
+FOCUS 参数仍可独立选 `env.config.focus_handoff_version=legacy` 或 `v2`。
+对比时只切换上述 continuity 参数，权重和其余参数保持一致。
+新选项生效的换段日志显示 `trajectory_continuity`；
+`online_hat_chunks.jsonl` 中 `aligned.execution_alignment.trajectory_match`
+记录历史区间、匹配区间和误差。它改善参考接续，不保证实际手腕消除跟踪误差。
