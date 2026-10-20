@@ -6,7 +6,6 @@ common:
   action_chunk_size: 100
   camera_names:
   - top
-  chunk_fps: 30.0
 model:
   enc_layers: 4
   dec_layers: 7
