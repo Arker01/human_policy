@@ -244,3 +244,26 @@ BEST_CKPT_ab4_nostate
 
 # Perturbation-suite raw output
 perturb_*.json
+
+# Local experiment plans, manifests, reports, and packaged checkpoints
+/experiments/
+/eval/
+/BEST_CKPT*
+/human_policy_src.tar.gz*
+/ph2d_render/
+/ph2d_render_preview/
+/data/sonic_real_teleop_*/
+
+# Machine-specific dataset manifests (keep reusable hdt/configs JSON files)
+/mix_bottle_0907*.json
+/fruitpick.json
+
+# One-off launchers tied to local episodes, GPU assignments, and mount paths
+/scripts/train/bottle_0907_*.sh
+/scripts/train/bottle_0908_aug6.sh
+/scripts/eval/mpjpe_all16.sh
+/scripts/preprocess/stage_bottle_0907.sh
+/scripts/open_robot_data.sh
+
+# Local deployment notes are maintained in docs/DEPLOYMENT_PARAMETERS.md
+/new_para.md

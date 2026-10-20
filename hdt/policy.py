@@ -38,6 +38,12 @@ class ACTPolicy(nn.Module):
         env_state = None
             
         image = self.transform(image)
+        # History frames must go through the SAME resize+normalize as the current
+        # frame, or the trunk sees two different image distributions and the extra
+        # slots are noise. Copied rather than mutated so the caller's dict is intact.
+        if conditioning_dict is not None and 'hist_image' in conditioning_dict:
+            conditioning_dict = dict(conditioning_dict)
+            conditioning_dict['hist_image'] = self.transform(conditioning_dict['hist_image'])
         future_image_transformed = None
         if future_image is not None:
             future_image_transformed = self.transform(future_image)

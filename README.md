@@ -17,6 +17,10 @@
 <img src="./repo_assets/dataset_viz.webp" width="80%"/>
 </p>
 
+> **要训自己的数据 / 新任务？看 [TRAINING.md](./TRAINING.md)** —— 目前推荐的三个配置、
+> 数据格式要求、训练与评估命令、默认 30fps、HuMI 和 lag/vis 用法、以及已经证伪的分支都在那里。
+> 下面这段 2026-07 的记录只是历史，配置已被后续几轮实验取代。
+
 ## Introduction
 
 This repository contains the codebase for the paper "Humanoid Policy ~ Human Policy".

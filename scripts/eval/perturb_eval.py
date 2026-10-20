@@ -27,6 +27,7 @@ sys.path.insert(0, REPO)
 sys.path.insert(0, os.path.join(REPO, "data"))
 import plot_keypoints_ys as P
 from hdt.modeling.utils import make_visual_encoder
+from hdt.action_representation import to_absolute_chunk
 
 DEV = "cuda"
 STRIDE = 3           # subsample frames; ~84 per episode is plenty
@@ -118,26 +119,44 @@ def run_ckpt(name, ckpt_dir, cfg, val_dir, ckpt_file="policy_last.ckpt"):
             s = ns[str(root.attrs.get("embodiment", "dex5"))]
             qm, qs = s["qpos_mean"].astype(np.float32), s["qpos_std"].astype(np.float32)
             am, ast = s["action_mean"].astype(np.float32), s["action_std"].astype(np.float32)
+            action_representation = str(s.get("action_representation", "original"))
+            target_offset = 1 if action_representation == "relative_chunk" else 0
             states, gt_act = root["observation.state"][()], root["action"][()]
+            source_fps = float(root.attrs.get("fps", 30.0))
+            target_fps_value = s.get("robot_target_fps", 30.0)
+            target_fps = 30.0 if target_fps_value is None else float(target_fps_value)
+            embodiment = str(root.attrs.get("embodiment", "default")).lower()
+            if "human" not in embodiment and source_fps > target_fps + 1e-6:
+                step = source_fps / target_fps
+                count = max(1, int(np.floor(len(states) / step)))
+                frame_indices = np.rint(np.arange(count) * step).astype(np.int64)
+                frame_indices = np.unique(np.clip(frame_indices, 0, len(states) - 1))
+            else:
+                frame_indices = np.arange(len(states), dtype=np.int64)
             cams = [k[len("observation.image."):] for k in root if k.startswith("observation.image.")]
             images = root[f"observation.image.{'top' if 'top' in cams else cams[0]}"]
-            start = P._detect_valid_start_from_actions(gt_act, check_frames=20,
+            start = P._detect_valid_start_from_actions(gt_act[frame_indices], check_frames=20,
                                                        jump_threshold_m=0.3, settle_frames=0)
-            for t in range(start, states.shape[0], STRIDE):
+            for logical_t in range(start, len(frame_indices) - target_offset, STRIDE):
+                t = int(frame_indices[logical_t])
+                target_t = int(frame_indices[logical_t + target_offset])
                 img = images[t]
                 if img.ndim == 1:
                     img = cv2.cvtColor(cv2.imdecode(img, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
                 if img.shape[0] != 240 or img.shape[1] != 320:
                     img = cv2.resize(img, (320, 240))
                 q = torch.from_numpy((states[t].astype(np.float32) - qm) / (qs + 1e-6)).unsqueeze(0).to(DEV)
-                gtj = joints(gt_act[t])
+                gtj = joints(gt_act[target_t])
                 rs = np.random.RandomState(t)   # same noise draw across checkpoints
                 for pname, fn in PERTURBS:
                     pim = fn(img, rs if pname in ("background", "noise", "compound") else rs)
                     it = prep(pim.transpose(2, 0, 1)[None].astype(np.uint8)).unsqueeze(0).to(DEV)
                     with torch.no_grad():
                         a = policy(it, q, conditioning_dict=None)[0, 0].cpu().numpy()
-                    pj = joints(a * (ast + 1e-6) + am)
+                    a = a * (ast + 1e-6) + am
+                    if action_representation == "relative_chunk":
+                        a = to_absolute_chunk(states[t].astype(np.float32), a)
+                    pj = joints(a)
                     e = np.linalg.norm(pj - gtj, axis=1).mean()
                     err[pname].append(e)
                     ep[pname].append(e)

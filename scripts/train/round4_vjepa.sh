@@ -23,7 +23,7 @@ PY=/home/aigc/miniconda/envs/human_policy/bin/python
 BASE_DIR=/home/aigc/human_policy/data
 MIXED=/home/aigc/human_policy/pickup_pillow_mixed_1to1.json
 CFG_DIR=hdt/configs/models
-CKPT_ROOT=/mnt/nvme0n1/human_policy_ckpt
+CKPT_ROOT=/mnt/nvme1n1/human_policy_ckpt
 mkdir -p logs/round4 "$CKPT_ROOT"
 
 # Same guard as round 2: a half-written 2.8GB VAE mid-run is a confusing failure.

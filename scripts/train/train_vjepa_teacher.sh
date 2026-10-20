@@ -23,7 +23,7 @@ set -uo pipefail
 
 cd /home/aigc/human_policy
 PY=/home/aigc/miniconda/envs/human_policy/bin/python
-CKPT_ROOT=/mnt/nvme0n1/human_policy_ckpt
+CKPT_ROOT=/mnt/nvme1n1/human_policy_ckpt
 
 gpu="${1:-0}"
 exptid="${2:-vj0_mixed_w1.0_h45_vjepa}"

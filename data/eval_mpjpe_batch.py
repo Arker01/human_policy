@@ -16,6 +16,7 @@ if str(_HDT_DIR) not in sys.path:
     sys.path.insert(0, str(_HDT_DIR))
 
 import hdt.constants as C
+from hdt.action_representation import to_absolute_chunk
 
 
 def _transform_points(points: np.ndarray, transform_mat: np.ndarray) -> np.ndarray:
@@ -219,21 +220,25 @@ def _to_numpy(x) -> np.ndarray:
         return x.detach().cpu().numpy()
     return np.asarray(x)
 
+
+def _stats_value(x):
+    return x if isinstance(x, str) or x is None else _to_numpy(x)
+
 def _load_norm_stats(stats_path: Path, embodiment: str | None) -> dict:
     with open(stats_path, "rb") as f:
         stats = pickle.load(f)
     if isinstance(stats, dict) and "qpos_mean" in stats:
-        return {k: _to_numpy(v) for k, v in stats.items()}
+        return {k: _stats_value(v) for k, v in stats.items()}
     if isinstance(stats, dict) and embodiment is not None and embodiment in stats:
-        return {k: _to_numpy(v) for k, v in stats[embodiment].items()}
+        return {k: _stats_value(v) for k, v in stats[embodiment].items()}
     if isinstance(stats, dict) and embodiment is not None:
         emb = embodiment.encode() if isinstance(next(iter(stats.keys())), bytes) else embodiment
         if emb in stats:
-            return {k: _to_numpy(v) for k, v in stats[emb].items()}
+            return {k: _stats_value(v) for k, v in stats[emb].items()}
     if isinstance(stats, dict):
         first = next(iter(stats.values()))
         if isinstance(first, dict):
-            return {k: _to_numpy(v) for k, v in first.items()}
+            return {k: _stats_value(v) for k, v in first.items()}
     raise ValueError(f"Unsupported stats format: {type(stats)}")
 
 def _make_act_policy(model_yaml: Path, ckpt_path: Path, *, device: str) -> tuple[object, dict]:
@@ -290,7 +295,7 @@ def _predict_actions_for_episode(
     camera_names: list[str],
     device: str,
     max_steps: int | None,
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     import torch
 
     with h5py.File(episode_path, "r") as f:
@@ -298,17 +303,32 @@ def _predict_actions_for_episode(
             raise ValueError(f"No camera data available in {episode_path}")
         
         states = f["observation.state"][()]
-        T = int(states.shape[0])
+        raw_length = int(states.shape[0])
+        embodiment = str(f.attrs.get("embodiment", "default")).lower()
+        source_fps = float(f.attrs.get("fps", 30.0))
+        target_fps_value = stats.get("robot_target_fps", 30.0)
+        target_fps = 30.0 if target_fps_value is None else float(target_fps_value)
+        if "human" not in embodiment and source_fps > target_fps + 1e-6:
+            step = source_fps / target_fps
+            count = max(1, int(np.floor(raw_length / step)))
+            frame_indices = np.rint(np.arange(count) * step).astype(np.int64)
+            frame_indices = np.unique(np.clip(frame_indices, 0, raw_length - 1))
+        else:
+            frame_indices = np.arange(raw_length, dtype=np.int64)
         if max_steps is not None:
-            T = min(T, int(max_steps))
+            frame_indices = frame_indices[:int(max_steps)]
 
         qpos_mean = stats["qpos_mean"].reshape(1, -1)
         qpos_std = stats["qpos_std"].reshape(1, -1)
         act_mean = stats["action_mean"].reshape(1, -1)
         act_std = stats["action_std"].reshape(1, -1)
+        action_representation = str(stats.get("action_representation", "original"))
+        prediction_offset = 1 if action_representation == "relative_chunk" else 0
+        observation_indices = frame_indices[:len(frame_indices) - prediction_offset]
+        target_indices = frame_indices[prediction_offset:]
 
-        pred = np.zeros((T, states.shape[1]), dtype=np.float32)
-        for t in range(T):
+        pred = np.zeros((len(observation_indices), states.shape[1]), dtype=np.float32)
+        for output_index, t in enumerate(observation_indices):
             imgs = []
             for cam in camera_names:
                 key = f"observation.image.{cam}"
@@ -342,9 +362,11 @@ def _predict_actions_for_episode(
             a_hat = policy(imgs_t, qpos_t, conditioning_dict=conditioning_dict)
             a0 = a_hat[0, 0].detach().float().cpu().numpy().astype(np.float32)
             a0 = a0 * act_std.reshape(-1) + act_mean.reshape(-1)
-            pred[t] = a0
+            if action_representation == "relative_chunk":
+                a0 = to_absolute_chunk(states[t].astype(np.float32), a0)
+            pred[output_index] = a0
 
-    return pred
+    return pred, target_indices
 
 
 def main() -> None:
@@ -415,7 +437,7 @@ def main() -> None:
                 emb = str(emb) if emb is not None else None
             stats = _load_norm_stats(stats_path, emb)
             try:
-                pred_actions = _predict_actions_for_episode(
+                pred_actions, target_indices = _predict_actions_for_episode(
                     policy,
                     gt_path,
                     stats=stats,
@@ -430,7 +452,7 @@ def main() -> None:
                     continue
                 raise
             with h5py.File(gt_path, "r") as f_gt:
-                gt_actions = f_gt["action"][()]
+                gt_actions = f_gt["action"][target_indices]
             metrics = eval_arrays_mpjpe(
                 gt_actions, pred_actions,
                 dirty_start_check_frames=args.dirty_start_check_frames,

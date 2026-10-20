@@ -27,7 +27,7 @@ cd /home/aigc/human_policy
 PY=/home/aigc/miniconda/envs/human_policy/bin/python
 BASE_DIR=/home/aigc/human_policy/data
 CFG_DIR=hdt/configs/models
-CKPT_ROOT=/mnt/nvme0n1/human_policy_ckpt
+CKPT_ROOT=/mnt/nvme1n1/human_policy_ckpt
 FLOW_DIR=/mnt/nvme0n1/human_policy_ckpt/flow_target_bottle
 mkdir -p logs/bottle_mix "$CKPT_ROOT"
 

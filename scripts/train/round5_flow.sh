@@ -18,7 +18,7 @@ PY=/home/aigc/miniconda/envs/human_policy/bin/python
 BASE_DIR=/home/aigc/human_policy/data
 MIXED=/home/aigc/human_policy/pickup_pillow_mixed_1to1.json
 CFG_DIR=hdt/configs/models
-CKPT_ROOT=/mnt/nvme0n1/human_policy_ckpt
+CKPT_ROOT=/mnt/nvme1n1/human_policy_ckpt
 FLOW_DIR=/mnt/nvme0n1/human_policy_ckpt/flow_target_dex5
 mkdir -p logs/round5 "$CKPT_ROOT"
 

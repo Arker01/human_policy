@@ -16,6 +16,7 @@ import torchvision.transforms.v2
 from hdt.constants import *
 
 import hdt.inference_utils
+from hdt.action_representation import ACTION_REPRESENTATIONS, convert_action_chunk
 
 EARLY_JUMP_CHECK_SLICES = (
     OUTPUT_HEAD_EEF[0:3],
@@ -91,7 +92,12 @@ class EpisodicDataset(torch.utils.data.Dataset):
                  flow_target_enabled=False,
                  flow_target_dir=None,
                  flow_grid_hw=(30, 40),
-                 flow_horizon=100):
+                 flow_horizon=100,
+                 history_offsets=None,
+                 lag_aug_config=None,
+                 visual_aug_config=None,
+                 action_representation="original",
+                 robot_target_fps=30.0):
         super(EpisodicDataset).__init__()
         # Future-DINO: when disabled (default) every code path below is byte-for-byte
         # the original one and read_one() still returns the original 5-tuple.
@@ -117,6 +123,13 @@ class EpisodicDataset(torch.utils.data.Dataset):
         if self.flow_target_enabled:
             assert self.flow_target_dir and os.path.isdir(self.flow_target_dir), \
                 f"flow_target_dir not found: {self.flow_target_dir}"
+
+        # ---- Real observation history (disabled by default) ----
+        # Offsets are frames on the common logical 30fps timeline and are NOT scaled
+        # by slow_down_factor. Thus [5, 10] means 0.17s/0.33s ago for both a native
+        # 30fps episode and robot teleop resampled online from 50fps.
+        self.history_offsets = [int(o) for o in (history_offsets or [])]
+        self.history_enabled = len(self.history_offsets) > 0
         self.camera_names = camera_names
         self.train = train
         self.data_config = data_config
@@ -126,6 +139,16 @@ class EpisodicDataset(torch.utils.data.Dataset):
         self.visual_preprocessor = visual_preprocessor
         self.chunk_size = chunk_size  # action length (e.g., chunk size)
         self.action_str = 'old_action' if control_mode == 'qpos' else 'action'
+        self.action_representation = str(action_representation)
+        if self.action_representation not in ACTION_REPRESENTATIONS:
+            raise ValueError(
+                f"action_representation must be one of {ACTION_REPRESENTATIONS}, "
+                f"got {self.action_representation!r}")
+        self.robot_target_fps = (
+            None if robot_target_fps is None else float(robot_target_fps)
+        )
+        if self.robot_target_fps is not None and self.robot_target_fps <= 0:
+            raise ValueError("robot_target_fps must be positive or None")
 
         self.predict_delta_action = False
         self.augment_action_space = False
@@ -140,8 +163,12 @@ class EpisodicDataset(torch.utils.data.Dataset):
         self.dirty_start_check_frames = int(dirty_start_check_frames)
         self.dirty_start_jump_threshold_m = float(dirty_start_jump_threshold_m)
         self.dirty_start_settle_frames = int(dirty_start_settle_frames)
+        self.source_fps_list, self.source_embodiment_list = self._read_episode_metadata()
         self.valid_start_list = self._compute_valid_start_list()
-        self.episode_len_list = np.maximum(self.raw_episode_len_list - self.valid_start_list, 1)
+        self.episode_frame_indices = self._build_episode_frame_indices()
+        self.episode_len_list = np.asarray(
+            [max(1, len(indices) - (self.action_representation == 'relative_chunk'))
+             for indices in self.episode_frame_indices], dtype=np.int64)
         self.cumulative_len = np.cumsum(self.episode_len_list)
 
         self.sum_dataset_len_l = np.cumsum([0] + [np.sum(episode_len) for episode_len in self.episode_len_list])
@@ -182,10 +209,51 @@ class EpisodicDataset(torch.utils.data.Dataset):
                         self.cached_hdf_dict[single_hdf_path][self.action_str] =  root[self.action_str][()]
                         self.cached_hdf_dict[single_hdf_path]['attrs'] = {k: v for k, v in root.attrs.items()}
         
-        self.training_transforms = torchvision.transforms.v2.Compose([
-            torchvision.transforms.v2.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
-            # torchvision.transforms.v2.GaussianBlur(kernel_size=(9,9), sigma=(0.1,2.0)),
-        ])
+        # ---- Execution-lag state augmentation (disabled by default) ----
+        # Perturbs the INPUT wrist state only; the action chunk label is untouched.
+        # Teaches "the wrist is behind the plan -> keep pushing it to the bottle mouth
+        # and close" instead of reading the current position as part of the plan.
+        # Train split only, so val/loss stays comparable to the un-augmented runs.
+        self.lag_aug = dict(lag_aug_config) if lag_aug_config else None
+        if self.lag_aug is not None:
+            assert not self.history_enabled, (
+                "lag_aug perturbs the current state only; the un-perturbed history "
+                "states would let the trunk extrapolate the true current wrist pose "
+                "and undo the augmentation. Decide how history should lag first.")
+            # Right arm is the manipulator in this task: OUTPUT_RIGHT_EEF is 3 pos + 6D
+            # rot, OUTPUT_RIGHT_KEYPOINTS are palm-LOCAL fingertips, which is why the
+            # finger block can be desynced from the wrist without contradicting it.
+            _w0 = int(OUTPUT_RIGHT_EEF[0])
+            self.lag_wrist_pos_slice = slice(_w0, _w0 + 3)
+            self.lag_wrist_slice = slice(_w0, int(OUTPUT_RIGHT_EEF[-1]) + 1)
+            self.lag_finger_slice = slice(int(OUTPUT_RIGHT_KEYPOINTS[0]),
+                                          int(OUTPUT_RIGHT_KEYPOINTS[-1]) + 1)
+
+        # ---- Visual localization augmentation (disabled by default) ----
+        # RandomResizedCrop back to the SAME resolution, so every shape downstream
+        # (backbone input, DINO patch grid) is unchanged. The random crop window gives
+        # the translation jitter for free, without the black borders a pad-based shift
+        # would introduce.
+        self.visual_aug = dict(visual_aug_config) if visual_aug_config else None
+        if self.visual_aug is not None:
+            assert not self.flow_target_enabled, (
+                "visual_aug crops the frame but the flow target is precomputed on a "
+                "fixed image-space anchor grid; the two would silently disagree.")
+
+        _train_tf = []
+        if self.visual_aug is not None:
+            _h, _w = (int(self.data_config["image_resolution_hw"][0]),
+                      int(self.data_config["image_resolution_hw"][1]))
+            _train_tf.append(torchvision.transforms.v2.RandomResizedCrop(
+                size=(_h, _w),
+                scale=tuple(self.visual_aug["scale"]),
+                ratio=tuple(self.visual_aug["ratio"]),
+                antialias=True,
+            ))
+        _train_tf.append(
+            torchvision.transforms.v2.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4))
+        # torchvision.transforms.v2.GaussianBlur(kernel_size=(9,9), sigma=(0.1,2.0)),
+        self.training_transforms = torchvision.transforms.v2.Compose(_train_tf)
 
         self.norm_stats, self.embodiment_list = self.get_norm_stats()
 
@@ -198,6 +266,85 @@ class EpisodicDataset(torch.utils.data.Dataset):
         empty_lang_embed_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "empty_lang_embed.pt")
         empty_lang_embedding = torch.load(empty_lang_embed_path, weights_only=True).float()
         self.cached_lang_embedding_dict[''] = empty_lang_embedding
+
+    @staticmethod
+    def _infer_embodiment(path, value):
+        if isinstance(value, bytes):
+            value = value.decode()
+        embodiment = str(value)
+        if embodiment == 'default':
+            lower = path.lower()
+            if 'human' in lower:
+                embodiment = 'human'
+            elif 'robot' in lower or 'dex5' in lower or 'sonic' in lower:
+                embodiment = 'robot'
+        return embodiment
+
+    def _read_episode_metadata(self):
+        fps_list = []
+        embodiment_list = []
+        for path in self.dataset_paths:
+            with h5py.File(path, 'r') as root:
+                embodiment = self._infer_embodiment(
+                    path, root.attrs.get('embodiment', 'default'))
+                # Historical HAT corpora without an fps attribute are 30fps.  We do
+                # not guess a higher rate from filenames: only explicit metadata may
+                # cause a trajectory to be temporally resampled.
+                fps = float(root.attrs.get('fps', 30.0))
+            if not np.isfinite(fps) or fps <= 0:
+                raise ValueError(f"Invalid fps={fps!r} in {path}")
+            fps_list.append(fps)
+            embodiment_list.append(embodiment)
+        return np.asarray(fps_list, dtype=np.float64), embodiment_list
+
+    def _build_episode_frame_indices(self):
+        """Build the logical observation timeline used by every data path.
+
+        Robot teleoperation recorded above ``robot_target_fps`` is mapped onto a
+        30fps logical timeline with the same nearest-frame rule as
+        scripts/preprocess/resample_sonic.py.  Images, state, action labels,
+        history, and future targets all consume this one mapping.
+        """
+        timelines = []
+        resampled = []
+        for idx, (path, raw_len, valid_start, fps, embodiment) in enumerate(zip(
+                self.dataset_paths, self.raw_episode_len_list, self.valid_start_list,
+                self.source_fps_list, self.source_embodiment_list)):
+            should_resample = (
+                self.robot_target_fps is not None
+                and 'human' not in embodiment.lower()
+                and fps > self.robot_target_fps + 1e-6
+            )
+            if should_resample:
+                step = fps / self.robot_target_fps
+                n_out = max(1, int(np.floor(int(raw_len) / step)))
+                indices = np.rint(np.arange(n_out, dtype=np.float64) * step).astype(np.int64)
+                indices = np.clip(indices, 0, int(raw_len) - 1)
+                indices = np.unique(indices)
+                indices = indices[indices >= int(valid_start)]
+                if len(indices) == 0:
+                    indices = np.asarray([min(int(valid_start), int(raw_len) - 1)])
+                resampled.append((os.path.basename(path), fps, len(indices), int(raw_len)))
+            else:
+                indices = np.arange(int(valid_start), int(raw_len), dtype=np.int64)
+                if len(indices) == 0:
+                    indices = np.asarray([int(raw_len) - 1], dtype=np.int64)
+            timelines.append(indices)
+
+        if resampled:
+            split = "train" if self.train else "val"
+            rates = sorted({float(item[1]) for item in resampled})
+            before = sum(item[3] for item in resampled)
+            after = sum(item[2] for item in resampled)
+            print(
+                f"Robot teleop FPS normalization ({split}): {len(resampled)} episodes "
+                f"{rates}fps -> {self.robot_target_fps:g}fps, {before} -> {after} frames")
+        return timelines
+
+    def _raw_index(self, episode_index, logical_ts):
+        timeline = self.episode_frame_indices[episode_index]
+        logical_ts = min(max(int(logical_ts), 0), len(timeline) - 1)
+        return int(timeline[logical_ts])
 
     def _compute_valid_start_list(self):
         valid_starts = np.zeros(len(self.dataset_paths), dtype=np.int64)
@@ -245,9 +392,9 @@ class EpisodicDataset(torch.utils.data.Dataset):
                         embodiment = 'robot'
                 
                 if 'human' in embodiment.lower():
-                    human_frame_counts.append(self.raw_episode_len_list[idx])
+                    human_frame_counts.append(self.episode_len_list[idx])
                 else:
-                    robot_frame_counts.append(self.raw_episode_len_list[idx])
+                    robot_frame_counts.append(self.episode_len_list[idx])
         
         if human_frame_counts and robot_frame_counts:
             human_avg = np.mean(human_frame_counts)
@@ -310,106 +457,157 @@ class EpisodicDataset(torch.utils.data.Dataset):
         else:
             raise ValueError(f"Unknown sampler type: {sampler_type}")
     
+    @staticmethod
+    def _interpolate_rows(values, positions):
+        """Linearly sample a 2-D action array at fractional frame positions."""
+        positions = np.asarray(positions, dtype=np.float64)
+        if len(positions) == 0:
+            return np.empty((0, int(values.shape[1])), dtype=np.float32)
+        lo = np.floor(positions).astype(np.int64)
+        hi = np.minimum(lo + 1, int(values.shape[0]) - 1)
+        first, last = int(lo.min()), int(hi.max())
+        block = np.asarray(values[first:last + 1], dtype=np.float32)
+        alpha = (positions - lo).astype(np.float32)[:, None]
+        return block[lo - first] * (1.0 - alpha) + block[hi - first] * alpha
+
+    def _read_action_chunk(self, index, logical_ts, states, actions):
+        """Return an unpadded action chunk and its current absolute anchor."""
+        embodiment = self.source_embodiment_list[index]
+        raw_start = self._raw_index(index, logical_ts)
+        anchor = np.asarray(states[raw_start], dtype=np.float32)
+        remaining = int(self.episode_len_list[index]) - int(logical_ts)
+
+        if self.action_representation == 'relative_chunk':
+            if 'human' in embodiment.lower():
+                # Human trajectories are intentionally slowed in action space.  A
+                # chunk step therefore advances 1/slow_down_factor source frames.
+                factor = max(int(self.slow_down_factor), 1)
+                positions = raw_start + np.arange(1, self.chunk_size + 1) / factor
+                valid = positions <= int(actions.shape[0]) - 1
+                positions = positions[valid]
+                chunk = self._interpolate_rows(actions, positions)
+            else:
+                timeline = self.episode_frame_indices[index]
+                raw_indices = timeline[int(logical_ts) + 1:int(logical_ts) + 1 + self.chunk_size]
+                chunk = np.asarray(actions[raw_indices], dtype=np.float32)
+            return convert_action_chunk(anchor, chunk, self.action_representation), anchor
+
+        if 'human' in embodiment.lower():
+            raw = np.asarray(actions[raw_start:raw_start + self.chunk_size])
+            chunk = hdt.inference_utils.interpolate_128dim_action(
+                raw, raw.shape[0] * max(int(self.slow_down_factor), 1))
+            chunk = np.asarray(chunk[:self.chunk_size], dtype=np.float32)
+            # Preserve the original padding convention for the original action mode.
+            chunk = chunk[:min(remaining, len(chunk))]
+        else:
+            timeline = self.episode_frame_indices[index]
+            raw_indices = timeline[int(logical_ts):int(logical_ts) + self.chunk_size]
+            chunk = np.asarray(actions[raw_indices], dtype=np.float32)
+        return chunk, anchor
+
+    @staticmethod
+    def _update_moments(accumulator, values):
+        values = np.asarray(values, dtype=np.float64)
+        if values.size == 0:
+            return
+        accumulator['count'] += int(values.shape[0])
+        accumulator['sum'] += values.sum(axis=0)
+        accumulator['sum_sq'] += np.square(values).sum(axis=0)
+
+    @staticmethod
+    def _finish_moments(accumulator):
+        count = accumulator['count']
+        if count == 0:
+            raise ValueError("Cannot compute normalization statistics from zero rows")
+        mean = accumulator['sum'] / count
+        if count > 1:
+            variance = (
+                accumulator['sum_sq'] - count * np.square(mean)
+            ) / (count - 1)
+        else:
+            variance = np.zeros_like(mean)
+        std = np.sqrt(np.maximum(variance, 0.0))
+        return mean.astype(np.float32), np.maximum(std, 1e-2).astype(np.float32)
+
     def get_norm_stats(self):
         if hasattr(self, 'norm_stats'):
             return self.norm_stats
-        
+
         norm_stats_dict = {}
-        embodiment_list = []
-        # First, gather types of embodiments
-        for single_hdf_path in self.dataset_paths:
-            with h5py.File(single_hdf_path, 'r') as root:
-                # Use default embodiment if not present
-                embodiment = root.attrs.get('embodiment', 'default')
-                
-                # 如果 HDF5 中没有 embodiment，从文件路径推断
-                if embodiment == 'default':
-                    if 'human' in single_hdf_path.lower():
-                        embodiment = 'human'
-                    elif 'robot' in single_hdf_path.lower():
-                        embodiment = 'robot'
-                    # 否则保持为 'default'
-                
-                if embodiment not in norm_stats_dict:
-                    norm_stats_dict[embodiment] = {
-                        "actions": [],
-                        "states": []
-                    }
-                embodiment_list.append(embodiment)
+        for embodiment in self.source_embodiment_list:
+            norm_stats_dict.setdefault(embodiment, {
+                'action_moments': {
+                    'count': 0,
+                    'sum': np.zeros(ACTION_STATE_VEC_SIZE, dtype=np.float64),
+                    'sum_sq': np.zeros(ACTION_STATE_VEC_SIZE, dtype=np.float64),
+                },
+                'state_moments': {
+                    'count': 0,
+                    'sum': np.zeros(ACTION_STATE_VEC_SIZE, dtype=np.float64),
+                    'sum_sq': np.zeros(ACTION_STATE_VEC_SIZE, dtype=np.float64),
+                },
+            })
         print(f"Found embodiments: {norm_stats_dict.keys()}")
 
-        for hdf_idx, hdf_path in enumerate(self.dataset_paths):
+        for index, hdf_path in enumerate(self.dataset_paths):
+            embodiment = self.source_embodiment_list[index]
+            timeline = self.episode_frame_indices[index]
             with h5py.File(hdf_path, 'r') as root:
-                valid_start = int(self.valid_start_list[hdf_idx])
-                state = root['observation.state'][valid_start:]
-                action = root['action'][valid_start:]
-                # Use default embodiment if not present
-                embodiment = root.attrs.get('embodiment', 'default')
-                
-                # 如果 HDF5 中没有 embodiment，从文件路径推断
-                if embodiment == 'default':
-                    if 'human' in hdf_path.lower():
-                        embodiment = 'human'
-                    elif 'robot' in hdf_path.lower():
-                        embodiment = 'robot'
-                
-                norm_stats_dict[embodiment]["actions"].append(torch.from_numpy(action))
-                norm_stats_dict[embodiment]["states"].append(torch.from_numpy(state))
-        
-        SAME_NORMALIZATION = False
-        if SAME_NORMALIZATION:
-            all_actions = []
-            all_states = []
-            for emb in norm_stats_dict:
-                all_actions.append(torch.cat(norm_stats_dict[emb]['actions']))
-                all_states.append(torch.cat(norm_stats_dict[emb]['states']))
-            
-            all_actions = torch.cat(all_actions)
-            all_states = torch.cat(all_states)
+                states = np.asarray(root['observation.state'])
+                actions = np.asarray(root[self.action_str])
+            self._update_moments(
+                norm_stats_dict[embodiment]['state_moments'],
+                states[timeline[:int(self.episode_len_list[index])]])
 
-            # normalize action data
-            action_mean = all_actions.mean(dim=0, keepdim=True).numpy().squeeze()
-            action_std = all_actions.std(dim=0, keepdim=True)
-            action_std = torch.clip(action_std, 1e-2, np.inf).numpy().squeeze()
+            if self.action_representation == 'original':
+                self._update_moments(
+                    norm_stats_dict[embodiment]['action_moments'], actions[timeline])
+            else:
+                # Relative values depend on both the anchor and the future horizon,
+                # so their statistics must be measured after conversion rather than
+                # borrowed from the absolute per-frame action distribution.
+                horizon = np.arange(1, self.chunk_size + 1, dtype=np.int64)
+                anchor_count = int(self.episode_len_list[index])
+                for batch_start in range(0, anchor_count, 256):
+                    logical = np.arange(
+                        batch_start, min(batch_start + 256, anchor_count),
+                        dtype=np.int64)
+                    anchors = states[timeline[logical]][:, None, :]
+                    if 'human' in embodiment.lower():
+                        factor = max(int(self.slow_down_factor), 1)
+                        positions = timeline[logical, None] + horizon[None, :] / factor
+                        valid = positions <= int(actions.shape[0]) - 1
+                        future = self._interpolate_rows(
+                            actions,
+                            np.minimum(positions, int(actions.shape[0]) - 1).reshape(-1)
+                        ).reshape(
+                                len(logical), self.chunk_size, ACTION_STATE_VEC_SIZE)
+                    else:
+                        future_logical = logical[:, None] + horizon[None, :]
+                        valid = future_logical < len(timeline)
+                        future_raw = timeline[
+                            np.minimum(future_logical, len(timeline) - 1)]
+                        future = actions[future_raw]
+                    relative = convert_action_chunk(
+                        anchors, future, self.action_representation)
+                    self._update_moments(
+                        norm_stats_dict[embodiment]['action_moments'], relative[valid])
+
+        for embodiment, stats in norm_stats_dict.items():
+            action_mean, action_std = self._finish_moments(stats.pop('action_moments'))
+            qpos_mean, qpos_std = self._finish_moments(stats.pop('state_moments'))
             if self.predict_delta_action:
                 action_mean = np.zeros_like(action_mean)
+            stats.update({
+                'action_mean': action_mean,
+                'action_std': action_std,
+                'qpos_mean': qpos_mean,
+                'qpos_std': qpos_std,
+                'action_representation': self.action_representation,
+                'robot_target_fps': self.robot_target_fps,
+            })
 
-            # normalize qpos data
-            qpos_mean = all_states.mean(dim=0, keepdim=True).numpy().squeeze()
-            qpos_std = all_states.std(dim=0, keepdim=True)
-            qpos_std = torch.clip(qpos_std, 1e-2, np.inf).numpy().squeeze()
-
-            for emb in norm_stats_dict:
-                norm_stats_dict[emb]['action_mean'] = action_mean
-                norm_stats_dict[emb]['action_std'] = action_std
-
-                norm_stats_dict[emb]['qpos_mean'] = qpos_mean
-                norm_stats_dict[emb]['qpos_std'] = qpos_std
-
-                del norm_stats_dict[emb]['actions']
-                del norm_stats_dict[emb]['states']
-            
-        else:
-            for emb in norm_stats_dict:
-                norm_stats_dict[emb]['actions'] = torch.cat(norm_stats_dict[emb]['actions'])
-                norm_stats_dict[emb]['states'] = torch.cat(norm_stats_dict[emb]['states'])
-
-                # normalize action data
-                norm_stats_dict[emb]['action_mean'] = norm_stats_dict[emb]['actions'].mean(dim=0, keepdim=True).numpy().squeeze()
-                norm_stats_dict[emb]['action_std'] = norm_stats_dict[emb]['actions'].std(dim=0, keepdim=True)
-                norm_stats_dict[emb]['action_std'] = torch.clip(norm_stats_dict[emb]['action_std'], 1e-2, np.inf).numpy().squeeze()
-                if self.predict_delta_action:
-                    norm_stats_dict[emb]['action_mean'] = np.zeros_like(norm_stats_dict[emb]['action_mean'])
-
-                # normalize qpos data
-                norm_stats_dict[emb]['qpos_mean'] = norm_stats_dict[emb]['states'].mean(dim=0, keepdim=True).numpy().squeeze()
-                norm_stats_dict[emb]['qpos_std'] = norm_stats_dict[emb]['states'].std(dim=0, keepdim=True)
-                norm_stats_dict[emb]['qpos_std'] = torch.clip(norm_stats_dict[emb]['qpos_std'], 1e-2, np.inf).numpy().squeeze()
-
-                del norm_stats_dict[emb]['actions']
-                del norm_stats_dict[emb]['states']
-
-        return norm_stats_dict, embodiment_list
+        return norm_stats_dict, list(self.source_embodiment_list)
     
     def __len__(self):
         return np.iinfo(int).max
@@ -487,7 +685,17 @@ class EpisodicDataset(torch.utils.data.Dataset):
             factor = max(self.slow_down_factor, 1)
             offs = np.rint(np.arange(1, K + 1) / factor).astype(np.int64)
         else:
-            offs = np.arange(1, K + 1, dtype=np.int64)
+            # Use the actual nearest-frame timeline, including its alternating
+            # 1/2-frame gaps for 50->30, rather than an average fps multiplier.
+            timeline = self.episode_frame_indices[index]
+            logical_ts = int(np.searchsorted(timeline, raw_start_ts))
+            future_logical = logical_ts + np.arange(1, K + 1, dtype=np.int64)
+            in_episode = future_logical < len(timeline)
+            clipped = np.minimum(future_logical, len(timeline) - 1)
+            offs = timeline[clipped] - int(raw_start_ts)
+            # Values after the episode are masked below. Give them an out-of-range
+            # offset so they cannot accidentally reuse the final valid flow row.
+            offs[~in_episode] = raw_offsets + 1
         # The preprocessing stores only R raw offsets, and R can be smaller than the
         # horizon the head predicts: one tracker window covers ~39 frames ahead, and
         # chaining more windows would pile up drift on top of an ~1cm noise floor. So
@@ -523,9 +731,67 @@ class EpisodicDataset(torch.utils.data.Dataset):
                 torch.from_numpy(flow_valid),
                 torch.from_numpy(anchor))
 
+    def _apply_lag_aug(self, root, index, raw_start_ts, qpos):
+        """Simulate "the BFM did not keep up" on the INPUT state.
+
+        Two independent perturbations, both on the raw (pre-normalization) state so the
+        thresholds stay in metres:
+
+        1. Trajectory backtrack. Sample a target lag distance d ~ U[min_m, max_m] and
+           replace the wrist block (pos + 6D rot) with the value at the MOST RECENT past
+           frame that sits at least d away. "Most recent" matters: a trajectory that
+           revisits a position would otherwise send the lag arbitrarily far back in time.
+           A lagging wrist also has a lagging orientation, hence the whole 9-dim block.
+        2. Random 3D offset on the wrist position, for tracking error that is not a pure
+           lag along the path.
+
+        Optionally the fingertip block is read at a DIFFERENT lag than the wrist, which is
+        the finger-vs-wrist progress desync: fingers already closing while the wrist is
+        still behind, or the reverse.
+
+        The action chunk is deliberately not touched anywhere in here.
+        """
+        cfg = self.lag_aug
+        ds = root['observation.state']
+        first_ts = int(self.valid_start_list[index])
+        # load_hdf_to_cpu hands back a VIEW into the cached episode array, so mutating
+        # in place would poison the cache for every later sample.
+        qpos = np.array(qpos, copy=True)
+
+        if random.random() < cfg['prob'] and raw_start_ts > first_ts:
+            target_m = random.uniform(cfg['min_m'], cfg['max_m'])
+            lo = max(first_ts, raw_start_ts - int(cfg['search_frames']))
+            past = np.asarray(ds[lo:raw_start_ts, self.lag_wrist_pos_slice], dtype=np.float64)
+            here = np.asarray(qpos[self.lag_wrist_pos_slice], dtype=np.float64)
+            dist = np.linalg.norm(past - here, axis=1)
+            hit = np.nonzero(dist >= target_m)[0]
+            # Nothing in the window is far enough (slow phase near the episode start):
+            # take the farthest frame available rather than skipping the sample, so the
+            # augmentation still fires, just at a smaller lag than requested.
+            j = int(hit[-1]) if len(hit) else int(np.argmax(dist))
+            lag_frames = raw_start_ts - (lo + j)
+            qpos[self.lag_wrist_slice] = ds[lo + j, self.lag_wrist_slice]
+
+            if lag_frames > 0 and random.random() < cfg['finger_prob']:
+                # finger_scale > 1 lets the fingers lag MORE than the wrist as well as less.
+                f_lag = int(round(random.uniform(0.0, cfg['finger_scale']) * lag_frames))
+                f_ts = max(first_ts, raw_start_ts - f_lag)
+                qpos[self.lag_finger_slice] = ds[f_ts, self.lag_finger_slice]
+
+        if random.random() < cfg['offset_prob']:
+            off = np.random.randn(3) * cfg['offset_sigma_m']
+            norm = float(np.linalg.norm(off))
+            if norm > cfg['offset_clip_m'] > 0:
+                off = off * (cfg['offset_clip_m'] / norm)
+            qpos[self.lag_wrist_pos_slice] = qpos[self.lag_wrist_pos_slice] + off
+
+        return qpos
+
     def read_one(self, index, start_ts):
-        episode_len = int(self.episode_len_list[index])
-        raw_start_ts = int(self.valid_start_list[index]) + int(start_ts)
+        # relative_chunk excludes the final no-future frame from sampling, while
+        # future-image clamping still needs the full observation timeline length.
+        episode_len = len(self.episode_frame_indices[index])
+        raw_start_ts = self._raw_index(index, start_ts)
 
         single_hdf_path = self.dataset_paths[index]
 
@@ -534,7 +800,14 @@ class EpisodicDataset(torch.utils.data.Dataset):
         else:
             root = h5py.File(single_hdf_path, 'r')
 
+        # Build the label from the clean current pose before lag augmentation.  Lag
+        # changes only what the policy observes; it must not move the demonstration
+        # trajectory or its HuMI anchor.
+        all_time_action, _ = self._read_action_chunk(
+            index, start_ts, root['observation.state'], root[self.action_str])
         qpos = root['observation.state'][raw_start_ts]
+        if self.lag_aug is not None and self.train:
+            qpos = self._apply_lag_aug(root, index, raw_start_ts, qpos)
 
         image_dict = dict()
         for cam_name in self.camera_names:
@@ -564,17 +837,26 @@ class EpisodicDataset(torch.utils.data.Dataset):
                     image_dict[cam_name] = image_dict[cam_name].transpose(2, 0, 1)  # CHW
             else:
                 image_dict[cam_name] = np.zeros((3, self.data_config["image_resolution_hw"][0], self.data_config["image_resolution_hw"][1]), dtype=np.uint8)
-        all_time_action = root[self.action_str][raw_start_ts:raw_start_ts+self.chunk_size]
+        # ---- Real history: read frames/states at t-o for each offset o ----
+        hist_cam_images = None
+        hist_qpos = None
+        if self.history_enabled:
+            # Clamped to the episode's first usable frame, NOT masked. A clamped slot
+            # repeats frame 0, which is what actually happened (nothing had moved yet);
+            # the per-slot time embedding on the model side still says which slot it
+            # is, so the model can tell "0.33s ago" from "start of episode".
+            hist_ts = [self._raw_index(index, int(start_ts) - o)
+                       for o in self.history_offsets]
+            hist_cam_images = [self._read_cam_images_at(root, ts, single_hdf_path)
+                               for ts in hist_ts]
+            hist_qpos = np.stack([root['observation.state'][ts] for ts in hist_ts], axis=0)
 
         # ---- Future-DINO: read the frame at t+H (disabled by default) ----
         future_cam_images = None
         current_clip = future_clip = None
         future_valid = 1.0
         if self.future_image_enabled:
-            if self.load_hdf_to_cpu:
-                _embodiment = root['attrs'].get('embodiment', 'default')
-            else:
-                _embodiment = root.attrs.get('embodiment', 'default')
+            _embodiment = self.source_embodiment_list[index]
             horizon = self.future_horizon
             if "human" in _embodiment:
                 # Human action chunks are time-compressed below by slow_down_factor:
@@ -582,23 +864,34 @@ class EpisodicDataset(torch.utils.data.Dataset):
                 # visual horizon identically, otherwise the world target sits far
                 # beyond the actions the trunk is being asked to predict.
                 horizon = max(1, int(round(horizon / max(self.slow_down_factor, 1))))
-            last_raw_ts = int(self.raw_episode_len_list[index]) - 1
-            future_ts = raw_start_ts + horizon
-            if future_ts > last_raw_ts:
+            future_logical_ts = int(start_ts) + horizon
+            if future_logical_ts >= episode_len:
                 # Clamp, but mark invalid so the loss masks it out. Training on the
                 # clamped frame would teach "the future is static" near episode ends.
-                future_ts = last_raw_ts
+                future_logical_ts = episode_len - 1
                 future_valid = 0.0
+            future_ts = self._raw_index(index, future_logical_ts)
             if self.future_clip_frames > 1:
                 # Video teacher: the query side is a clip ending at t and the target a
                 # clip ending at t+H. Both are read here so that the single
                 # visual_preprocessor/training_transforms call below applies the
                 # identical photometric augmentation to every frame (doc S2.3).
-                first_ts = int(self.valid_start_list[index])
-                current_clip = self._read_cam_clip_ending_at(
-                    root, raw_start_ts, single_hdf_path, first_ts=first_ts)
-                future_clip = self._read_cam_clip_ending_at(
-                    root, future_ts, single_hdf_path, first_ts=first_ts)
+                current_clip = [
+                    self._read_cam_images_at(
+                        root,
+                        self._raw_index(index, int(start_ts) - (self.future_clip_frames - 1 - i)
+                                        * self.future_clip_stride),
+                        single_hdf_path)
+                    for i in range(self.future_clip_frames)
+                ]
+                future_clip = [
+                    self._read_cam_images_at(
+                        root,
+                        self._raw_index(index, future_logical_ts - (self.future_clip_frames - 1 - i)
+                                        * self.future_clip_stride),
+                        single_hdf_path)
+                    for i in range(self.future_clip_frames)
+                ]
             else:
                 future_cam_images = self._read_cam_images_at(root, future_ts, single_hdf_path)
 
@@ -610,18 +903,11 @@ class EpisodicDataset(torch.utils.data.Dataset):
             lang_instruction = root['attrs'].get('description', '')
             embodiment = root['attrs'].get('embodiment', 'default')
         
-        if "human" in embodiment:
-            SLOW_DOWN_FACTOR = self.slow_down_factor
-            all_time_action = hdt.inference_utils.interpolate_128dim_action(all_time_action, all_time_action.shape[0] * SLOW_DOWN_FACTOR)
-            all_time_action = all_time_action[:self.chunk_size]
-        
         padded_action = np.zeros((self.chunk_size, all_time_action.shape[1]), dtype=np.float32)
         padded_action[:all_time_action.shape[0], :] = all_time_action
-        
-        real_len = episode_len - int(start_ts)
 
         is_pad = np.zeros(self.chunk_size, dtype=bool)
-        is_pad[real_len:] = True
+        is_pad[all_time_action.shape[0]:] = True
 
         # new axis for different cameras
         all_cam_images = []
@@ -630,7 +916,21 @@ class EpisodicDataset(torch.utils.data.Dataset):
         all_cam_images = np.stack(all_cam_images, axis=0)
 
         # construct observations
+        # History frames ride along at the TAIL of whatever stack is preprocessed
+        # below, for the same reason the future frame does: torchvision v2 samples
+        # ColorJitter once per call, so one call gives every timestep the identical
+        # photometric transform. Separate calls would let the model spot the current
+        # frame by its colour statistics alone.
+        hist_block = None
+        n_hist_rows = 0
+        if self.history_enabled:
+            hist_block = np.stack([np.stack(f, axis=0) for f in hist_cam_images], axis=0)
+            n_hist = hist_block.shape[0]
+            hist_block = hist_block.reshape(-1, *all_cam_images.shape[1:])
+            n_hist_rows = hist_block.shape[0]
+
         future_image_data = None
+        hist_image_data = None
         if self.future_image_enabled:
             # Preprocess + augment current and future in ONE call: torchvision v2
             # samples the ColorJitter params once per call, so both frames get the
@@ -644,24 +944,45 @@ class EpisodicDataset(torch.utils.data.Dataset):
                 clip_stack = np.stack(
                     [np.stack(frame, axis=0) for frame in (current_clip + future_clip)],
                     axis=0)                                    # [2K, n_cam, C, H, W]
-                stacked = np.concatenate(
-                    [all_cam_images,
-                     clip_stack.reshape(2 * K * n_cam, *all_cam_images.shape[1:])], axis=0)
+                blocks = [all_cam_images,
+                          clip_stack.reshape(2 * K * n_cam, *all_cam_images.shape[1:])]
+                if hist_block is not None:
+                    blocks.append(hist_block)
+                stacked = np.concatenate(blocks, axis=0)
                 stacked = self.visual_preprocessor(stacked)
                 if self.train:
                     stacked = self.training_transforms(stacked)
                 image_data = stacked[:n_cam]
-                future_image_data = stacked[n_cam:].reshape(2 * K, n_cam, *stacked.shape[1:])
+                # len(stacked)-n_hist_rows is just len(stacked) when history is off,
+                # so this slice is the original stacked[n_cam:].
+                future_image_data = stacked[n_cam:len(stacked) - n_hist_rows].reshape(
+                    2 * K, n_cam, *stacked.shape[1:])
             else:
-                stacked = np.concatenate([all_cam_images, np.stack(future_cam_images, axis=0)], axis=0)
+                blocks = [all_cam_images, np.stack(future_cam_images, axis=0)]
+                if hist_block is not None:
+                    blocks.append(hist_block)
+                stacked = np.concatenate(blocks, axis=0)
                 stacked = self.visual_preprocessor(stacked)
                 if self.train:
                     stacked = self.training_transforms(stacked)
-                image_data, future_image_data = stacked[:n_cam], stacked[n_cam:]
+                image_data = stacked[:n_cam]
+                future_image_data = stacked[n_cam:len(stacked) - n_hist_rows]
+            if hist_block is not None:
+                hist_image_data = stacked[len(stacked) - n_hist_rows:].reshape(
+                    n_hist, n_cam, *stacked.shape[1:])
         else:
-            image_data = self.visual_preprocessor(all_cam_images)
-            if self.train:
-                image_data = self.training_transforms(image_data)
+            if hist_block is not None:
+                n_cam = all_cam_images.shape[0]
+                stacked = self.visual_preprocessor(
+                    np.concatenate([all_cam_images, hist_block], axis=0))
+                if self.train:
+                    stacked = self.training_transforms(stacked)
+                image_data = stacked[:n_cam]
+                hist_image_data = stacked[n_cam:].reshape(n_hist, n_cam, *stacked.shape[1:])
+            else:
+                image_data = self.visual_preprocessor(all_cam_images)
+                if self.train:
+                    image_data = self.training_transforms(image_data)
 
         qpos_data = torch.from_numpy(qpos).float()
         action_data = torch.from_numpy(padded_action).float()
@@ -682,8 +1003,13 @@ class EpisodicDataset(torch.utils.data.Dataset):
         qpos_std = torch.from_numpy(self.norm_stats[embodiment]["qpos_std"]).float()
         
         action_data = (action_data - action_mean) / (action_std + 1e-6)
-        qpos_data = (qpos_data - qpos_mean) / (qpos_std + 1e-6) \
-            if random.random() > self.cond_mask_prob else torch.zeros_like(qpos_data)
+        # Same single random.random() draw and the exact complementary condition as
+        # before -- only hoisted into a variable so the history states below can be
+        # blanked by the SAME event. Blanking the current state but keeping t-0.17s
+        # would leak the very thing cond_mask is hiding.
+        _state_masked = random.random() <= self.cond_mask_prob
+        qpos_data = torch.zeros_like(qpos_data) if _state_masked \
+            else (qpos_data - qpos_mean) / (qpos_std + 1e-6)
         
         if random.random() < self.cond_mask_prob:
             lang_instruction = ''
@@ -699,6 +1025,15 @@ class EpisodicDataset(torch.utils.data.Dataset):
             "language_embeddings": selected_embedding,
             "plain_text": lang_instruction
         }
+
+        if self.history_enabled:
+            # Rides in conditioning_dict for the same reason the flow target does:
+            # the 5-tuple / 6-tuple return contract stays untouched.
+            hist_qpos_data = torch.from_numpy(hist_qpos).float()
+            hist_qpos_data = torch.zeros_like(hist_qpos_data) if _state_masked \
+                else (hist_qpos_data - qpos_mean) / (qpos_std + 1e-6)
+            conditioning_dict["hist_image"] = hist_image_data
+            conditioning_dict["hist_qpos"] = hist_qpos_data
 
         if self.flow_target_enabled:
             # Rides in conditioning_dict, not in the return tuple, so the 5-tuple /
@@ -895,6 +1230,13 @@ def collate_fn(batch):
             ret_conditioning_dict[key] = torch.stack(
                 [conditioning[key] for conditioning in conditioning_list])
 
+    # Same allow-list trap as above: without this the history arm would train on
+    # the current frame only and look like a plain baseline that mysteriously costs 3x.
+    if 'hist_image' in conditioning_list[0]:
+        for key in ('hist_image', 'hist_qpos'):
+            ret_conditioning_dict[key] = torch.stack(
+                [conditioning[key] for conditioning in conditioning_list])
+
     if future_image_data is not None:
         ret_conditioning_dict['future_valid'] = torch.stack(
             [conditioning['future_valid'] for conditioning in conditioning_list])
@@ -924,7 +1266,12 @@ def load_data(base_dir,
               flow_target_enabled=False,
               flow_target_dir=None,
               flow_grid_hw=(30, 40),
-              flow_horizon=100):
+              flow_horizon=100,
+              history_offsets=None,
+              lag_aug_config=None,
+              visual_aug_config=None,
+              action_representation="original",
+              robot_target_fps=30.0):
 
 
     assert os.path.exists(dataset_json_path)
@@ -971,7 +1318,12 @@ def load_data(base_dir,
                                     flow_target_enabled=flow_target_enabled,
                                     flow_target_dir=flow_target_dir,
                                     flow_grid_hw=flow_grid_hw,
-                                    flow_horizon=flow_horizon)
+                                    flow_horizon=flow_horizon,
+                                    history_offsets=history_offsets,
+                                    lag_aug_config=lag_aug_config,
+                                    visual_aug_config=visual_aug_config,
+                                    action_representation=action_representation,
+                                    robot_target_fps=robot_target_fps)
     
     train_dataset = dataset_dict['train']
     val_dataset = dataset_dict['val']
