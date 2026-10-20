@@ -49,6 +49,15 @@ export PYTHONPATH=/home/nerv/qingyaoxu/human_policy:/home/nerv/qingyaoxu/human_p
 HAT_BUNDLE=pick_bottle_0930/b0930_20261003_oldhuman_vjepa_w0_ckpt
 HAT_CONFIG=act_input_vjepa_w0.yaml
 
+HAT_BUNDLE=pick_bottle_0930/b0930_20261003_oldhuman_vjepa_w0_lagvis_ckpt
+HAT_CONFIG=act_input_vjepa_w0_lagvis.yaml
+
+HAT_BUNDLE=pick_bottle_0930/b0930_20261004_oldhuman_nostate_vjepa_w0_ckpt
+HAT_CONFIG=act_input_vjepa_w0_nostate.yaml
+
+HAT_BUNDLE=pick_bottle_0930/b0930_20261004_oldhuman_nostate_vjepa_w0_lagvis_ckpt
+HAT_CONFIG=act_input_vjepa_w0_nostate_lagvis.yaml
+
 HAT_BUNDLE=pick_bottle_0930/b0930_20261003_oldhuman_humi_ckpt
 HAT_CONFIG=act_input_humi.yaml
 
@@ -78,6 +87,31 @@ HAT_CONFIG=act_input_humi_nostate_lagvis.yaml
   --relative-anchor-mode actual
 ```
 
+2026-10-20 新训练的四个模型（均为 100,000 步，数据、编码器及 nostate / lag / vis 配置沿用当前测试的 replace50 原模型）。选择下面其中一组 `HAT_BUNDLE` / `HAT_CONFIG` 赋值，再执行上面的同一条在线推理命令；如果全部赋值，最后一组生效。
+
+```bash
+cd /home/nerv/qingyaoxu/human_policy
+export PYTHONPATH=/home/nerv/qingyaoxu/human_policy:/home/nerv/qingyaoxu/human_policy/hdt:/home/nerv/qingyaoxu/human_policy/hdt/detr:/home/nerv/qingyaoxu/ScaleBFM/ScaleBridge
+
+# 方案1：预测未来视觉 latent，训练损失权重 0.1
+HAT_BUNDLE=pick_bottle_0930/b0930_20261020_replace50_nostate_vjepa_w01_lagvis_ckpt
+HAT_CONFIG=act_input_vjepa_w01_nostate_lagvis.yaml
+
+# 方案1：预测未来视觉 latent，训练损失权重 1.0
+HAT_BUNDLE=pick_bottle_0930/b0930_20261020_replace50_nostate_vjepa_w1_lagvis_ckpt
+HAT_CONFIG=act_input_vjepa_w1_nostate_lagvis.yaml
+
+# 方案2：到位判断辅助训练，未来视觉损失权重 0
+HAT_BUNDLE=pick_bottle_0930/b0930_20261020_replace50_nostate_vjepa_w0_lagvis_readiness_ckpt
+HAT_CONFIG=act_input_vjepa_w0_nostate_lagvis_readiness.yaml
+
+# 方案3：几何辅助损失，未来视觉损失权重 0
+HAT_BUNDLE=pick_bottle_0930/b0930_20261020_replace50_nostate_vjepa_w0_lagvis_geometry_ckpt
+HAT_CONFIG=act_input_vjepa_w0_nostate_lagvis_geometry.yaml
+```
+
+四份目录均包含完整的 `policy_last.ckpt`、配套 `dataset_stats.pkl`、推理 YAML 和原始训练配置。启动入口仍为 `python -m hdt.online_hat_service`，其余参数沿用上面命令。现有加载器会忽略训练辅助头；方案2当前用于比较辅助训练后的动作预测效果，尚未用到位概率控制抓握。旧模型和代码保持不变。
+
 常用替换（改上面两个变量，再执行同一条 python 命令）：
 
 | 模型 | HAT_BUNDLE | HAT_CONFIG |
@@ -103,6 +137,22 @@ HAT 加载完成后等第 4 个终端发送机器人状态，尚无 chunk 输出
 第 4 个终端选择其中一条执行。新旧 focus 指训练标签版本，两条命令沿用当前在线
 focus 与手部交接逻辑；参考变速和精细跟踪奖励属于训练机制，在线无需附加开关。
 
+两阶段控制（第二次 R2 站立，R1 后新模型跟踪）：
+下面两条命令使用七月底已部署的 `hat4_focus_release_v1` 作为站立策略，
+配合原有 `prestart_arm_pose=stand`，保持本次实测 FK，双臂不要求抬起；
+站立时旧策略继续按实时反馈计算 action，不冻结某一帧 action。
+`agent.config.checkpoint` 仍为各组新模型，R1 后接管；HuMI 先等待新 chunk，
+再沿用 `takeover_blend_s`（默认 0.75 秒）混合旧站立目标与新策略目标。
+下面两个新模型命令显式启用 `takeover_sync_action_history=true`，
+混合期间 action history 按实际下发关节目标同步，IMU 反馈和关节增益不改。
+此开关默认关闭，原有七月底模型命令保留原先的 action history 行为；
+`prestart_checkpoint` 也默认为空，原有命令不会启用双模型。
+可从日志确认 `[Agent] Active controller: pre-R1 standing checkpoint`，
+开始跟踪后变为 `tracking checkpoint`。旧策略站立行为有此前真机使用依据，
+这次两策略接管尚需实机验证。
+此前 `default_stand` 和 `upright_stand` 候选在实机仍出现抖动，
+这两条命令已不再使用它们；`default_raised` 是此前需要抬臂的准备姿态。
+
 ### 新 focus＋新机制（2026-10-11，14,000 轮）
 
 ```bash
@@ -113,13 +163,20 @@ cd /home/nerv/qingyaoxu/ScaleBFM/ScaleBridge
   --config-name=hat4_online \
   simulator=real_world_inspire_online \
   agent.config.checkpoint=/home/nerv/qingyaoxu/ScaleBFM/MyScaleBFM/ScaleTrack/releases/hat4_v3_new_settings_20261011/model_14000_scalebridge_tensorrt_4080s.pt \
+  agent.config.prestart_checkpoint=/home/nerv/qingyaoxu/ScaleBFM/MyScaleBFM/ScaleTrack/releases/hat4_focus_release_v1/model_20000_scalebridge_tensorrt_4080s.pt \
+  env.config.prestart_arm_pose=stand \
+  env.config.takeover_sync_action_history=true \
   env.config.reference_forcing=false \
   'simulator.config.hand_thumb_rot_invert_sides=[left,right]' \
   'simulator.config.hand_fk_thumb_rot_invert_sides=[left,right]' \
   env.config.min_chunk_execution_fraction=0.1 \
   env.config.chunk_start_reference_continuity=True \
   env.config.focus_handoff_enabled=true \
-  env.config.focus_handoff_finger_mode=continuity/hold_progress
+  env.config.focus_handoff_finger_mode=off \
+  env.config.prestart_arm_pose=stand \
+  env.config.takeover_sync_action_history=true \
+  agent.config.prestart_checkpoint=/home/nerv/qingyaoxu/ScaleBFM/MyScaleBFM/ScaleTrack/releases/hat4_focus_release_v1/model_20000_scalebridge_tensorrt_4080s.pt
+
 ```
 
 ### 旧 focus＋新机制（2026-10-11，14,000 轮）
@@ -132,6 +189,9 @@ cd /home/nerv/qingyaoxu/ScaleBFM/ScaleBridge
   --config-name=hat4_online \
   simulator=real_world_inspire_online \
   agent.config.checkpoint=/home/nerv/qingyaoxu/ScaleBFM/MyScaleBFM/ScaleTrack/releases/hat4_v2_new_settings_20261011/model_14000_scalebridge_tensorrt_4080s.pt \
+  agent.config.prestart_checkpoint=/home/nerv/qingyaoxu/ScaleBFM/MyScaleBFM/ScaleTrack/releases/hat4_focus_release_v1/model_20000_scalebridge_tensorrt_4080s.pt \
+  env.config.prestart_arm_pose=stand \
+  env.config.takeover_sync_action_history=true \
   env.config.reference_forcing=false \
   env.config.min_chunk_execution_fraction=0.1 \
   env.config.chunk_start_reference_continuity=True \
@@ -424,3 +484,40 @@ FOCUS 参数仍可独立选 `env.config.focus_handoff_version=legacy` 或 `v2`�
 新选项生效的换段日志显示 `trajectory_continuity`；
 `online_hat_chunks.jsonl` 中 `aligned.execution_alignment.trajectory_match`
 记录历史区间、匹配区间和误差。它改善参考接续，不保证实际手腕消除跟踪误差。
+
+### 1012 接近抓取点按距离连续变速
+
+目标：插手入瓶两侧这一段放慢，远处和搬运段保持原速。
+HAT 侧不动（仍 `--fps 30`，重规划频率不变），只在第 4 个终端加参数，
+重启 ScaleBridge 后生效。要求 `env.config.focus_handoff_enabled=true`
+（上面三条命令都已带），否则启动即报错。
+
+```bash
+env.config.approach_slowdown=true \
+env.config.approach_slowdown_d_slow_m=0.10 \
+env.config.approach_slowdown_min_scale=0.2 \
+env.config.focus_handoff_timeout_s=20.0
+```
+
+播放倍率 `s = clip(d / d_slow_m, min_scale, 1.0)`，每个控制步更新。
+`d` 是该手实测腕（Vive root + 实测关节 FK，与腕补偿同一条链）到这只手
+已达成共识的 FOCUS 入口腕位置的距离，即原来要求"实测腕进到 3 cm 内
+才解锁"的那个点；左右手各算一次，取更慢的一个。
+上面的默认值对应：10 cm 外原速，5 cm 半速，2 cm 以内 0.2 倍速。
+入口共识还没建立时为原速；解锁后入口被清空、没有距离可算，
+保持解锁瞬间的倍率直到该次手部动作结束，结束后回到原速。
+松手窗口走同一套入口逻辑，所以接近松手点同样会慢下来。
+
+实现上只缩放参考播放时钟：延迟跳帧、最短执行比例、chunk 结束余量
+都用同一个慢时钟，所以新 chunk 不会把慢放省下的帧再跳回去。
+预测频率、50 Hz 控制频率、关节增益、FOCUS 的入口与完成判据都不变。
+`approach_slowdown_fingers_full_speed`（默认 `true`）让已解锁窗口内的
+手指目标走真实时间，手腕继续慢放；设 `false` 则手指跟随慢时钟。
+
+注意 `focus_handoff_timeout_s=5` 和完成保持 1 秒是真实时间，不随倍率拉长，
+所以 `min_scale=0.2` 时要把 timeout 调到约 20 秒，否则抓取必然判超时。
+启动日志打印 `Approach slowdown enabled`，倍率每变化 0.1 打印一次
+`Approach playback rate 0.30x (d=right=3.0cm)`；
+`wrist_compensation_trace.jsonl` 每步记录 `play_scale` 与
+`play_entry_distance_m`。它只改变参考播放速度，不等于手已经对准瓶子两侧。
+默认 `approach_slowdown=false`，不加这组参数时与之前的行为完全一致。

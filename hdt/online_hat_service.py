@@ -1568,6 +1568,8 @@ def main():
 
     PROTOCOL_ROOT = args.scalebridge_root
     make_hat_chunk, monotonic_ns, validate_robot_state, LatestPublisher, LatestSubscriber = _install_protocol(args.scalebridge_root)
+    from scalebridge.online.controller_watchdog import ControllerWatchdog
+    controller_watchdog = ControllerWatchdog().start()
     policy = OnlineHATPolicy(
         config_path=args.config,
         checkpoint=args.checkpoint,
@@ -1678,10 +1680,11 @@ def main():
     )
 
     def _handle_sigterm(signum, frame):
-        print(
-            "[online_hat] SIGTERM received; finalizing recordings ...",
-            flush=True,
-        )
+        if not controller_watchdog.shutdown_requested.is_set():
+            print(
+                "[online_hat] SIGTERM received; finalizing recordings ...",
+                flush=True,
+            )
         raise KeyboardInterrupt
 
     previous_sigterm_handler = signal.signal(signal.SIGTERM, _handle_sigterm)
@@ -1832,7 +1835,8 @@ def main():
             sequence_id += 1
             next_replan_ns = now + replan_ns
     except KeyboardInterrupt:
-        print("[online_hat] stopping; finalizing recordings ...", flush=True)
+        if not controller_watchdog.shutdown_requested.is_set():
+            print("[online_hat] stopping; finalizing recordings ...", flush=True)
     finally:
         signal.signal(signal.SIGTERM, previous_sigterm_handler)
         if source_video_stop is not None:
