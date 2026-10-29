@@ -108,9 +108,163 @@ HAT_CONFIG=act_input_vjepa_w0_nostate_lagvis_readiness.yaml
 # 方案3：几何辅助损失，未来视觉损失权重 0
 HAT_BUNDLE=pick_bottle_0930/b0930_20261020_replace50_nostate_vjepa_w0_lagvis_geometry_ckpt
 HAT_CONFIG=act_input_vjepa_w0_nostate_lagvis_geometry.yaml
+
 ```
 
+## 方案4
+cd /home/nerv/qingyaoxu/human_policy
+HAT_BUNDLE=pick_bottle_0930/b0930_20261021_replace50_nostate_vjepa_w1_lagvis_geometry_ckpt
+HAT_CONFIG=act_input_vjepa_w1_nostate_lagvis_geometry.yaml
+
+### 方案5
+
+# 屏蔽左腕：几何辅助 + 未来视觉 latent 权重 0
+HAT_BUNDLE=pick_bottle_0930/b0930_20261022_replace50_nostate_vjepa_w0_lagvis_geometry_noleftwrist_ckpt
+HAT_CONFIG=act_input_vjepa_w0_nostate_lagvis_geometry_noleftwrist.yaml
+
+### 方案6
+# 屏蔽左腕：几何辅助 + 未来视觉 latent 权重 1
+HAT_BUNDLE=pick_bottle_0930/b0930_20261022_replace50_nostate_vjepa_w1_lagvis_geometry_noleftwrist_ckpt
+HAT_CONFIG=act_input_vjepa_w1_nostate_lagvis_geometry_noleftwrist.yaml
+
+### 方案7
+cd /home/nerv/qingyaoxu/human_policy
+source pick_bottle_0930/b0930_20261004_scdp_w0_lagvis_step100000_ckpt/activate.sh
+
+### 方案8：抓瓶子，仅机器人数据，几何 + latent 0，屏蔽左腕
+
+```bash
+cd /home/nerv/qingyaoxu/human_policy
+HAT_BUNDLE=pick_bottle_0930/b0930_20261026_robotonly_nostate_vjepa_w0_lagvis_geometry_noleftwrist_ckpt
+HAT_CONFIG=act_input_vjepa_w0_nostate_lagvis_geometry_noleftwrist.yaml
+```
+
+下面四个 `omega_HOME_20261025` 任务模型均已完成 100,000 步训练，已复制到本地并通过 SHA256、模型加载和屏蔽设置检查。均为几何辅助 + latent 权重 0、屏蔽左腕的版本；每个目录均包含 `policy_last.ckpt`、配套 `dataset_stats.pkl`、`model.yaml`、`training_config.json` 和下面指定的在线推理 YAML。以下路径相对于 `/home/nerv/qingyaoxu/human_policy`，每次选择一组变量，并使用该目录自己的 checkpoint 和 stats。
+
+### 方案9：与人协作搬桌（move_table_with_human）
+
+```bash
+HAT_BUNDLE=omega_HOME_20261025/move_table_with_human_geometry_noleftwrist_w0_ckpt
+HAT_CONFIG=act_input_vjepa_w0_nostate_lagvis_geometry_noleftwrist.yaml
+```
+
+### 方案10：擦桌（wipe_table）
+
+```bash
+HAT_BUNDLE=omega_HOME_20261025/wipe_table_geometry_noleftwrist_w0_ckpt
+HAT_CONFIG=act_input_vjepa_w0_nostate_lagvis_geometry_noleftwrist.yaml
+```
+
+### 方案11：物品分类（classify_gadgets）
+
+```bash
+HAT_BUNDLE=omega_HOME_20261025/classify_gadgets_geometry_noleftwrist_w0_ckpt
+HAT_CONFIG=act_input_vjepa_w0_nostate_lagvis_geometry_noleftwrist.yaml
+```
+
+### 方案12：grab_fruit_bucket 任务
+
+```bash
+HAT_BUNDLE=omega_HOME_20261025/grab_fruit_bucket_geometry_noleftwrist_w0_ckpt
+HAT_CONFIG=act_input_vjepa_w0_nostate_lagvis_geometry_noleftwrist.yaml
+```
+
+#### 方案13：SCDP v2 + 几何辅助，保留左腕输入
+
+```bash
+cd /home/nerv/qingyaoxu/human_policy
+source pick_bottle_0930/b0930_20261022_scdp_v2_w0_geometry_step100000_ckpt/activate.sh
+```
+
+#### 方案14：SCDP v2 + 几何辅助，屏蔽左腕输入
+
+```bash
+cd /home/nerv/qingyaoxu/human_policy
+source pick_bottle_0930/b0930_20261022_scdp_v2_w0_geometry_no_left_wrist_step100000_ckpt/activate.sh
+
 四份目录均包含完整的 `policy_last.ckpt`、配套 `dataset_stats.pkl`、推理 YAML 和原始训练配置。启动入口仍为 `python -m hdt.online_hat_service`，其余参数沿用上面命令。现有加载器会忽略训练辅助头；方案2当前用于比较辅助训练后的动作预测效果，尚未用到位概率控制抓握。旧模型和代码保持不变。
+
+2026-10-21 新增组合模型：未来视觉 latent 损失权重 1.0 + 几何辅助损失权重 0.1，已完成 100,000 步训练，数据和编码器沿用上一轮。
+
+```bash
+cd /home/nerv/qingyaoxu/human_policy
+export PYTHONPATH=/home/nerv/qingyaoxu/human_policy:/home/nerv/qingyaoxu/human_policy/hdt:/home/nerv/qingyaoxu/human_policy/hdt/detr:/home/nerv/qingyaoxu/ScaleBFM/ScaleBridge
+
+HAT_BUNDLE=pick_bottle_0930/b0930_20261021_replace50_nostate_vjepa_w1_lagvis_geometry_ckpt
+HAT_CONFIG=act_input_vjepa_w1_nostate_lagvis_geometry.yaml
+```
+
+这份推理 YAML 与旧 replace50 HAT 的字段一致，仅未来视觉损失权重为 1.0；几何辅助损失只用于训练，不新增推理字段。未添加 `common.chunk_fps`，在线频率、重规划和小脑参数继续使用当前实验的启动命令。
+
+2026-10-26 新增仅机器人数据模型：几何辅助损失权重 0.1、未来视觉 latent 权重 0，GPU 4 单卡、batch 64，从头完成 100,000 步训练。使用 69 条机器人训练轨迹和 10 条独立机器人验证轨迹，没有人类任务示教数据；保留左腕 `80:89` 和状态尾部 `98:128` 的输入屏蔽。
+
+```bash
+cd /home/nerv/qingyaoxu/human_policy
+export PYTHONPATH=/home/nerv/qingyaoxu/human_policy:/home/nerv/qingyaoxu/human_policy/hdt:/home/nerv/qingyaoxu/human_policy/hdt/detr:/home/nerv/qingyaoxu/ScaleBFM/ScaleBridge
+
+HAT_BUNDLE=pick_bottle_0930/b0930_20261026_robotonly_nostate_vjepa_w0_lagvis_geometry_noleftwrist_ckpt
+HAT_CONFIG=act_input_vjepa_w0_nostate_lagvis_geometry_noleftwrist.yaml
+```
+
+设好这组变量后，执行下方同一条 15 Hz / replan 5 推理命令，小脑命令保持原样。使用新目录自带的 `dataset_stats.pkl`；推理 YAML 的字段和值与之前几何 + latent 0 的屏蔽左腕版本一致，没有新增帧率字段。左腕屏蔽自动从 checkpoint 恢复，无需固定左腕的两个参数，也无需同步服务器训练代码。
+
+2026-10-22 新增两个从头训练 100,000 步的屏蔽左腕模型。数据、编码器和训练配置沿用各自几何辅助版本，额外在训练和推理时屏蔽左腕位姿输入 `80:89`；原有状态尾部 `98:128` 屏蔽保留。完整屏蔽规则保存在 checkpoint 的 `model.state_keep_mask` 中，现有本地加载器会自动恢复，不需要增加推理 YAML 字段。
+
+```bash
+cd /home/nerv/qingyaoxu/human_policy
+export PYTHONPATH=/home/nerv/qingyaoxu/human_policy:/home/nerv/qingyaoxu/human_policy/hdt:/home/nerv/qingyaoxu/human_policy/hdt/detr:/home/nerv/qingyaoxu/ScaleBFM/ScaleBridge
+
+# 屏蔽左腕：几何辅助 + 未来视觉 latent 权重 0
+HAT_BUNDLE=pick_bottle_0930/b0930_20261022_replace50_nostate_vjepa_w0_lagvis_geometry_noleftwrist_ckpt
+HAT_CONFIG=act_input_vjepa_w0_nostate_lagvis_geometry_noleftwrist.yaml
+
+# 屏蔽左腕：几何辅助 + 未来视觉 latent 权重 1
+HAT_BUNDLE=pick_bottle_0930/b0930_20261022_replace50_nostate_vjepa_w1_lagvis_geometry_noleftwrist_ckpt
+HAT_CONFIG=act_input_vjepa_w1_nostate_lagvis_geometry_noleftwrist.yaml
+```
+
+选择其中一组变量后，执行：
+
+```bash
+/home/nerv/miniconda3/envs/twist_qyx/bin/python -m hdt.online_hat_service \
+  --config "$HAT_BUNDLE/$HAT_CONFIG" \
+  --checkpoint "$HAT_BUNDLE/policy_last.ckpt" \
+  --stats "$HAT_BUNDLE/dataset_stats.pkl" \
+  --embodiment dex5 \
+  --image-source hdt.zed2i_image_source:get_images \
+  --state-tail full \
+  --fps 15 --replan-frames 5 \
+  --wrist-frame-conversion inspire_hand_base \
+  --heading-frame initial \
+  --scheduled-anchor-max-error-m 0
+```
+
+两份推理 YAML 的字段和值分别与屏蔽前的对应版本一致，没有添加 `common.chunk_fps`。使用新模型无需启用先前的 `--left-wrist-state-reference` / `--left-wrist-state-sequence` 固定输入参数；小脑继续使用当前命令。
+
+2026-10-21 左腕输入固定对照（旧诊断实验，新模型使用上面的命令）：下面沿用几何辅助、latent 权重 0 的模型与 15 Hz / replan 5，仅增加最后两个参数。固定值取自成功记录 `2026-10-20_17-18-37` 的 `sequence_id=46`，与离线替换对照使用同一帧。
+
+```bash
+cd /home/nerv/qingyaoxu/human_policy
+export PYTHONPATH=/home/nerv/qingyaoxu/human_policy:/home/nerv/qingyaoxu/human_policy/hdt:/home/nerv/qingyaoxu/human_policy/hdt/detr:/home/nerv/qingyaoxu/ScaleBFM/ScaleBridge
+HAT_BUNDLE=pick_bottle_0930/b0930_20261020_replace50_nostate_vjepa_w0_lagvis_geometry_ckpt
+HAT_CONFIG=act_input_vjepa_w0_nostate_lagvis_geometry.yaml
+
+/home/nerv/miniconda3/envs/twist_qyx/bin/python -m hdt.online_hat_service \
+  --config "$HAT_BUNDLE/$HAT_CONFIG" \
+  --checkpoint "$HAT_BUNDLE/policy_last.ckpt" \
+  --stats "$HAT_BUNDLE/dataset_stats.pkl" \
+  --embodiment dex5 \
+  --image-source hdt.zed2i_image_source:get_images \
+  --state-tail full \
+  --fps 15 --replan-frames 5 \
+  --wrist-frame-conversion inspire_hand_base \
+  --heading-frame initial \
+  --scheduled-anchor-max-error-m 0 \
+  --left-wrist-state-reference online_hat_records/2026-10-20_17-18-37 \
+  --left-wrist-state-sequence 46
+```
+
+整个运行过程中，只有大脑编码器的左腕位姿输入 `80:89` 被固定为该帧的值，并使用当前 checkpoint 的 stats 归一化；这是策略坐标系中的位姿，不是旧实验的世界坐标。左右手指、右腕、图像、小脑和真实解码锚点沿用原逻辑，不对实体左腕发固定位置命令。启动会打印 `FROZEN encoder left wrist`，新记录的 manifest 保存来源和固定值。删除最后两个参数即可恢复原行为；无需修改 YAML 或重新训练。小脑继续使用原来的启动命令。
 
 常用替换（改上面两个变量，再执行同一条 python 命令）：
 
@@ -521,3 +675,52 @@ env.config.focus_handoff_timeout_s=20.0
 `wrist_compensation_trace.jsonl` 每步记录 `play_scale` 与
 `play_entry_distance_m`。它只改变参考播放速度，不等于手已经对准瓶子两侧。
 默认 `approach_slowdown=false`，不加这组参数时与之前的行为完全一致。
+
+
+### 方案13 / 方案14：2026-10-22 重训的五尺度 SCDP v2（2026-10-26 补充部署）
+
+上周四（10 月 22 日）启动的这两组 SCDP v2 均已完成 100,000 步训练。
+服务器文件时间为 UTC 10 月 22 日 19:34 / 19:40，对应北京时间周五（10 月 23 日）03:34 / 03:40。
+2026-10-26 已从 `4090-168-aigc:/home/aigc/human_policy/training_experiments/scdp_multiscale_v2_20261022/checkpoints/` 复制到本机。
+
+两组均冻结原 HAT / V-JEPA 底座，训练新增的五尺度视觉采样和 FiLM 模块，
+未来视觉 latent 损失权重为 0、底座几何辅助损失权重为 0.1。
+区别是方案14额外屏蔽左腕位姿输入 `80:89`；两者均保留状态尾部 `98:128` 屏蔽。
+五尺度模块读取 V-JEPA 第 3、6、9、12 层特征，只修正左右腕 xyz 输出，沿用原动作接口。
+原方案7为单尺度版本；本地先前两个 `step3000_ckpt` 目录也是旧单尺度模型。
+
+每次在第 3 个终端选择下面一个 `source`，再执行后面的公共推理命令。
+`activate.sh` 会设置该模型自己的 `HAT_BUNDLE`、`HAT_CONFIG` 并启用五尺度部署加载器；不能只设置两个变量而省略 `source`。
+
+
+```
+
+#### 两组共用的第 3 个终端推理命令
+
+```bash
+/home/nerv/miniconda3/envs/twist_qyx/bin/python -m hdt.online_hat_service \
+  --config "$HAT_BUNDLE/$HAT_CONFIG" \
+  --checkpoint "$HAT_BUNDLE/policy_last.ckpt" \
+  --stats "$HAT_BUNDLE/dataset_stats.pkl" \
+  --embodiment dex5 \
+  --image-source hdt.zed2i_image_source:get_images \
+  --state-tail full \
+  --fps 30 --replan-frames 10 \
+  --wrist-frame-conversion inspire_hand_base \
+  --heading-frame initial \
+  --scheduled-anchor-max-error-m 0
+```
+
+这里给出 30 Hz / replan 10 的命令；若延续当前 15 Hz / replan 5 的对照实验，
+只将对应一行改成 `--fps 15 --replan-frames 5`，其余参数及小脑命令沿用当前实验。
+使用原始 ZED 左目流（输入尺寸 `1×3×240×320`），相机投影由本轮实测头部位姿构建。
+启动应打印 `[SCDP] loaded geometry... step=100000 anchors=8 five-scale-v2`，
+或 `geometry_no_left_wrist` 的对应信息。
+
+每个新目录均包含配对的 `policy_last.ckpt`、`dataset_stats.pkl`、推理 YAML、
+`training_config.json`、`model.yaml`、`scdp_adapter.pt`、`cameras.json`、底座源代码和 v2 adapter 代码。
+部署入口在 `training_experiments/scdp_multiscale_v2_20261022/deployment/`。
+两份 adapter 已通过远端/本地 SHA256 一致性、底座 SHA256 配对检查；
+使用已有在线记录完成本地真实前向验证：输出为有限的 `100×128`，有效视觉采样和腕部修正均生效，
+非腕 xyz 通道与 coarse 输出完全一致，方案14的左腕输入扰动不影响输出。
+这里只验证了本地加载和推理，尚未做这两份模型的真机抓瓶验证。

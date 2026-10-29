@@ -12,15 +12,48 @@ from hdt.online_hat_service import (
     _act_config,
     _g1_wrist_to_hand_base,
     _hand_base_to_g1_wrist,
+    _load_left_wrist_state_reference,
     _quat_wxyz_to_rotation_6d,
     _rotation_6d_to_quat_wxyz,
     action_chunk_to_targets,
+    OmegaHomeViewImageSource,
     OnlineHATInputRecorder,
     OnlineHATPolicy,
     robot_state_to_policy_state,
     ScheduledAnchorPlanner,
     TimedObservationHistory,
 )
+
+
+class OmegaHomeViewImageSourceTests(unittest.TestCase):
+    def test_transform_is_opt_in_shape_preserving_and_does_not_mutate_source(self):
+        yy, xx = np.mgrid[:240, :320]
+        hwc = np.stack(
+            [xx % 256, yy % 256, (xx + yy) % 256], axis=-1
+        ).astype(np.uint8)
+        source = np.ascontiguousarray(hwc.transpose(2, 0, 1))[None]
+        before = source.copy()
+        callback = Mock(return_value=source)
+        adapter = OmegaHomeViewImageSource(callback)
+        output = adapter(camera_names=("top",), robot_state={"sequence_id": 1})
+        callback.assert_called_once()
+        self.assertEqual(output.shape, source.shape)
+        self.assertEqual(output.dtype, source.dtype)
+        self.assertTrue(output.flags.c_contiguous)
+        np.testing.assert_array_equal(source, before)
+        self.assertFalse(np.array_equal(output, source))
+        self.assertGreater(float(adapter.valid.mean()), 0.999)
+
+    def test_none_from_recovering_source_passes_through(self):
+        adapter = OmegaHomeViewImageSource(Mock(return_value=None))
+        self.assertIsNone(adapter(camera_names=("top",), robot_state={}))
+
+    def test_wrong_source_geometry_fails_before_policy(self):
+        adapter = OmegaHomeViewImageSource(
+            Mock(return_value=np.zeros((1, 3, 360, 640), dtype=np.uint8))
+        )
+        with self.assertRaisesRegex(ValueError, "requires image source output"):
+            adapter(camera_names=("top",), robot_state={})
 
 
 def trainer_config(**model_extra):
@@ -38,6 +71,44 @@ def trainer_config(**model_extra):
 
 
 class EncoderLeftHandStateTests(unittest.TestCase):
+    def test_frozen_left_wrist_preserves_actual_raw_pose_and_other_inputs(self):
+        policy = OnlineHATPolicy.__new__(OnlineHATPolicy)
+        policy.state_tail = "full"
+        policy.wrist_conversion = "inspire_hand_base"
+        policy.stats = {"qpos_mean": np.zeros(128), "qpos_std": np.ones(128)}
+        policy.left_wrist_state_reference_normalized = np.arange(9, dtype=np.float32)
+        policy._check_state_in_distribution = Mock()
+        measured = state()
+        before = json.dumps(measured)
+        expected_raw = robot_state_to_policy_state(
+            measured, "full", None, "inspire_hand_base", root_quat_mean_w=0.0)
+        raw, normalized = policy.prepare_policy_state(measured)
+        np.testing.assert_array_equal(raw, expected_raw.astype(np.float32))
+        expected = expected_raw / (1 + 1e-6)
+        expected[C.OUTPUT_LEFT_EEF] = np.arange(9)
+        np.testing.assert_allclose(normalized, expected, atol=1e-6)
+        self.assertEqual(json.dumps(measured), before)
+
+    def test_recorded_left_reference_requires_same_coordinate_convention(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            manifest = {"heading_frame": "initial",
+                        "wrist_frame_conversion": "inspire_hand_base", "embodiment": "dex5"}
+            (path / "manifest.json").write_text(json.dumps(manifest))
+            raw = np.zeros(128)
+            raw[C.OUTPUT_LEFT_EEF] = [.01, .26, -.53, 1, 0, 0, 0, 1, 0]
+            (path / "inference_inputs.jsonl").write_text(json.dumps(
+                {"sequence_id": 46, "policy_state_raw": raw.tolist()}) + "\n")
+            kwargs = dict(heading_frame="initial", wrist_conversion="inspire_hand_base",
+                          embodiment="dex5")
+            reference = _load_left_wrist_state_reference(path, 46, **kwargs)
+            np.testing.assert_array_equal(reference["pose_raw"], raw[C.OUTPUT_LEFT_EEF].astype(np.float32))
+            with self.assertRaisesRegex(ValueError, "not found"):
+                _load_left_wrist_state_reference(path, 99, **kwargs)
+            kwargs["heading_frame"] = "world"
+            with self.assertRaisesRegex(ValueError, "does not match"):
+                _load_left_wrist_state_reference(path, 46, **kwargs)
+
     def test_train_mean_changes_only_encoder_left_points(self):
         policy = OnlineHATPolicy.__new__(OnlineHATPolicy)
         policy.left_hand_state_mode = "train_mean"
@@ -133,9 +204,12 @@ class OnlineHATServiceTest(unittest.TestCase):
         policy.chunk_size = 100
         policy.action_representation = "relative_chunk"
         policy.stats = {"action_std": np.ones(128), "action_mean": np.zeros(128)}
+        policy.left_wrist_state_reference_normalized = np.full(9, .123, dtype=np.float32)
 
         def predict(image, qpos, conditioning_dict):
-            np.testing.assert_array_equal(qpos.numpy()[0], raw)
+            expected_input = raw.copy()
+            expected_input[C.OUTPUT_LEFT_EEF] = .123
+            np.testing.assert_array_equal(qpos.numpy()[0], expected_input)
             # Simulate a newer measured pose arriving before output decoding.
             measured["timestamp_ns"] = 1_200_000_000
             measured["right_wrist_pos_world"] = [9., 8., 7.]
@@ -148,6 +222,7 @@ class OnlineHATServiceTest(unittest.TestCase):
             normalized_state=raw.copy(), action_anchor=anchor,
         )
         np.testing.assert_allclose(output[0, C.OUTPUT_RIGHT_EEF[:3]], [.12, -.21, 1.03], atol=1e-7)
+        np.testing.assert_allclose(output[0, C.OUTPUT_LEFT_EEF[:3]], raw[C.OUTPUT_LEFT_EEF[:3]], atol=1e-7)
         rotation = _rotation_6d_to_quat_wxyz(output[0, C.OUTPUT_RIGHT_EEF[3:9]])
         expected = delta.as_quat()[[3, 0, 1, 2]]
         self.assertAlmostEqual(abs(float(np.dot(rotation, expected))), 1.0, places=6)
@@ -381,6 +456,7 @@ class OnlineHATServiceTest(unittest.TestCase):
             "action_std": np.ones(128, dtype=np.float32),
         }
         runner.policy = Mock(return_value=torch.zeros((1, 3, 128)))
+        runner.left_wrist_state_reference_normalized = np.arange(9, dtype=np.float32)
 
         output = runner.infer(
             np.zeros((1, 3, 2, 2), dtype=np.uint8),
@@ -394,6 +470,10 @@ class OnlineHATServiceTest(unittest.TestCase):
         conditioning = runner.policy.call_args.kwargs["conditioning_dict"]
         self.assertEqual(conditioning["hist_image"].shape, (1, 2, 1, 3, 2, 2))
         self.assertEqual(conditioning["hist_qpos"].shape, (1, 2, 128))
+        expected = np.zeros(128, dtype=np.float32)
+        expected[C.OUTPUT_LEFT_EEF] = np.arange(9)
+        np.testing.assert_array_equal(runner.policy.call_args.args[1].numpy()[0], expected)
+        np.testing.assert_array_equal(conditioning["hist_qpos"].numpy()[0], np.stack([expected, expected]))
 
     def test_degenerate_rotation_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "degenerate"):

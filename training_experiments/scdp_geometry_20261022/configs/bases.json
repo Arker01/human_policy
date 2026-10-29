@@ -1,0 +1,25 @@
+{
+  "geometry": {
+    "source_root": "/mnt/nvme0n1/human_policy_ckpt/isolated_20261020_readiness_geometry/src",
+    "checkpoint_dir": "/mnt/nvme0n1/human_policy_ckpt/isolated_20261020_readiness_geometry/checkpoints/geometry_ckpt",
+    "dataset_json": "/mnt/nvme0n1/human_policy_ckpt/isolated_20261020_readiness_geometry/configs/replace50.json",
+    "weights_sha256": "a55641caf0c1532a4fef2793c07506c41cd4873f95e8edf78c0edfaae9ecf5d0",
+    "input_mask_ranges": [[98,128]],
+    "future_visual_weight": 0.0,
+    "experiment_variant": "geometry",
+    "geometry_loss_weight": 0.1,
+    "bundle": "b0930_20261020_replace50_nostate_vjepa_w0_lagvis_geometry_ckpt",
+    "inference_config": "act_input_vjepa_w0_nostate_lagvis_geometry.yaml"
+  },
+  "geometry_no_left_wrist": {
+    "source_root": "/mnt/nvme0n1/human_policy_ckpt/isolated_20261021_no_left_wrist/src",
+    "checkpoint_dir": "/mnt/nvme0n1/human_policy_ckpt/isolated_20261021_no_left_wrist/checkpoints/geometry_ckpt",
+    "dataset_json": "/mnt/nvme0n1/human_policy_ckpt/isolated_20261021_no_left_wrist/configs/replace50.json",
+    "weights_sha256": "7d0e0f736b0f12113a6940ad515a97df58d571555421dc0f66ff32182054a146",
+    "input_mask_ranges": [[80,89],[98,128]],
+    "future_visual_weight": 0.0,
+    "experiment_variant": "geometry",
+    "geometry_loss_weight": 0.1,
+    "note": "Mask normalized left-wrist INPUT 80:89; retain all 128 action outputs and labels"
+  }
+}

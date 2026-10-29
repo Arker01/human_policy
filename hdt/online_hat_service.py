@@ -717,10 +717,46 @@ def _act_config(config, chunk_size):
     return act_config
 
 
+def _load_left_wrist_state_reference(path, sequence_id, *, heading_frame,
+                                     wrist_conversion, embodiment):
+    """Read a recorded pose in policy coordinates, not the old world's frame."""
+    path = Path(path).resolve()
+    inputs = path / "inference_inputs.jsonl" if path.is_dir() else path
+    with (inputs.parent / "manifest.json").open(encoding="utf-8") as stream:
+        manifest = json.load(stream)
+    for key, expected in (("heading_frame", heading_frame),
+                          ("wrist_frame_conversion", wrist_conversion),
+                          ("embodiment", embodiment)):
+        if manifest.get(key) != expected:
+            raise ValueError(
+                f"Left wrist reference {key}={manifest.get(key)!r} "
+                f"does not match this service's {expected!r}"
+            )
+    with inputs.open(encoding="utf-8") as stream:
+        for line in stream:
+            row = json.loads(line)
+            if row["sequence_id"] == sequence_id:
+                raw = np.asarray(row["policy_state_raw"], dtype=np.float32)
+                if raw.shape != (C.ACTION_STATE_VEC_SIZE,):
+                    raise ValueError("Left wrist reference must contain a 128-D raw policy state")
+                pose = raw[C.OUTPUT_LEFT_EEF]
+                if not np.isfinite(pose).all():
+                    raise ValueError("Left wrist reference contains NaN or infinity")
+                _rotation_6d_to_quat_wxyz(pose[3:9])
+                return {
+                    "inputs_file": str(inputs), "sequence_id": int(sequence_id),
+                    "heading_frame": heading_frame,
+                    "wrist_frame_conversion": wrist_conversion,
+                    "pose_raw": pose.tolist(),
+                }
+    raise ValueError(f"Left wrist reference sequence {sequence_id} not found in {inputs}")
+
+
 class OnlineHATPolicy:
     def __init__(self, *, config_path, checkpoint, stats_path, embodiment,
                  device="cuda", state_tail="full", wrist_conversion="none",
-                 state_ood_limit=6.0, left_hand_state_mode="actual"):
+                 state_ood_limit=6.0, left_hand_state_mode="actual",
+                 left_wrist_state_reference=None):
         self.device = torch.device(device)
         if left_hand_state_mode not in ("actual", "train_mean"):
             raise ValueError("left_hand_state_mode must be actual or train_mean")
@@ -764,6 +800,16 @@ class OnlineHATPolicy:
             self.config.get("model", {}).get("zero_state_dims")
         )
         self.stats = _load_stats(stats_path, embodiment)
+        self.left_wrist_state_reference_normalized = None
+        if left_wrist_state_reference is not None:
+            pose = np.asarray(left_wrist_state_reference, dtype=np.float32)
+            if pose.shape != (9,) or not np.isfinite(pose).all():
+                raise ValueError("left_wrist_state_reference must be a finite 9-D pose")
+            _rotation_6d_to_quat_wxyz(pose[3:9])
+            self.left_wrist_state_reference_normalized = (
+                (pose - self.stats["qpos_mean"][C.OUTPUT_LEFT_EEF])
+                / (self.stats["qpos_std"][C.OUTPUT_LEFT_EEF] + 1e-6)
+            ).astype(np.float32)
         self.action_representation = self.stats["action_representation"]
         self.policy, self.visual_preprocessor, self.is_torchscript = self._load_policy(
             Path(checkpoint)
@@ -852,6 +898,16 @@ class OnlineHATPolicy:
         if getattr(self, "left_hand_state_mode", "actual") == "train_mean":
             normalized = normalized.copy()
             normalized[..., C.OUTPUT_LEFT_KEYPOINTS] = 0.0
+        return self._apply_left_wrist_state_reference(normalized)
+
+    def _apply_left_wrist_state_reference(self, normalized):
+        # Encoder input only. Never mutate the raw measured state, protocol
+        # source_state, or the actual/scheduled relative decoding anchor.
+        reference = getattr(self, "left_wrist_state_reference_normalized", None)
+        if reference is None:
+            return normalized
+        normalized = np.asarray(normalized).copy()
+        normalized[..., C.OUTPUT_LEFT_EEF] = reference
         return normalized
 
     def _describe_state_dim(self, raw, masked, dim):
@@ -928,6 +984,8 @@ class OnlineHATPolicy:
                     "normalized_state must be shaped "
                     f"({C.ACTION_STATE_VEC_SIZE},), got {state.shape}"
                 )
+        # Also cover callers supplying an already normalized offline state.
+        state = self._apply_left_wrist_state_reference(state)
         qpos = torch.from_numpy(state).unsqueeze(0).to(self.device)
         history_count = len(self.history_offsets)
         history_conditioning = {}
@@ -953,6 +1011,7 @@ class OnlineHATPolicy:
                     "normalized_history_states must be shaped "
                     f"{expected_state_shape}, got {history_states.shape}"
                 )
+            history_states = self._apply_left_wrist_state_reference(history_states)
             flat_history_images = history_images.reshape(
                 history_count * len(self.camera_names),
                 *history_images.shape[2:],
@@ -1049,6 +1108,119 @@ class RecoveringImageSource:
             self.failed_at = None
             self.last_warning = float("-inf")
         return images
+
+
+class OmegaHomeViewImageSource:
+    """Opt-in, fixed-cost ZED 2i -> omega-HOME image adapter.
+
+    The callback contract remains uint8 NCHW and the output remains 320x240,
+    so enabling this does not change policy tensor shapes or channel order.
+    The inverse map is built once at startup; each frame is one cv2.remap.
+    """
+
+    INPUT_WH = (320, 240)
+    OUTPUT_WH = (320, 240)
+    SOURCE_DOWN_PITCH_DEG = 56.272020907132855
+    TARGET_DOWN_PITCH_DEG = 55.38604827974715
+    SOURCE_K = np.array(
+        [[132.89664027, 0.0, 156.14071672],
+         [0.0, 177.20740901, 123.50140821],
+         [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+    SOURCE_D = np.array(
+        [0.0564711822, 0.1466200586, -0.0003228833, 0.0002013464,
+         0.1791991446, 0.1328947127, 0.0732228294, 0.2320380446],
+        dtype=np.float64,
+    )
+    # The native omega-HOME left image is 640x360 with fx=fy=368.  HAT
+    # consumes 320x240, so this is its direct-resize equivalent intrinsics.
+    TARGET_K = np.array(
+        [[184.0, 0.0, 160.0],
+         [0.0, 245.33333333333334, 120.0],
+         [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+
+    def __init__(self, callback):
+        self.callback = callback
+        self.map_x, self.map_y, self.valid = self._build_maps()
+
+    @staticmethod
+    def _symmetric_rotation(down_pitch_deg):
+        theta = np.deg2rad(float(down_pitch_deg))
+        cosine, sine = np.cos(theta), np.sin(theta)
+        # Optical camera coordinates -> mechanically symmetric head_link.
+        return np.array(
+            [[0.0, -sine, cosine],
+             [-1.0, 0.0, 0.0],
+             [0.0, -cosine, -sine]],
+            dtype=np.float64,
+        )
+
+    @classmethod
+    def _build_maps(cls):
+        # For every output ray, find the corresponding distorted source pixel.
+        import cv2
+
+        width, height = cls.OUTPUT_WH
+        u, v = np.meshgrid(np.arange(width), np.arange(height))
+        target_pixels = np.stack(
+            [u.ravel(), v.ravel(), np.ones(width * height)], axis=0
+        )
+        target_rays = np.linalg.inv(cls.TARGET_K) @ target_pixels
+        source_rotation = cls._symmetric_rotation(cls.SOURCE_DOWN_PITCH_DEG)
+        target_rotation = cls._symmetric_rotation(cls.TARGET_DOWN_PITCH_DEG)
+        source_rays = source_rotation.T @ target_rotation @ target_rays
+        forward = source_rays[2]
+        normalized = source_rays[:2] / forward[None]
+        object_points = np.column_stack(
+            [normalized.T, np.ones(width * height, dtype=np.float64)]
+        )
+        source_pixels, _ = cv2.projectPoints(
+            object_points, np.zeros(3), np.zeros(3), cls.SOURCE_K, cls.SOURCE_D
+        )
+        source_pixels = source_pixels.reshape(height, width, 2)
+        map_x = source_pixels[..., 0].astype(np.float32)
+        map_y = source_pixels[..., 1].astype(np.float32)
+        source_width, source_height = cls.INPUT_WH
+        valid = (
+            (forward.reshape(height, width) > 0.0)
+            & np.isfinite(map_x) & np.isfinite(map_y)
+            & (map_x >= 0.0) & (map_x <= source_width - 1)
+            & (map_y >= 0.0) & (map_y <= source_height - 1)
+        )
+        map_x[~valid] = -1.0
+        map_y[~valid] = -1.0
+        return map_x, map_y, valid
+
+    def __call__(self, **kwargs):
+        images = self.callback(**kwargs)
+        if images is None:
+            return None
+        images = np.asarray(images)
+        expected_suffix = (3, self.INPUT_WH[1], self.INPUT_WH[0])
+        if images.ndim != 4 or images.shape[1:] != expected_suffix:
+            raise ValueError(
+                "--omega-home-view requires image source output shaped "
+                f"(camera,{expected_suffix[0]},{expected_suffix[1]},"
+                f"{expected_suffix[2]}), got {images.shape}"
+            )
+        import cv2
+
+        output = np.empty(
+            (images.shape[0], 3, self.OUTPUT_WH[1], self.OUTPUT_WH[0]),
+            dtype=images.dtype,
+        )
+        for index, chw in enumerate(images):
+            hwc = np.ascontiguousarray(chw.transpose(1, 2, 0))
+            warped = cv2.remap(
+                hwc, self.map_x, self.map_y, cv2.INTER_LINEAR,
+                borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0),
+            )
+            warped[~self.valid] = 0
+            output[index] = warped.transpose(2, 0, 1)
+        return np.ascontiguousarray(output)
 
 
 class TimedObservationHistory:
@@ -1434,6 +1606,12 @@ def main():
     parser.add_argument("--stats", type=Path, required=True)
     parser.add_argument("--embodiment", default="h1_inspire")
     parser.add_argument("--image-source", required=True, help="module:function returning (camera,C,H,W)")
+    parser.add_argument(
+        "--omega-home-view", action="store_true",
+        help="opt in to the fixed, rotation-only ZED 2i -> omega-HOME "
+             "mechanical-symmetry view transform before policy inference; "
+             "omitting this flag preserves the existing image path exactly",
+    )
     parser.add_argument("--state-endpoint", default="tcp://127.0.0.1:5561")
     parser.add_argument("--chunk-endpoint", default="tcp://127.0.0.1:5562")
     parser.add_argument(
@@ -1490,6 +1668,15 @@ def main():
              "anchors remain actual",
     )
     parser.add_argument(
+        "--left-wrist-state-reference", type=Path,
+        help="encoder input only: freeze left wrist position and rotation to a "
+             "recorded raw policy pose; pass a record directory or inference_inputs.jsonl",
+    )
+    parser.add_argument(
+        "--left-wrist-state-sequence", type=int,
+        help="sequence_id in --left-wrist-state-reference to freeze for the entire run",
+    )
+    parser.add_argument(
         "--state-ood-limit", type=float, default=10.0,
         help="refuse to start when any policy state dim is further than this "
              "many standard deviations from the checkpoint's training mean. The "
@@ -1515,6 +1702,17 @@ def main():
     )
     parser.add_argument("--scalebridge-root", type=Path, default=DEFAULT_SCALEBRIDGE_ROOT)
     args = parser.parse_args()
+    left_wrist_reference = None
+    if (args.left_wrist_state_reference is None) != (args.left_wrist_state_sequence is None):
+        parser.error("--left-wrist-state-reference and --left-wrist-state-sequence must be used together")
+    if args.left_wrist_state_reference is not None:
+        left_wrist_reference = _load_left_wrist_state_reference(
+            args.left_wrist_state_reference, args.left_wrist_state_sequence,
+            heading_frame=args.heading_frame,
+            wrist_conversion=args.wrist_frame_conversion,
+            embodiment=args.embodiment,
+        )
+        print(f"[online_hat] FROZEN encoder left wrist: {left_wrist_reference}", flush=True)
     if args.fps is not None and args.fps <= 0:
         parser.error("--fps must be positive")
     if args.replan_frames <= 0:
@@ -1580,6 +1778,9 @@ def main():
         wrist_conversion=args.wrist_frame_conversion,
         state_ood_limit=args.state_ood_limit,
         left_hand_state_mode=args.left_hand_state_mode,
+        left_wrist_state_reference=(
+            None if left_wrist_reference is None else left_wrist_reference["pose_raw"]
+        ),
     )
     print(f"[online_hat] action representation: {policy.action_representation}", flush=True)
     if policy.action_representation == "relative_chunk":
@@ -1605,6 +1806,7 @@ def main():
             "camera_names": list(policy.camera_names),
             "state_tail": args.state_tail,
             "left_hand_state_mode": args.left_hand_state_mode,
+            "left_wrist_state_reference": left_wrist_reference,
             "origin_frames": args.origin_frames,
             "heading_frame": args.heading_frame,
             "wrist_frame_conversion": args.wrist_frame_conversion,
@@ -1616,6 +1818,8 @@ def main():
             "relative_anchor_mode": args.relative_anchor_mode,
             "scheduled_anchor_max_error_m": args.scheduled_anchor_max_error_m,
         }
+        if args.omega_home_view:
+            recorder_metadata["omega_home_view"] = True
         if args.record_dir is None:
             recorder = OnlineHATInputRecorder.create_default(
                 ROOT / "online_hat_records", recorder_metadata
@@ -1628,6 +1832,16 @@ def main():
     recovering_images = RecoveringImageSource(
         image_source, getattr(image_source_module, "RECOVERABLE_IMAGE_ERRORS", ())
     )
+    policy_images = recovering_images
+    if args.omega_home_view:
+        policy_images = OmegaHomeViewImageSource(recovering_images)
+        print(
+            "[online_hat] omega-HOME view enabled: 320x240 ZED 2i -> "
+            "320x240 mechanical-symmetry remap "
+            f"({OmegaHomeViewImageSource.SOURCE_DOWN_PITCH_DEG:.3f} -> "
+            f"{OmegaHomeViewImageSource.TARGET_DOWN_PITCH_DEG:.3f} deg)",
+            flush=True,
+        )
     source_video_stop = None
     if recorder is not None:
         image_source_module = importlib.import_module(image_source.__module__)
@@ -1657,7 +1871,7 @@ def main():
             subscriber_factory=LatestSubscriber,
             endpoint=args.state_endpoint,
             validator=validate_robot_state,
-            image_source=recovering_images,
+            image_source=policy_images,
             camera_names=policy.camera_names,
             history_offsets=policy.history_offsets,
             history_fps=policy.history_fps,
@@ -1719,7 +1933,7 @@ def main():
                 now = monotonic_ns()
                 if now < next_replan_ns:
                     continue
-                images = recovering_images(
+                images = policy_images(
                     camera_names=policy.camera_names, robot_state=state
                 )
                 if images is None:

@@ -1,0 +1,87 @@
+{
+  "version": "v2_five_scale",
+  "conditioner": {
+    "enabled": true,
+    "anchors": 8,
+    "film_dim": 256,
+    "spatial_mode": "five_scale_v2",
+    "pyramid_channels": 128
+  },
+  "pyramid": {
+    "source_layers_one_based": [
+      3,
+      6,
+      9,
+      12,
+      12
+    ],
+    "strides": [
+      1,
+      2,
+      4,
+      8,
+      16
+    ],
+    "feature_hw": [
+      [
+        14,
+        19
+      ],
+      [
+        7,
+        10
+      ],
+      [
+        4,
+        5
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        1,
+        2
+      ]
+    ],
+    "method": "native intermediate tokens, pretrained hierarchical norms, trainable lateral 1x1 + depthwise 3x3 strided convolutions; no upsampling"
+  },
+  "training": {
+    "steps": 100000,
+    "lr": 1e-05,
+    "save_every": 1000,
+    "workers": 4
+  },
+  "global_batch_size": 64,
+  "seed": 0,
+  "evaluation": {
+    "query0_protocol": "original eval_mpjpe_batch.py",
+    "preclose_source_seconds": 0.5,
+    "reference_requires_equal_training_steps": true,
+    "bottle_pairs_manifest": null
+  },
+  "jobs": [
+    {
+      "name": "original_20261004",
+      "gpus": [
+        6,
+        7
+      ],
+      "batch_size_per_process": 32
+    },
+    {
+      "name": "geometry",
+      "gpus": [
+        6
+      ],
+      "batch_size_per_process": 64
+    },
+    {
+      "name": "geometry_no_left_wrist",
+      "gpus": [
+        7
+      ],
+      "batch_size_per_process": 64
+    }
+  ]
+}

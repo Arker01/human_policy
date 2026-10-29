@@ -31,6 +31,9 @@ def _expand_hand_25_from_tips(hand_kpts_25: np.ndarray) -> np.ndarray:
 
 
 def load_cmd_tuple_hdf5(path, *, full_hand=False):
+    import torch
+    from pytorch3d.transforms import rotation_6d_to_matrix
+
     data_list = []
 
     with h5py.File(path, 'r') as file:
@@ -77,6 +80,17 @@ def load_cmd_tuple_hdf5(path, *, full_hand=False):
                     'joints': left_skeleton_joints.reshape(-1).tolist()
                 }
             }
+            if np.any(file["/action"][i, 89:98]):
+                waist_mat = cur_cmd_dict.get('waist_mat')
+                if waist_mat is None:
+                    # Older remote inference_utils returns only head and wrists.
+                    root_pose = file["/action"][i, 89:98]
+                    waist_mat = np.eye(4)
+                    waist_mat[:3, 3] = root_pose[:3]
+                    waist_mat[:3, :3] = rotation_6d_to_matrix(
+                        torch.as_tensor(root_pose[3:9])
+                    ).numpy()
+                data['waist'] = waist_mat.flatten(order="F").tolist()
             data_list.append(data)
 
     return data_list
@@ -343,13 +357,19 @@ def main(input_file, *, full_hand=False):
                 'left': left_fingers_world
             }
         }
+        if 'waist' in data:
+            waist_mat = np.array(data['waist']).reshape(4, 4, order="F")
+            waist_pos, wx, wy, wz = get_axes(waist_mat)
+            frame_data['positions']['waist'] = waist_pos
+            frame_data['axes']['waist'] = (wx, wy, wz)
         frames.append(frame_data)
     
     # Create figure
     fig = go.Figure()
     
     # Add initial positions
-    colors = {'head': 'blue', 'right_wrist': 'red', 'left_wrist': 'green'}
+    colors = {'head': 'blue', 'right_wrist': 'red', 'left_wrist': 'green', 'waist': 'orange'}
+    parts = list(frames[0]['positions'])
     axis_colors = ['red', 'green', 'blue']  # x, y, z axes colors
     
     def add_coordinate_frame(pos, axes, name, base_color):
@@ -386,7 +406,7 @@ def main(input_file, *, full_hand=False):
     # Add origin coordinate frame
     
     
-    for part in ['head', 'right_wrist', 'left_wrist']:
+    for part in parts:
         pos = first_frame['positions'][part]
         axes = first_frame['axes'][part]
         add_coordinate_frame(pos, axes, part, colors[part])
@@ -404,7 +424,7 @@ def main(input_file, *, full_hand=False):
         scene=dict(
             aspectmode='data',
             camera=dict(
-                up=dict(x=0, y=1, z=0),
+                up=dict(x=0, y=0, z=1),
                 center=dict(x=0, y=0, z=0),
                 eye=dict(x=1.5, y=1.5, z=1.5)
             ),
@@ -483,7 +503,7 @@ def main(input_file, *, full_hand=False):
         #         line=dict(color=color, width=3)
         #     ))
             
-        for part in ['head', 'right_wrist', 'left_wrist']:
+        for part in parts:
             pos = frame['positions'][part]
             axes = frame['axes'][part]
             
@@ -533,7 +553,9 @@ def _save_html(fig, out_path):
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     pio.write_html(fig, out_path, auto_open=False, include_plotlyjs="cdn")
 
-def _save_mp4(fig, out_path, *, fps=20, width=960, height=720):
+def _save_mp4(fig, out_path, *, fps=20, width=960, height=720, frames=None):
+    if frames is not None:
+        return _save_mp4_matplotlib(frames, out_path, fps=fps, width=width, height=height)
     import subprocess
     import tempfile
     import plotly.io as pio
@@ -564,6 +586,75 @@ def _save_mp4(fig, out_path, *, fps=20, width=960, height=720):
         proc = subprocess.run(["bash", "-lc", cmd], capture_output=True, text=True)
         if proc.returncode != 0:
             raise RuntimeError(f"ffmpeg failed: {proc.stderr.strip()}")
+
+
+def _save_mp4_matplotlib(frames, out_path, *, fps=20, width=960, height=720):
+    """Render the same decoded keypoints with fixed metric bounds and Z up."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import subprocess
+    import imageio_ffmpeg
+
+    if not frames:
+        raise ValueError('No keypoint frames to render')
+    os.makedirs(os.path.dirname(out_path) or '.', exist_ok=True)
+    colors = {'head': 'blue', 'right_wrist': 'red', 'left_wrist': 'green', 'waist': 'orange'}
+    parts = list(frames[0]['positions'])
+    all_points = np.concatenate([
+        np.stack([frame['positions'][part] for part in parts]) for frame in frames
+    ] + [frame['fingers'][side] for frame in frames for side in ('left', 'right')])
+    low, high = all_points.min(axis=0) - .12, all_points.max(axis=0) + .12
+    fig = plt.figure(figsize=(width / 100, height / 100), dpi=100)
+    ax = fig.add_subplot(111, projection='3d')
+    ax.set(xlim=(low[0], high[0]), ylim=(low[1], high[1]), zlim=(low[2], high[2]),
+           xlabel='X forward (m)', ylabel='Y left (m)', zlabel='Z up (m)')
+    ax.set_box_aspect(high - low)
+    ax.view_init(elev=20, azim=210)
+    markers, axes = {}, {}
+    for part in parts:
+        markers[part], = ax.plot([], [], [], 'o', color=colors[part], label=part)
+        axes[part] = [ax.plot([], [], [], color=c, linewidth=1)[0] for c in ('red', 'green', 'blue')]
+    fingers = {side: ax.plot([], [], [], '.', color=colors[side + '_wrist'], markersize=4)[0]
+               for side in ('left', 'right')}
+    root_path = np.stack([frame['positions']['waist'] for frame in frames]) if 'waist' in parts else None
+    trail, = ax.plot([], [], [], color='darkorange', linewidth=2, label='root trajectory')
+    if root_path is not None:
+        ax.plot(root_path[:, 0], root_path[:, 1], root_path[:, 2], color='orange', alpha=.2)
+    ax.legend(loc='upper left', fontsize=8)
+    title = ax.set_title('')
+    fig.subplots_adjust(left=0, right=1, bottom=.03, top=.94)
+    cmd = [imageio_ffmpeg.get_ffmpeg_exe(), '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
+           '-pix_fmt', 'rgb24', '-s', f'{width}x{height}', '-r', str(fps), '-i', '-',
+           '-an', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out_path]
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    try:
+        for i, frame in enumerate(frames):
+            for part in parts:
+                pos = frame['positions'][part]
+                markers[part].set_data_3d(pos[0:1], pos[1:2], pos[2:3])
+                for line, end in zip(axes[part], frame['axes'][part]):
+                    line.set_data_3d([pos[0], end[0]], [pos[1], end[1]], [pos[2], end[2]])
+            for side, line in fingers.items():
+                pts = frame['fingers'][side]
+                line.set_data_3d(pts[:, 0], pts[:, 1], pts[:, 2])
+            if root_path is not None:
+                trail.set_data_3d(root_path[:i+1, 0], root_path[:i+1, 1], root_path[:i+1, 2])
+            title.set_text(f'Action frame {i}/{len(frames)-1} | {i/fps:.2f}s | root: stance-foot FK estimate')
+            fig.canvas.draw()
+            rgb = np.asarray(fig.canvas.buffer_rgba())[:, :, :3].copy()
+            proc.stdin.write(rgb.tobytes())
+            if i % 100 == 0:
+                print(f'Rendering {i}/{len(frames)}', flush=True)
+        proc.stdin.close()
+        error = proc.stderr.read().decode(errors='replace')
+        if proc.wait():
+            raise RuntimeError(f'ffmpeg failed: {error}')
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+        plt.close(fig)
 
 if __name__ == "__main__":
     import argparse
@@ -607,7 +698,7 @@ if __name__ == "__main__":
             max_steps=args.max_steps,
             device=args.device,
         )
-        fig, _ = main(args.out, full_hand=args.full_hand)
+        fig, frames = main(args.out, full_hand=args.full_hand)
         if args.eval_mpjpe:
             gt_file = args.gt_file if args.gt_file is not None else args.predict_episode
             metrics = evaluate_mpjpe(gt_file, args.out, save_json_path=args.metrics_out)
@@ -615,7 +706,7 @@ if __name__ == "__main__":
             for k, v in metrics.items():
                 print(f"{k}: {v}")
     else:
-        fig, _ = main(args.file, full_hand=args.full_hand)
+        fig, frames = main(args.file, full_hand=args.full_hand)
         if args.eval_mpjpe:
             if args.gt_file is None:
                 raise ValueError("--gt_file is required when using --eval_mpjpe without --predict_episode")
@@ -627,7 +718,7 @@ if __name__ == "__main__":
     if args.save_html is not None:
         _save_html(fig, args.save_html)
     if args.save_mp4 is not None:
-        _save_mp4(fig, args.save_mp4, fps=args.fps, width=args.width, height=args.height)
+        _save_mp4(fig, args.save_mp4, fps=args.fps, width=args.width, height=args.height, frames=frames)
 
     if args.save_html is None and args.save_mp4 is None:
         fig.show()

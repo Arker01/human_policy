@@ -1,0 +1,68 @@
+{
+  "version": "five_scale_v2",
+  "base": "original_20261004",
+  "step": 0,
+  "v1_step": null,
+  "query0_protocol": "original eval_mpjpe_batch.py, 16 joints, per-episode macro average, prior only",
+  "max_frames_per_episode": null,
+  "query0": {
+    "human/v2": {
+      "mpjpe_all_mm": 17.666357549031577,
+      "mpjpe_hand_mm": 19.93681303660075,
+      "mpjpe_wrist_mm": 17.4144318262736,
+      "mpjpe_head_mm": 4.8970043659210205,
+      "mpjpe_waist_mm": 3.6940927664438883,
+      "episodes": 15,
+      "observations": 2456
+    },
+    "human/baseline": {
+      "mpjpe_all_mm": 17.666357549031577,
+      "mpjpe_hand_mm": 19.93681303660075,
+      "mpjpe_wrist_mm": 17.4144318262736,
+      "mpjpe_head_mm": 4.8970043659210205,
+      "mpjpe_waist_mm": 3.6940927664438883,
+      "episodes": 15,
+      "observations": 2456
+    },
+    "dex5/v2": {
+      "mpjpe_all_mm": 27.212954330444337,
+      "mpjpe_hand_mm": 30.938968849182128,
+      "mpjpe_wrist_mm": 23.687620449066163,
+      "mpjpe_head_mm": 9.68174867630005,
+      "mpjpe_waist_mm": 7.082639575004578,
+      "episodes": 10,
+      "observations": 3986
+    },
+    "dex5/baseline": {
+      "mpjpe_all_mm": 27.212954330444337,
+      "mpjpe_hand_mm": 30.938968849182128,
+      "mpjpe_wrist_mm": 23.687620449066163,
+      "mpjpe_head_mm": 9.68174867630005,
+      "mpjpe_waist_mm": 7.082639575004578,
+      "episodes": 10,
+      "observations": 3986
+    }
+  },
+  "preclose_05s": {
+    "dex5/v2/right": {
+      "frames": 165,
+      "camera_xyz_mae_mm": [
+        15.056578636169434,
+        25.70276641845703,
+        12.58443832397461
+      ],
+      "wrist_l2_mm": 35.233848571777344
+    },
+    "dex5/baseline/right": {
+      "frames": 165,
+      "camera_xyz_mae_mm": [
+        15.056578636169434,
+        25.70276641845703,
+        12.58443832397461
+      ],
+      "wrist_l2_mm": 35.233848571777344
+    }
+  },
+  "preclose_definition": "GT finger closing onset proxy, source-recording seconds; camera axes right/down/forward; frame-weighted",
+  "bottle_translation_response": "pending: requires valid fixed-state bottle-only paired observations; whole-image shift is not a substitute"
+}

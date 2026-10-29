@@ -1,0 +1,2284 @@
+{
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-155_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-155_unified_V.json",
+    "converter_head_max_abs": 3.7585230455890184e-07,
+    "converter_wrist_position_max_abs_m": 5.483639209380442e-07,
+    "kp_from_arkit_world": [
+      [
+        -2.8712834405870452e-08,
+        -8.36118649778483e-08,
+        -1.0000000492221948,
+        -0.12355907387688607
+      ],
+      [
+        -1.0000001390893336,
+        -5.094564664608659e-09,
+        -6.405949696597847e-11,
+        0.01203262082650168
+      ],
+      [
+        -3.920373618423168e-09,
+        1.0000000591243627,
+        -1.0952370390660817e-09,
+        -1.4821729323725323
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0000003000000899
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-156_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-156_unified_V.json",
+    "converter_head_max_abs": 2.390143498676167e-07,
+    "converter_wrist_position_max_abs_m": 7.32373044987078e-08,
+    "kp_from_arkit_world": [
+      [
+        -4.175031434599934e-08,
+        -8.362631769405002e-08,
+        -0.9999997434076083,
+        -0.12519177186549313
+      ],
+      [
+        -0.9999998738839655,
+        4.15939687069026e-10,
+        7.750476726863539e-09,
+        0.02355894137727548
+      ],
+      [
+        4.590388519562326e-09,
+        0.9999999576391556,
+        -2.0446075276677867e-08,
+        -1.495074939335189
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-157_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-157_unified_V.json",
+    "converter_head_max_abs": 2.2885392242377733e-07,
+    "converter_wrist_position_max_abs_m": 9.115315768859489e-08,
+    "kp_from_arkit_world": [
+      [
+        -8.667987681199063e-09,
+        -3.12524919281045e-08,
+        -1.0000001077761107,
+        -0.03520365150651995
+      ],
+      [
+        -1.0000001732767565,
+        -6.30935575454965e-10,
+        6.960245246423176e-10,
+        0.012622393164118216
+      ],
+      [
+        -2.3196554574911737e-08,
+        1.0000000021080915,
+        2.844446711516701e-09,
+        -1.5095816027894051
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-158_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-158_unified_V.json",
+    "converter_head_max_abs": 2.106125817080695e-07,
+    "converter_wrist_position_max_abs_m": 1.8167022397541643e-07,
+    "kp_from_arkit_world": [
+      [
+        -1.679966428129548e-08,
+        -5.9315191606593166e-08,
+        -0.999999860551034,
+        -0.06592358436583118
+      ],
+      [
+        -1.0000000015122383,
+        -2.3181769256315274e-09,
+        -1.2807473768208854e-09,
+        0.024187344029033178
+      ],
+      [
+        -1.3321829609457146e-08,
+        1.0000000177595918,
+        4.168478351060573e-09,
+        -1.5079184753911499
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.9999999000000099
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-159_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-159_unified_V.json",
+    "converter_head_max_abs": 2.074485486724953e-07,
+    "converter_wrist_position_max_abs_m": 5.42097244871087e-08,
+    "kp_from_arkit_world": [
+      [
+        1.8253350384312193e-08,
+        2.8464609650909928e-08,
+        -0.9999999495733847,
+        -0.1317615860030804
+      ],
+      [
+        -0.999999976270878,
+        -1.1407143744926267e-09,
+        -4.621900448443778e-09,
+        0.0054777869661072134
+      ],
+      [
+        4.233819357571058e-09,
+        0.9999999606406902,
+        -4.119426057012805e-09,
+        -1.4947466417337756
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-160_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-160_unified_V.json",
+    "converter_head_max_abs": 2.2982684490246985e-07,
+    "converter_wrist_position_max_abs_m": 7.844832627945664e-08,
+    "kp_from_arkit_world": [
+      [
+        2.0645687447272817e-08,
+        1.5054923745426508e-08,
+        -1.000000003097346,
+        -0.041384720393167915
+      ],
+      [
+        -1.00000002655816,
+        1.7439597170827305e-09,
+        -1.3603881454225189e-08,
+        0.029099644584423247
+      ],
+      [
+        1.81376903040419e-08,
+        1.0000000365342165,
+        -3.4566921015809728e-09,
+        -1.505434655670728
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-161_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-161_unified_V.json",
+    "converter_head_max_abs": 2.412684301468168e-07,
+    "converter_wrist_position_max_abs_m": 1.4255165270427028e-07,
+    "kp_from_arkit_world": [
+      [
+        6.226509844472364e-08,
+        -3.216034976459882e-08,
+        -0.9999999431660114,
+        -0.14346849335652734
+      ],
+      [
+        -1.0000000350978104,
+        3.794678758477012e-09,
+        6.651518505321859e-09,
+        0.011165390376885293
+      ],
+      [
+        3.401259362985538e-08,
+        1.0000000558434081,
+        3.131235735291161e-08,
+        -1.486081868040205
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0000000600000036
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-162_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-162_unified_V.json",
+    "converter_head_max_abs": 1.9739068865542997e-07,
+    "converter_wrist_position_max_abs_m": 1.401086419106079e-07,
+    "kp_from_arkit_world": [
+      [
+        -8.810703359255699e-09,
+        -2.94585345883615e-08,
+        -0.9999999006447572,
+        -0.049788188292087414
+      ],
+      [
+        -0.9999998742121177,
+        -5.398424846523239e-09,
+        1.5602560403597064e-08,
+        -0.003199277596120407
+      ],
+      [
+        1.1700129302293838e-08,
+        1.0000002003302635,
+        1.1622713021875665e-08,
+        -1.4864753971698421
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-163_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-163_unified_V.json",
+    "converter_head_max_abs": 2.1057295040982638e-07,
+    "converter_wrist_position_max_abs_m": 2.0546193035819726e-07,
+    "kp_from_arkit_world": [
+      [
+        2.6471583475777334e-08,
+        5.184323114576472e-09,
+        -0.9999999373547669,
+        -0.04089451150316124
+      ],
+      [
+        -0.9999999630158518,
+        -1.3102342076924313e-09,
+        -6.5708511267922e-09,
+        0.017171296325090676
+      ],
+      [
+        1.7065291554355934e-08,
+        1.0000000191097627,
+        2.718272122629216e-08,
+        -1.4852288790408945
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.9999999000000099
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-164_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-164_unified_V.json",
+    "converter_head_max_abs": 1.987254466852273e-07,
+    "converter_wrist_position_max_abs_m": 5.99977434401211e-08,
+    "kp_from_arkit_world": [
+      [
+        2.1855549588760256e-08,
+        -5.5004889412220094e-08,
+        -0.9999999780608932,
+        -0.13578835597114328
+      ],
+      [
+        -0.9999999614891741,
+        -1.3173146024640615e-09,
+        3.2333176397180807e-09,
+        0.0029421620683470016
+      ],
+      [
+        1.7612020459861985e-08,
+        1.00000001338462,
+        -1.1166561378415578e-08,
+        -1.4746704213060102
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-165_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-165_unified_V.json",
+    "converter_head_max_abs": 2.2456190906794404e-07,
+    "converter_wrist_position_max_abs_m": 6.528374169034734e-08,
+    "kp_from_arkit_world": [
+      [
+        -1.022200716025378e-08,
+        -4.797056152144829e-08,
+        -0.9999999231364477,
+        -0.14939776634071966
+      ],
+      [
+        -1.0000000019935624,
+        2.441144768669201e-09,
+        4.3142510582739415e-09,
+        0.01542722901039775
+      ],
+      [
+        1.0954538614645663e-08,
+        1.0000000464730328,
+        6.08047776484929e-10,
+        -1.5013027698482466
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-166_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-166_unified_V.json",
+    "converter_head_max_abs": 2.3609762792725641e-07,
+    "converter_wrist_position_max_abs_m": 9.51357608247605e-08,
+    "kp_from_arkit_world": [
+      [
+        3.6522218476122306e-08,
+        -5.739117774087402e-08,
+        -0.9999999970014047,
+        -0.14219156375043246
+      ],
+      [
+        -1.0000000369482283,
+        -9.606606381600966e-10,
+        9.911605034772112e-10,
+        0.003690274316118816
+      ],
+      [
+        2.679511044036249e-08,
+        1.0000000367918351,
+        -2.5143055962382705e-08,
+        -1.4977558587791984
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-167_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-167_unified_V.json",
+    "converter_head_max_abs": 2.044739051410005e-07,
+    "converter_wrist_position_max_abs_m": 8.239779369922928e-08,
+    "kp_from_arkit_world": [
+      [
+        -2.6780771649040028e-08,
+        3.8766795793665706e-08,
+        -1.0000000125052926,
+        -0.15896993890196542
+      ],
+      [
+        -1.0000000329392122,
+        8.471330352270353e-10,
+        -6.967008817103407e-09,
+        0.021044252329634975
+      ],
+      [
+        4.2234471342632054e-08,
+        1.0000000871498735,
+        3.668128336774282e-08,
+        -1.4826499242703162
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-168_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-168_unified_V.json",
+    "converter_head_max_abs": 3.44506040306225e-07,
+    "converter_wrist_position_max_abs_m": 2.3402126037019855e-07,
+    "kp_from_arkit_world": [
+      [
+        9.823624694858957e-09,
+        -3.5328396102020146e-08,
+        -0.9999999383456183,
+        -0.1447134932476939
+      ],
+      [
+        -1.0000000264247055,
+        2.5752264456168644e-09,
+        8.151138187591142e-10,
+        0.008333923609290654
+      ],
+      [
+        2.2123905698121315e-08,
+        1.0000000402563443,
+        -1.2784866137827764e-08,
+        -1.512681111661427
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.9999999000000099
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-169_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-169_unified_V.json",
+    "converter_head_max_abs": 2.721219477253012e-07,
+    "converter_wrist_position_max_abs_m": 1.8679182867131772e-07,
+    "kp_from_arkit_world": [
+      [
+        -6.934015112301562e-08,
+        -4.551703710679252e-08,
+        -1.0000000439817527,
+        -0.055158953169815075
+      ],
+      [
+        -1.0000000749926272,
+        6.347574144134291e-10,
+        2.101340996824035e-09,
+        0.018777661698783327
+      ],
+      [
+        -3.225144851408863e-10,
+        1.0000001049161562,
+        6.033802605235676e-08,
+        -1.4997390439969307
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0000000600000036
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-170_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-170_unified_V.json",
+    "converter_head_max_abs": 2.641918883800054e-07,
+    "converter_wrist_position_max_abs_m": 1.5152517574001934e-07,
+    "kp_from_arkit_world": [
+      [
+        -3.6880428257443496e-08,
+        -2.8847641034890203e-08,
+        -0.9999999274071288,
+        -0.048011187856647104
+      ],
+      [
+        -1.0000000104465119,
+        2.057185315967502e-09,
+        -3.1556346681235686e-09,
+        0.03555974634223811
+      ],
+      [
+        1.3330716283317823e-08,
+        1.0000000371622215,
+        -2.3681694853539628e-08,
+        -1.4638041438374814
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0000000600000036
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-171_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-171_unified_V.json",
+    "converter_head_max_abs": 2.511494964774208e-07,
+    "converter_wrist_position_max_abs_m": 1.3008381993806495e-07,
+    "kp_from_arkit_world": [
+      [
+        -8.688729900516038e-08,
+        -2.2042879970859002e-08,
+        -0.9999998551681534,
+        -0.02370759032219957
+      ],
+      [
+        -1.0000000375681193,
+        7.76736530766316e-09,
+        2.2734712787693326e-09,
+        0.016904000139697728
+      ],
+      [
+        1.714755848183535e-08,
+        0.999999815492884,
+        -2.5182846831457285e-09,
+        -1.486894226006949
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-172_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-172_unified_V.json",
+    "converter_head_max_abs": 3.809366058496466e-07,
+    "converter_wrist_position_max_abs_m": 2.924056257125329e-07,
+    "kp_from_arkit_world": [
+      [
+        7.89180047144194e-09,
+        5.159438056624721e-09,
+        -1.0000000179523618,
+        -0.026592123775393554
+      ],
+      [
+        -1.0000000886080513,
+        4.969183145720828e-09,
+        -5.9003699308965495e-09,
+        0.014486929328452063
+      ],
+      [
+        -2.895918359804001e-08,
+        1.0000000873024035,
+        2.8999000761573008e-08,
+        -1.4583881719689118
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.00000010000001
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-173_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-173_unified_V.json",
+    "converter_head_max_abs": 3.676622938181273e-07,
+    "converter_wrist_position_max_abs_m": 7.731469686689252e-08,
+    "kp_from_arkit_world": [
+      [
+        -3.6941032251388285e-08,
+        -3.117535153916374e-08,
+        -0.999999916710915,
+        -0.06696259174154688
+      ],
+      [
+        -0.999999957800972,
+        -1.5419557510046334e-09,
+        2.003078712006506e-09,
+        0.016309486724973652
+      ],
+      [
+        2.2628844415307476e-09,
+        1.0000000113777792,
+        6.3620532274144535e-09,
+        -1.478049316427805
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-174_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-174_unified_V.json",
+    "converter_head_max_abs": 3.2255327697683356e-07,
+    "converter_wrist_position_max_abs_m": 3.298074640056825e-07,
+    "kp_from_arkit_world": [
+      [
+        -7.625739665657296e-08,
+        -1.591768528508653e-08,
+        -0.9999999307626042,
+        -0.06648288060556697
+      ],
+      [
+        -0.9999999980663218,
+        -7.279661166095791e-10,
+        9.266743344541294e-09,
+        0.02037884659578936
+      ],
+      [
+        6.4725577190408795e-09,
+        0.9999999962996992,
+        6.543178655541801e-09,
+        -1.5040320933251028
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.9999998000000401
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-175_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-175_unified_V.json",
+    "converter_head_max_abs": 2.233799871395603e-07,
+    "converter_wrist_position_max_abs_m": 5.247246170902997e-08,
+    "kp_from_arkit_world": [
+      [
+        1.6897819986329953e-08,
+        -1.1304761893605629e-08,
+        -1.000000061075018,
+        -0.1594691223923181
+      ],
+      [
+        -1.000000081680775,
+        5.842933450090859e-10,
+        1.7959005964598417e-09,
+        0.016548395727019962
+      ],
+      [
+        3.257508546008756e-08,
+        0.9999999982554169,
+        -1.8379691456873386e-08,
+        -1.559245000749826
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-176_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-176_unified_V.json",
+    "converter_head_max_abs": 2.6493211613409784e-07,
+    "converter_wrist_position_max_abs_m": 1.3921821828688508e-07,
+    "kp_from_arkit_world": [
+      [
+        -6.344347142442139e-08,
+        -3.407813509259228e-08,
+        -0.9999999649435858,
+        -0.057869612590003554
+      ],
+      [
+        -1.0000000964368247,
+        2.787606522100168e-09,
+        -1.0994071487122716e-08,
+        0.02229071709779403
+      ],
+      [
+        -3.851580197070199e-08,
+        1.0000000207074167,
+        3.225014132857897e-09,
+        -1.5018464798695397
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.9999999000000099
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-177_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-177_unified_V.json",
+    "converter_head_max_abs": 2.687686533053846e-07,
+    "converter_wrist_position_max_abs_m": 9.157233216150473e-08,
+    "kp_from_arkit_world": [
+      [
+        -8.157693204104167e-08,
+        -3.2156487379891603e-08,
+        -0.9999999420203468,
+        -0.0219027478522243
+      ],
+      [
+        -0.9999999958177039,
+        -4.011435844715225e-09,
+        6.856145852275943e-10,
+        0.029591074937001517
+      ],
+      [
+        1.3281225383990231e-08,
+        1.000000036518809,
+        -6.292590088737588e-08,
+        -1.5071270568097426
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-178_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-178_unified_V.json",
+    "converter_head_max_abs": 2.234866407491154e-07,
+    "converter_wrist_position_max_abs_m": 5.22406229386263e-08,
+    "kp_from_arkit_world": [
+      [
+        8.411757096536569e-08,
+        1.6286407016516025e-09,
+        -0.9999999687352483,
+        -0.026696446964036908
+      ],
+      [
+        -0.9999999360195193,
+        1.5620032637695622e-09,
+        -2.6501685144273307e-09,
+        0.016376656559396484
+      ],
+      [
+        -1.5640436649715512e-09,
+        0.9999999775211436,
+        7.212218177992064e-10,
+        -1.4865953665381677
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-179_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-179_unified_V.json",
+    "converter_head_max_abs": 2.0035220904546236e-07,
+    "converter_wrist_position_max_abs_m": 1.8536757551146366e-07,
+    "kp_from_arkit_world": [
+      [
+        6.997664538091476e-09,
+        -4.230854199645297e-08,
+        -0.9999998490391796,
+        -0.15291370804545407
+      ],
+      [
+        -0.9999999324474939,
+        3.2641016328524305e-09,
+        1.4632791466991664e-09,
+        0.018955342132376343
+      ],
+      [
+        2.3346356343208536e-08,
+        1.0000000571306076,
+        -4.2824249336518094e-08,
+        -1.505885542434562
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.9999999000000099
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-180_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-180_unified_V.json",
+    "converter_head_max_abs": 2.1388163562452434e-07,
+    "converter_wrist_position_max_abs_m": 6.053357815005711e-08,
+    "kp_from_arkit_world": [
+      [
+        3.688498468475715e-08,
+        -3.160888987535008e-08,
+        -1.0000000915538292,
+        -0.06056614590395757
+      ],
+      [
+        -1.0000000942940082,
+        1.2167814118006453e-09,
+        -6.825861583705898e-09,
+        0.02858286444574672
+      ],
+      [
+        -2.7541671722043555e-08,
+        0.9999999375033486,
+        -2.3603320397972475e-09,
+        -1.508923105053089
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-181_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-181_unified_V.json",
+    "converter_head_max_abs": 2.7194047454159875e-07,
+    "converter_wrist_position_max_abs_m": 2.7055468854175757e-07,
+    "kp_from_arkit_world": [
+      [
+        4.602289566755276e-08,
+        -3.172908827085102e-08,
+        -0.9999999602216761,
+        -0.1538436026474133
+      ],
+      [
+        -0.9999999862786526,
+        -2.333607848487952e-10,
+        -6.871026045192183e-10,
+        0.011802823259480951
+      ],
+      [
+        3.14806625922933e-08,
+        1.000000198688915,
+        -5.2540901322106554e-09,
+        -1.486349645135944
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.00000010000001
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-182_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-182_unified_V.json",
+    "converter_head_max_abs": 2.143331410131566e-07,
+    "converter_wrist_position_max_abs_m": 8.695224251731304e-08,
+    "kp_from_arkit_world": [
+      [
+        -6.090840470609163e-08,
+        -2.287125125179621e-09,
+        -1.00000003617938,
+        -0.021391148949368353
+      ],
+      [
+        -1.0000000983007373,
+        4.3352449823034335e-10,
+        3.1190781494209804e-09,
+        0.023679198753290574
+      ],
+      [
+        -4.39730027906735e-08,
+        0.9999999686479804,
+        -1.7231219468640984e-08,
+        -1.4788382529627826
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-183_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-183_unified_V.json",
+    "converter_head_max_abs": 2.1374333041002114e-07,
+    "converter_wrist_position_max_abs_m": 5.646131229219975e-08,
+    "kp_from_arkit_world": [
+      [
+        -5.022816342050915e-09,
+        -4.064904624143952e-08,
+        -0.9999999816485993,
+        -0.0723366126483133
+      ],
+      [
+        -1.0000000074353799,
+        4.774763237096665e-10,
+        8.2359366618629e-09,
+        0.021533653052078633
+      ],
+      [
+        -1.572944821949565e-08,
+        1.0000000542884329,
+        -9.063602869162584e-09,
+        -1.4739841803372051
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-184_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-184_unified_V.json",
+    "converter_head_max_abs": 3.121435294510533e-07,
+    "converter_wrist_position_max_abs_m": 1.9551185603816634e-07,
+    "kp_from_arkit_world": [
+      [
+        -5.525031518420643e-08,
+        -8.11015692644849e-08,
+        -0.9999999959622718,
+        -0.03883127779218855
+      ],
+      [
+        -1.0000001346658953,
+        6.096229155185821e-09,
+        -4.130861438665659e-10,
+        0.018253102413915777
+      ],
+      [
+        -1.446852697103661e-08,
+        1.0000000514435603,
+        2.5154440004678275e-09,
+        -1.4965483664188963
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0000000600000036
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-185_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-185_unified_V.json",
+    "converter_head_max_abs": 2.1297101259962203e-07,
+    "converter_wrist_position_max_abs_m": 1.9705359921573518e-07,
+    "kp_from_arkit_world": [
+      [
+        1.0510712171450294e-08,
+        -1.5994489671171634e-08,
+        -0.9999997754642698,
+        -0.15799062516436646
+      ],
+      [
+        -0.9999998683951913,
+        1.7890620202647006e-10,
+        -2.2474645564431826e-09,
+        0.01608332565450182
+      ],
+      [
+        1.3075436764726133e-09,
+        1.000000030491401,
+        3.4320806877759264e-08,
+        -1.483702191468604
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.9999999000000099
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-186_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-186_unified_V.json",
+    "converter_head_max_abs": 2.61752689117295e-07,
+    "converter_wrist_position_max_abs_m": 4.0775717224939e-07,
+    "kp_from_arkit_world": [
+      [
+        -8.27547457156234e-08,
+        -3.0712200205434046e-08,
+        -0.9999999982306083,
+        -0.049008810749418624
+      ],
+      [
+        -1.0000001580919504,
+        1.4518942067734494e-09,
+        3.475118637235846e-09,
+        0.019012590595062842
+      ],
+      [
+        -5.571291906134004e-10,
+        0.9999999718750254,
+        -2.5480431062400685e-08,
+        -1.476696814113358
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0000002400000576
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-187_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-187_unified_V.json",
+    "converter_head_max_abs": 2.008882894139266e-07,
+    "converter_wrist_position_max_abs_m": 8.79594512781523e-08,
+    "kp_from_arkit_world": [
+      [
+        2.0649385194558133e-08,
+        5.586594541054278e-09,
+        -0.9999998636125011,
+        -0.06545638979493869
+      ],
+      [
+        -0.9999999202339654,
+        -1.6677731718194156e-09,
+        -5.224198581191952e-09,
+        0.02347888024439125
+      ],
+      [
+        4.317343858730752e-08,
+        1.0000000136078322,
+        6.653231315658041e-09,
+        -1.4745204206431937
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-188_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-188_unified_V.json",
+    "converter_head_max_abs": 3.052615914966514e-07,
+    "converter_wrist_position_max_abs_m": 1.5180345824816754e-07,
+    "kp_from_arkit_world": [
+      [
+        1.0477265910122622e-08,
+        -4.388617991666971e-09,
+        -0.9999999515746333,
+        -0.14344469531520704
+      ],
+      [
+        -0.9999999896463233,
+        -4.006886423609015e-10,
+        -3.579726696339117e-09,
+        0.013092438728342847
+      ],
+      [
+        1.0978245985726512e-08,
+        0.9999999939897453,
+        1.4697135035677528e-08,
+        -1.477067677782014
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0000000600000036
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-189_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-189_unified_V.json",
+    "converter_head_max_abs": 2.3780311056431636e-07,
+    "converter_wrist_position_max_abs_m": 9.993940741637175e-08,
+    "kp_from_arkit_world": [
+      [
+        -3.023623455945922e-08,
+        -2.5106924177768552e-08,
+        -0.9999999653911601,
+        -0.0015346580369141954
+      ],
+      [
+        -1.0000000947306438,
+        9.64996811354241e-10,
+        -3.482585036241884e-09,
+        0.015955224898441995
+      ],
+      [
+        5.4754185308398063e-08,
+        0.9999999842646419,
+        -1.3503007671758572e-09,
+        -1.665976474660951
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-190_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-190_unified_V.json",
+    "converter_head_max_abs": 2.2080484374242815e-07,
+    "converter_wrist_position_max_abs_m": 6.149403386501717e-08,
+    "kp_from_arkit_world": [
+      [
+        3.410192852706674e-08,
+        1.901013306501981e-08,
+        -0.9999999398377615,
+        -0.10816576175215739
+      ],
+      [
+        -0.9999999031490362,
+        1.015018753092005e-10,
+        8.267934754975505e-11,
+        0.003642498905938387
+      ],
+      [
+        2.999459830266131e-08,
+        1.0000000543725185,
+        2.410977493512369e-08,
+        -1.4800230779739816
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-191_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-191_unified_V.json",
+    "converter_head_max_abs": 2.2617613031072903e-07,
+    "converter_wrist_position_max_abs_m": 1.1705642477544131e-07,
+    "kp_from_arkit_world": [
+      [
+        9.350730168037328e-08,
+        -8.108236636892695e-08,
+        -0.9999999082642522,
+        -0.1279140563815992
+      ],
+      [
+        -0.9999999561375612,
+        -4.191439493296105e-10,
+        3.0087815476989966e-09,
+        0.024173259966315207
+      ],
+      [
+        -1.1514239483096905e-08,
+        1.0000000332999373,
+        -5.676596535386475e-08,
+        -1.5310909579680665
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-192_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-192_unified_V.json",
+    "converter_head_max_abs": 3.4625428425860694e-07,
+    "converter_wrist_position_max_abs_m": 2.1903845803805666e-07,
+    "kp_from_arkit_world": [
+      [
+        2.1124388859532757e-08,
+        -6.913578252898216e-08,
+        -1.000000108262827,
+        -0.08879025163347856
+      ],
+      [
+        -1.0000001580967837,
+        -6.963414184754494e-10,
+        4.551118652702578e-09,
+        0.02531232097052875
+      ],
+      [
+        1.5182207414307118e-08,
+        1.000000064325139,
+        -1.0683146106652996e-09,
+        -1.5019913872144286
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0000000600000036
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-193_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-193_unified_V.json",
+    "converter_head_max_abs": 1.9056874489900566e-07,
+    "converter_wrist_position_max_abs_m": 7.059690498856241e-08,
+    "kp_from_arkit_world": [
+      [
+        -3.212430422117049e-08,
+        -4.088224514427667e-08,
+        -0.9999998359687569,
+        -0.028221540206736874
+      ],
+      [
+        -0.9999998457893736,
+        4.1445316250748405e-10,
+        7.67845334432394e-09,
+        0.019870672528697883
+      ],
+      [
+        -1.7285447428304446e-08,
+        1.0000000029115366,
+        4.863968299460654e-08,
+        -1.5049493026655514
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-194_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-194_unified_V.json",
+    "converter_head_max_abs": 3.309181940830408e-07,
+    "converter_wrist_position_max_abs_m": 1.3026092293699776e-07,
+    "kp_from_arkit_world": [
+      [
+        -6.570186231286793e-08,
+        -2.7885552745668348e-09,
+        -1.0000001168264592,
+        -0.06935494642612147
+      ],
+      [
+        -1.000000083961511,
+        -1.9307119898910833e-09,
+        9.571433770665458e-09,
+        0.02549079721576898
+      ],
+      [
+        -4.244173495732871e-08,
+        0.9999999863340145,
+        2.7272553421480867e-08,
+        -1.4928429661960487
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0000000600000036
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-195_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-195_unified_V.json",
+    "converter_head_max_abs": 1.9911825107320202e-07,
+    "converter_wrist_position_max_abs_m": 1.2283785469358044e-07,
+    "kp_from_arkit_world": [
+      [
+        5.9104063438161555e-08,
+        -9.59003949879905e-08,
+        -0.9999997973229954,
+        -0.022435756042058597
+      ],
+      [
+        -0.9999998277737527,
+        1.4615699426988514e-09,
+        -1.1690680540261735e-08,
+        0.015845635808749616
+      ],
+      [
+        1.2042438635587524e-08,
+        0.9999999678329528,
+        -1.3276603485966551e-08,
+        -1.5051787520715352
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-196_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-196_unified_V.json",
+    "converter_head_max_abs": 2.5626003830048205e-07,
+    "converter_wrist_position_max_abs_m": 1.5096887406862436e-07,
+    "kp_from_arkit_world": [
+      [
+        -1.2297601380598795e-08,
+        -1.1729715571884419e-08,
+        -1.0000001419187694,
+        -0.08458113393954589
+      ],
+      [
+        -1.000000307388539,
+        4.602313135479013e-09,
+        7.514528615230114e-09,
+        0.0036406016845377557
+      ],
+      [
+        1.9691029311172717e-08,
+        0.9999999560460008,
+        3.5678510911625106e-08,
+        -1.5362123295312793
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-197_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-197_unified_V.json",
+    "converter_head_max_abs": 3.767344243371662e-07,
+    "converter_wrist_position_max_abs_m": 2.3641650370720413e-07,
+    "kp_from_arkit_world": [
+      [
+        4.442366484161908e-08,
+        -4.7134624550971835e-08,
+        -0.9999999246017235,
+        -0.024325672712443937
+      ],
+      [
+        -1.0000000166602165,
+        1.7217579831776153e-09,
+        -6.306345832581758e-09,
+        0.01034343930044472
+      ],
+      [
+        -1.2070184746127824e-08,
+        0.9999999500741943,
+        -6.736639850458577e-09,
+        -1.5589463663127248
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.9999999000000099
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-198_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-198_unified_V.json",
+    "converter_head_max_abs": 2.141472232389252e-07,
+    "converter_wrist_position_max_abs_m": 1.7793266660071083e-07,
+    "kp_from_arkit_world": [
+      [
+        6.980816811766372e-08,
+        7.426171891301646e-09,
+        -0.9999998848520052,
+        -0.03373885453854876
+      ],
+      [
+        -0.9999999294289218,
+        8.607877214933879e-10,
+        -1.4610831555710433e-09,
+        0.010167133931286427
+      ],
+      [
+        1.614112963711268e-09,
+        0.9999999980664023,
+        3.842825174402722e-08,
+        -1.493049846527943
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.9999999000000099
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-199_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-199_unified_V.json",
+    "converter_head_max_abs": 2.2204885974375088e-07,
+    "converter_wrist_position_max_abs_m": 7.250740963193891e-08,
+    "kp_from_arkit_world": [
+      [
+        6.985675653145925e-08,
+        -4.699090920113648e-09,
+        -1.0000000025193962,
+        -0.02865599996454905
+      ],
+      [
+        -1.0000000129431692,
+        -3.55407004767333e-09,
+        3.7221583648563877e-09,
+        0.015462418743154347
+      ],
+      [
+        -3.669740106514843e-08,
+        0.9999999497431596,
+        2.3664569209130448e-08,
+        -1.5296151218808107
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-200_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-200_unified_V.json",
+    "converter_head_max_abs": 2.3186340428194008e-07,
+    "converter_wrist_position_max_abs_m": 6.35311925289983e-08,
+    "kp_from_arkit_world": [
+      [
+        -5.545966668037322e-09,
+        1.632951735373916e-09,
+        -1.0000000043578612,
+        -0.12883353319899357
+      ],
+      [
+        -0.9999999539789564,
+        -1.3487912242881635e-10,
+        -1.1313279000302752e-09,
+        -0.0011058746775083604
+      ],
+      [
+        -1.3559108486532767e-08,
+        1.0000000204205688,
+        1.053308017344359e-08,
+        -1.6114510315647268
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-201_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-201_unified_V.json",
+    "converter_head_max_abs": 2.166640313827628e-07,
+    "converter_wrist_position_max_abs_m": 7.240402211117214e-08,
+    "kp_from_arkit_world": [
+      [
+        -2.0750423368259462e-08,
+        -5.035289026634721e-08,
+        -0.9999999637505004,
+        -0.14882174703890724
+      ],
+      [
+        -1.0000000545774068,
+        -2.631404340934503e-09,
+        -1.0897567682932962e-08,
+        0.021244320568187106
+      ],
+      [
+        -2.5645546723357238e-08,
+        1.000000001338975,
+        2.11285445369035e-08,
+        -1.5317004983616977
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-202_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-202_unified_V.json",
+    "converter_head_max_abs": 2.4971109791049884e-07,
+    "converter_wrist_position_max_abs_m": 6.291271970049195e-08,
+    "kp_from_arkit_world": [
+      [
+        -1.1952423013648233e-08,
+        -5.3819007957406945e-09,
+        -1.0000000097326016,
+        -0.0776877326315004
+      ],
+      [
+        -0.9999999662849279,
+        4.020781948449631e-09,
+        8.020878179333623e-10,
+        0.004404940883297027
+      ],
+      [
+        1.503028722641396e-08,
+        1.0000000985664756,
+        -2.058419229293448e-09,
+        -1.4998333480593944
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-203_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-203_unified_V.json",
+    "converter_head_max_abs": 2.1473820055462056e-07,
+    "converter_wrist_position_max_abs_m": 2.737464050994731e-07,
+    "kp_from_arkit_world": [
+      [
+        2.0803018639242534e-08,
+        -5.273766477432178e-08,
+        -0.9999998631570172,
+        -0.012922681439864397
+      ],
+      [
+        -0.9999998899656735,
+        2.3728590297750005e-10,
+        -2.9897190761305433e-09,
+        -0.0013160111198017835
+      ],
+      [
+        2.3062681264773063e-08,
+        0.9999998647267225,
+        -2.738661154919217e-08,
+        -1.5069321457826472
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.9999999000000099
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/human_policy_ckpt/bottle0930_8runs_20261003_data/human_new/wholebody-204_unified_V.hdf5": {
+    "source_pose": "/tmp/1001_human_input2/wholebody-204_unified_V.json",
+    "converter_head_max_abs": 2.085695445241953e-07,
+    "converter_wrist_position_max_abs_m": 7.731150275525067e-08,
+    "kp_from_arkit_world": [
+      [
+        6.156540442852677e-09,
+        -4.817006706502631e-08,
+        -1.0000001059148251,
+        -0.051550798428103096
+      ],
+      [
+        -1.000000083797646,
+        -9.837496577941694e-10,
+        9.875483317904757e-09,
+        0.025995497161785407
+      ],
+      [
+        8.080023719066382e-09,
+        0.999999991167478,
+        -3.168200756327641e-08,
+        -1.4986887886060771
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "pose_time_offset_seconds": 0.09742822128965446,
+    "time_outside_recording_frames": 3
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0000_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.2132221023116756e-07,
+    "audit_fk_rotation_max_abs": 4.6509530060578896e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0001_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.499555407682209e-07,
+    "audit_fk_rotation_max_abs": 4.8022090082255886e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0002_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.9231422316321485e-07,
+    "audit_fk_rotation_max_abs": 4.601250824798342e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0003_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.864558485444647e-07,
+    "audit_fk_rotation_max_abs": 6.93872400647777e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0004_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.445425477728193e-07,
+    "audit_fk_rotation_max_abs": 9.436358450187754e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0005_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.561154144933077e-07,
+    "audit_fk_rotation_max_abs": 7.149995684407884e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0006_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.8339992469715867e-07,
+    "audit_fk_rotation_max_abs": 6.894041720828525e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0007_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.907983823214778e-07,
+    "audit_fk_rotation_max_abs": 5.3216362483343715e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0008_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.040707867192239e-07,
+    "audit_fk_rotation_max_abs": 6.984576894630834e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0010_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.9383540328952193e-07,
+    "audit_fk_rotation_max_abs": 6.45817498923229e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0011_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.774380424870216e-07,
+    "audit_fk_rotation_max_abs": 6.752715647762031e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0013_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.9993247863412407e-07,
+    "audit_fk_rotation_max_abs": 4.99159726885523e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0014_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.7700540900242885e-07,
+    "audit_fk_rotation_max_abs": 4.242142356836176e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0015_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.2966855745563137e-07,
+    "audit_fk_rotation_max_abs": 5.436723565788171e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0016_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.097146604209456e-07,
+    "audit_fk_rotation_max_abs": 3.635730413953375e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0019_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.858670392682285e-07,
+    "audit_fk_rotation_max_abs": 8.961659325734672e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0020_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.0180498250830254e-07,
+    "audit_fk_rotation_max_abs": 1.1729193449827591e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0021_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.8049305756127083e-07,
+    "audit_fk_rotation_max_abs": 9.489184960020935e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0022_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.616693905472701e-07,
+    "audit_fk_rotation_max_abs": 6.231802524014896e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0023_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.1017575436175235e-07,
+    "audit_fk_rotation_max_abs": 1.0577770032105249e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0024_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.0405887580252653e-07,
+    "audit_fk_rotation_max_abs": 9.988605270683237e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0025_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.8995635120997463e-07,
+    "audit_fk_rotation_max_abs": 1.114173925342854e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0026_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.6833977196115697e-07,
+    "audit_fk_rotation_max_abs": 1.0542232042887179e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0027_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.8782520683788846e-07,
+    "audit_fk_rotation_max_abs": 9.935092948332169e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0028_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.658646918203168e-07,
+    "audit_fk_rotation_max_abs": 1.0486810975152139e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0029_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.3666037335965413e-07,
+    "audit_fk_rotation_max_abs": 7.829958648120083e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0030_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.872874303478824e-07,
+    "audit_fk_rotation_max_abs": 8.510958315888217e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0031_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.45190624587255e-07,
+    "audit_fk_rotation_max_abs": 9.530313277439362e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0033_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.665910163792475e-07,
+    "audit_fk_rotation_max_abs": 5.846648770679863e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0034_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.9450023525677835e-07,
+    "audit_fk_rotation_max_abs": 7.67111150712374e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0035_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.05543697179489e-07,
+    "audit_fk_rotation_max_abs": 1.1909099228990527e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0036_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.6454376056704874e-07,
+    "audit_fk_rotation_max_abs": 5.807740721675003e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0037_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.832159484185027e-07,
+    "audit_fk_rotation_max_abs": 6.376420963460916e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0038_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.84802611275159e-07,
+    "audit_fk_rotation_max_abs": 8.648167543201524e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0040_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.25400764614281e-07,
+    "audit_fk_rotation_max_abs": 6.381792672094377e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0041_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.8442102628932773e-07,
+    "audit_fk_rotation_max_abs": 5.8357799925801146e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0043_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.75587902501362e-07,
+    "audit_fk_rotation_max_abs": 7.18917113617934e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0044_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.720317970357101e-07,
+    "audit_fk_rotation_max_abs": 9.073588780328379e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0045_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.1961609981155945e-07,
+    "audit_fk_rotation_max_abs": 4.790681906730043e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0046_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.4652664532573993e-07,
+    "audit_fk_rotation_max_abs": 1.4044804819146606e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0047_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.225410225600079e-07,
+    "audit_fk_rotation_max_abs": 3.972019133047233e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0048_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.694775030371744e-07,
+    "audit_fk_rotation_max_abs": 3.570644085959529e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0049_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.991698281358147e-07,
+    "audit_fk_rotation_max_abs": 8.584030786185082e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0050_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.297758648408312e-07,
+    "audit_fk_rotation_max_abs": 1.264363718167516e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0051_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.750953385672773e-07,
+    "audit_fk_rotation_max_abs": 1.241119247374911e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0052_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.722135484274247e-07,
+    "audit_fk_rotation_max_abs": 9.083701946188683e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0053_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.291825540514438e-07,
+    "audit_fk_rotation_max_abs": 9.817443596960018e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0054_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.134560372404117e-07,
+    "audit_fk_rotation_max_abs": 1.229594227547537e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0055_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.959344217485672e-07,
+    "audit_fk_rotation_max_abs": 7.067352797429649e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0056_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.237499985348947e-07,
+    "audit_fk_rotation_max_abs": 7.620450404033363e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0057_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.0516921862021604e-07,
+    "audit_fk_rotation_max_abs": 1.6013881132259655e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0058_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.1528422567438383e-07,
+    "audit_fk_rotation_max_abs": 1.0781658810188333e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0059_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.650057230908388e-07,
+    "audit_fk_rotation_max_abs": 1.1055236109891453e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0061_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.5225690125928466e-07,
+    "audit_fk_rotation_max_abs": 6.945500680144434e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0062_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.279470018353493e-07,
+    "audit_fk_rotation_max_abs": 6.796239010453675e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0063_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.8544008557073184e-07,
+    "audit_fk_rotation_max_abs": 6.803586749537516e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0064_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.0312985866153284e-07,
+    "audit_fk_rotation_max_abs": 1.020197535339662e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0065_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.186266958083884e-07,
+    "audit_fk_rotation_max_abs": 7.915687555426487e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0066_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.144728741883874e-07,
+    "audit_fk_rotation_max_abs": 6.371139954497451e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0067_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.8476994362879324e-07,
+    "audit_fk_rotation_max_abs": 8.024483733048982e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0069_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.84195890767991e-07,
+    "audit_fk_rotation_max_abs": 1.0513273518419908e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0070_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.0233041587178775e-07,
+    "audit_fk_rotation_max_abs": 8.031974729760805e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0071_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.9994406381138603e-07,
+    "audit_fk_rotation_max_abs": 8.470844098384944e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0072_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.5908765822222364e-07,
+    "audit_fk_rotation_max_abs": 8.280188928955212e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0073_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.1266675249174156e-07,
+    "audit_fk_rotation_max_abs": 7.799668055863407e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0074_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.8318177097984574e-07,
+    "audit_fk_rotation_max_abs": 8.40792090395226e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0075_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.2759394391911343e-07,
+    "audit_fk_rotation_max_abs": 1.3799786735546604e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0076_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.9695207532108867e-07,
+    "audit_fk_rotation_max_abs": 8.928766237481511e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0078_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.878863797934784e-07,
+    "audit_fk_rotation_max_abs": 9.928082189691878e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0009_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.7498410760127285e-07,
+    "audit_fk_rotation_max_abs": 3.9442515670229383e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0012_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.9588091754749755e-07,
+    "audit_fk_rotation_max_abs": 4.054930738406348e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0017_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.20812867607534e-07,
+    "audit_fk_rotation_max_abs": 6.13298152818409e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0018_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.436400122791561e-07,
+    "audit_fk_rotation_max_abs": 4.6811822973502615e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0032_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.792875399339813e-07,
+    "audit_fk_rotation_max_abs": 1.028664394775447e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0039_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.728601196684167e-07,
+    "audit_fk_rotation_max_abs": 8.960631098231531e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0042_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 3.9173717664153784e-07,
+    "audit_fk_rotation_max_abs": 8.402374446214722e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0060_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 5.041650201764725e-07,
+    "audit_fk_rotation_max_abs": 1.0218758872415634e-07,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0068_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.0709467052924e-07,
+    "audit_fk_rotation_max_abs": 6.40843933474855e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  },
+  "/mnt/nvme0n1/DATASETS/0930_pick_bottle/robot/SONIC_Dex5_20260930_ep_0077_rootfix.hdf5": {
+    "head_frame": "virtual_torso_plus_0.4m",
+    "audit_fk_head_max_abs_m": 4.2151179091565183e-07,
+    "audit_fk_rotation_max_abs": 8.276705770748904e-08,
+    "camera_status": "user_provided_best_coarse_candidate_not_physically_verified",
+    "pose_source": "unaugmented observation.state[:9]",
+    "root_origin_handled": "head and wrist already share the translated initial-heading KP frame"
+  }
+}
