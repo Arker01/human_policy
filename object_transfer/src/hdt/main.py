@@ -777,7 +777,15 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
                 import json
                 inner_model = accelerator.unwrap_model(policy).model
                 groups = {}
-                for group in ('action_head', 'input_proj', 'readiness_head', 'future_dino_head'):
+                gradient_groups = [
+                    'action_head',
+                    'input_proj',
+                    'readiness_head',
+                    'future_dino_head',
+                ]
+                if getattr(inner_model, 'use_object_transfer', False):
+                    gradient_groups.extend(['object_head', 'object_fusion'])
+                for group in gradient_groups:
                     grads = [p.grad.detach().float().square().sum() for n,p in inner_model.named_parameters()
                              if n.startswith(group + '.') and p.grad is not None]
                     groups[group] = float(torch.stack(grads).sum().sqrt()) if grads else 0.0
@@ -786,6 +794,9 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
                     assert groups['readiness_head'] > 0, groups
                 if inner_model.future_dino_weight > 0:
                     assert groups['future_dino_head'] > 0, groups
+                if getattr(inner_model, 'use_object_transfer', False):
+                    assert groups['object_head'] > 0, groups
+                    assert groups['object_fusion'] > 0, groups
                 if accelerator.is_main_process:
                     with open(os.path.join(ckpt_dir, 'first_step_gradient_check.json'), 'w') as fp:
                         json.dump(groups, fp, indent=2)
