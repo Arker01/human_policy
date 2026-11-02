@@ -1,0 +1,48 @@
+common:
+  action_dim: 128
+  camera_names: [top]
+  policy_class: ACT
+  state_dim: 128
+data:
+  image_resolution_hw: [240, 320]
+  action_representation: original
+model:
+  backbone: vjepa2_1_vitb
+  dec_layers: 7
+  dim_feedforward: 3200
+  enc_layers: 4
+  hidden_dim: 512
+  image_feature_strategy: ACT_linear
+  kl_weight: 10
+  lr_backbone: 1.0e-5
+  nheads: 8
+  use_language_conditioning: false
+  zero_state_dims: 98:128
+  future_dino:
+    enabled: true
+    weight: 0.0
+    target_encoder: dinov2_vits14
+    horizon: 45
+    num_layers: 4
+    num_heads: 8
+    dropout: 0.1
+    num_patches: 1024
+    normalize_target: true
+    huber_weight: 0.1
+    warmup_steps: 0
+    ablation: none
+  object_transfer:
+    enabled: true
+    task: SET_BY_LAUNCHER
+    label_root: /mnt/nvme1n1/human_policy_derived/object_transfer_labels_20261102
+    image_override_root: null
+    human_image_override_root: null
+    head_hidden_dim: 256
+    head_lr: 1.0e-4
+    gate_init: -6.0
+    human_action_weight: 0.2
+    object_weight: 1.0
+    relative_wrist_weight: 0.1
+    sigma_patches: 1.0
+    uv_weight: 1.0
+    present_weight: 0.2

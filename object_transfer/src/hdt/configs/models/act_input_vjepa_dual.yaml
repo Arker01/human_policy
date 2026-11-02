@@ -1,0 +1,49 @@
+# 把这一周赢的两块拼起来:输入端 = 冻结 V-JEPA 2.1 ViT-B(扰动套件唯一把退化砍半的改动,
+# 4.1% vs ab4 的 9.5%),输出端 = DINO + Wan VAE 双 target 等权(wv2,wv 组最好的一档,
+# compound 58.2mm)。两者作用在模型的不同端,没有共享参数以外的耦合,所以值得直接试叠加。
+# λ 都是 1.0:wv2 的等权配比赢过 ST-WAM 原配比 wv1(dino 0.02)。
+common:
+  policy_class: ACT
+  state_dim: 128
+  action_dim: 128
+  camera_names:
+  - top
+model:
+  enc_layers: 4
+  dec_layers: 7
+  nheads: 8
+  hidden_dim: 512
+  kl_weight: 10
+  dim_feedforward: 3200
+  lr_backbone: 1e-5
+  backbone: vjepa2_1_vitb
+  image_feature_strategy: ACT_linear
+  use_language_conditioning: false
+  future_dino:
+    enabled: true
+    weight: 1.0
+    target_encoder: dinov2_vits14
+    horizon: 45
+    num_layers: 4
+    num_heads: 8
+    dropout: 0.1
+    num_patches: 1024
+    normalize_target: true
+    huber_weight: 0.1
+    warmup_steps: 0
+    ablation: none
+  future_vae:
+    enabled: true
+    weight: 1.0
+    target_encoder: wan22_vae
+    num_layers: 4
+    num_heads: 8
+    dropout: 0.1
+    num_patches: 1024
+    normalize_target: false
+    huber_weight: 1.0
+    ablation: none
+data:
+  image_resolution_hw:
+  - 240
+  - 320

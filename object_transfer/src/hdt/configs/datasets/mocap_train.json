@@ -1,0 +1,4 @@
+{
+    "train": ["mocap_task"],
+    "val": ["mocap_task"]
+}

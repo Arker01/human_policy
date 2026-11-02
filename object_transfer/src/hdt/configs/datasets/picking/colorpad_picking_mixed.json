@@ -1,0 +1,16 @@
+{
+    "train": [
+        "402-pick_on_color_pad_right-2025_01_09-16_36_15",
+        "403-pick_on_color_pad_left-2025_01_09-16_58_04",
+        "404-pick_on_color_pad_right_far-2025_01_12-20_20_57",
+        "405-pick_on_color_pad_right_far_far-2025_01_13-19_29_04",
+    	"1403-human_pick_color_pad_left_2025-01-13_13-05-06",
+        "1404-human_more_colorpad_left_picking_2025-01-20_22-23-13",
+        "1405-picking_3cat_straw_2025-03-12_15-53-25",
+        "1406-picking_orange_2025-03-12_17-08-20",
+        "1407-picking_orange_tj_2025-03-12_16-42-19"
+    ],
+    "val": [
+        "903-picking-val-2024_11_18-18_58_16"
+    ]
+}

@@ -1,0 +1,39 @@
+# r2_in_vjepa 的 config,只多一件事:归一化后的 qpos[98:128](只有 dex5 有内容的
+# 机器人自身构型块)对所有 embodiment 强制置 0,跟人类数据一致。
+# 训练和评测都要用这一份 —— mask 是 ckpt 里的 buffer,用 act_input_vjepa.yaml 建模型
+# 会被 strict=False 静默丢掉,模型就会被喂进它从没见过的完整状态。
+common:
+  policy_class: ACT
+  state_dim: 128
+  action_dim: 128
+  camera_names:
+  - top
+model:
+  enc_layers: 4
+  dec_layers: 7
+  nheads: 8
+  hidden_dim: 512
+  kl_weight: 10
+  dim_feedforward: 3200
+  lr_backbone: 1e-5
+  backbone: vjepa2_1_vitb
+  image_feature_strategy: ACT_linear
+  use_language_conditioning: false
+  future_dino:
+    enabled: true
+    weight: 1.0
+    target_encoder: dinov2_vits14
+    horizon: 45
+    num_layers: 4
+    num_heads: 8
+    dropout: 0.1
+    num_patches: 1024
+    normalize_target: true
+    huber_weight: 0.1
+    warmup_steps: 0
+    ablation: none
+  zero_state_dims: 98:128
+data:
+  image_resolution_hw:
+  - 240
+  - 320
