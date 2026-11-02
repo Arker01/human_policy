@@ -20,6 +20,7 @@ def main() -> None:
     parser.add_argument("--smoke", action="store_true")
     args = parser.parse_args()
     jobs = json.loads((args.root / "jobs.json").read_text())
+    source_root = Path(__file__).resolve().parent
     job = dict(jobs[args.job])
     steps = 3 if args.smoke else int(job["steps"])
     run_name = args.job + (".smoke" if args.smoke else "")
@@ -58,7 +59,10 @@ def main() -> None:
     env.update({
         "CUDA_VISIBLE_DEVICES": str(args.gpu),
         "HDT_EXPERIMENT": "baseline",
-        "PYTHONPATH": f"{args.root}:{args.root / 'src'}:{args.root / 'src/hdt'}",
+        "PYTHONPATH": (
+            f"{source_root.parent}:{source_root / 'src'}:"
+            f"{source_root / 'src/hdt'}"
+        ),
         "OMP_NUM_THREADS": "4",
         "MKL_NUM_THREADS": "4",
         "TOKENIZERS_PARALLELISM": "false",
@@ -69,7 +73,7 @@ def main() -> None:
         "gpu": str(args.gpu),
         "command": command,
         "checkpoint_dir": str(checkpoint_dir),
-        "source_root": str(args.root / "src"),
+        "source_root": str(source_root / "src"),
         "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "launcher_pid": os.getpid(),
     }
@@ -77,7 +81,11 @@ def main() -> None:
     manifest_path.write_text(json.dumps(manifest, indent=2))
     with (args.root / "logs" / f"{run_name}.log").open("ab", buffering=0) as log:
         process = subprocess.Popen(
-            command, cwd=args.root / "src", env=env, stdout=log, stderr=subprocess.STDOUT,
+            command,
+            cwd=source_root / "src",
+            env=env,
+            stdout=log,
+            stderr=subprocess.STDOUT,
             start_new_session=True,
         )
     manifest["training_pid"] = process.pid
