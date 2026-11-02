@@ -8,7 +8,8 @@ The active experiment uses:
 
 - the original global V-JEPA/HAT visual and state paths;
 - a shared Object Head for Omega and Human RGB;
-- metric wrist-relative-to-object motion loss for both domains;
+- an explicit image-space object-center to detected hand-region relation head
+  for both domains, plus metric future wrist-displacement supervision;
 - the shared original 3D action head for both domains, with Human action loss
   weight 0.2;
 - a gated object residual initialized near zero;
@@ -24,6 +25,5 @@ Run artifacts are under:
 /mnt/nvme0n1/human_policy_ckpt/object_transfer_20261102
 
 Each status JSON records the launcher command and isolated source root. The six
-active jobs were started from source revision cf7586d; a7ab94b adds
-documentation only. See AUDIT.md for verified interfaces, label provenance,
-checks, and current limitations.
+active jobs were started from source revision e2aa34f. See AUDIT.md for
+verified interfaces, label provenance, checks, and current limitations.

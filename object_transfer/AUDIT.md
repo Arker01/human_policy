@@ -30,8 +30,9 @@ therefore does not numerically dilute the Robot loss.
 - New run root:
   /mnt/nvme0n1/human_policy_ckpt/object_transfer_20261102
 
-The old checkpoint loads with strict=False; only the new Object Head and gated
-fusion parameters are missing and initialized from scratch.
+The old checkpoint loads with strict=False; only the new Object Head, gated
+fusion, and object-to-hand relation head are missing and initialized from
+scratch.
 
 ## Verified model interface
 
@@ -52,6 +53,7 @@ flowchart LR
     G --> H
     O --> F[Gated residual fusion]
     H --> F
+    F --> R[Object-to-hand image relation head]
     F --> A[Existing 100x128 action chunk]
 ~~~
 
@@ -78,15 +80,17 @@ manifest instead uses high-confidence detector refresh boxes:
 - classify: gadget box centers only near hand/arm interaction.
 
 These labels are sparse and are box centers, not masks or true contact points.
-Invalid frames are masked from localization loss. Counts validated by
-check_labels.py:
+When both boxes are reliable, a second label stores the normalized image-space
+vector from object center to detected hand/arm/gripper-region center. This is
+a region-center proxy, not a calibrated wrist projection. Invalid frames are
+masked from localization/relation losses. Counts validated by check_labels.py:
 
-| Task/domain | Episodes | Frames | Valid points |
-| --- | ---: | ---: | ---: |
-| wipe Robot | 187 | 137080 | 1886 |
-| wipe Human | 75 | 20722 | 286 |
-| classify Robot | 200 | 382008 | 2817 |
-| classify Human | 75 | 26552 | 298 |
+| Task/domain | Episodes | Frames | Object points | Object-hand relations |
+| --- | ---: | ---: | ---: | ---: |
+| wipe Robot | 187 | 137080 | 1886 | 1593 |
+| wipe Human | 75 | 20722 | 286 | 277 |
+| classify Robot | 200 | 382008 | 2817 | 2817 |
+| classify Human | 75 | 26552 | 298 | 298 |
 
 The manifest is stored separately at
 /mnt/nvme1n1/human_policy_derived/object_transfer_labels_relation_20261102;
@@ -95,9 +99,11 @@ HDF5 files are not rewritten. No detector or segmenter is used at inference.
 
 ## Training checks
 
-- Unit tests: 5 passed.
+- Unit tests: 6 passed.
 - Smoke runs completed forward, validation, backward, and checkpoint save.
-- Both Object Head and fusion have finite nonzero first-step gradients.
+- Object Head and fusion have finite nonzero first-step gradients. The relation
+  head is checked on the first batch containing a valid relation; all six
+  formal runs produced finite nonzero relation-head gradients by step 3.
 - Mixed validation logs contain separate Robot and Human action/relative-wrist
   losses; Omega-only logs correctly report a zero Human component.
 - Random-background Human RGB is read through human_image_override_root, while
@@ -109,6 +115,9 @@ HDF5 files are not rewritten. No detector or segmenter is used at inference.
 
 - Labels are intentionally sparse; they do not justify claims about contact
   point accuracy.
+- Future wrist displacement supplies the motion-direction auxiliary signal.
+  The explicit current-frame object-to-hand relation uses detector-region
+  centers; it must not be reported as exact wrist-to-object geometry.
 - No phase head is enabled because a reliable shared phase label was not found.
 - Wrist-to-image projection is not fused because the two camera projection
   chains have not passed a common pixel-error audit.
