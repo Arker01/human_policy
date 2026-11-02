@@ -94,7 +94,7 @@ def build_ACT_model_and_optimizer(args_override):
         model.cpu()
 
     object_cfg = dict(getattr(args, 'object_transfer_config', None) or {})
-    object_names = ('object_head', 'object_fusion')
+    object_names = ('object_head', 'object_fusion', 'object_relation_head')
     param_dicts = [
         {"params": [p for n, p in model.named_parameters()
                     if "backbone" not in n and not any(key in n for key in object_names)

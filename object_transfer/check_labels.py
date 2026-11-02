@@ -27,6 +27,17 @@ def main() -> None:
                     failures.append(f"{path}: invalid normalized coordinates")
                 if not np.array_equal(data["present"][valid], np.ones(valid.sum(), dtype=np.uint8)):
                     failures.append(f"{path}: point label without object-present target")
+            relation_valid = data["relation_valid"].astype(bool)
+            if np.any(relation_valid & ~valid):
+                failures.append(f"{path}: hand relation without a valid object")
+            if relation_valid.any():
+                delta = data["object_to_hand_uv"][relation_valid]
+                if not (
+                    np.isfinite(delta).all()
+                    and (delta >= -1).all()
+                    and (delta <= 1).all()
+                ):
+                    failures.append(f"{path}: invalid object-to-hand vector")
     if failures:
         raise SystemExit("label validation failed:\n" + "\n".join(failures[:50]))
     print(json.dumps({"episodes": len(manifest["records"]), "status": "ok"}))

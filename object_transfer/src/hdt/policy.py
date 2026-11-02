@@ -119,7 +119,8 @@ class ACTPolicy(nn.Module):
 
             if self.model.use_object_transfer:
                 from object_transfer.losses import (
-                    metric_relative_wrist_loss, object_localization_loss)
+                    metric_relative_wrist_loss, object_hand_relation_loss,
+                    object_localization_loss)
                 object_losses = object_localization_loss(
                     self.model.object_transfer_outputs,
                     conditioning_dict['object_uv'],
@@ -135,6 +136,19 @@ class ACTPolicy(nn.Module):
                     loss_dict[f'object_{name}'] = value
                 loss_dict['loss'] = loss_dict['loss'] + float(
                     self.object_transfer_config.get('object_weight', 1.0)) * object_losses['loss']
+
+                relation_losses = object_hand_relation_loss(
+                    self.model.object_hand_relation_uv,
+                    conditioning_dict['object_to_hand_uv'],
+                    conditioning_dict['object_hand_relation_valid'],
+                    conditioning_dict['object_hand_relation_quality'],
+                )
+                for name, value in relation_losses.items():
+                    loss_dict[f'object_hand_relation_{name}'] = value
+                loss_dict['loss'] = loss_dict['loss'] + float(
+                    self.object_transfer_config.get(
+                        'object_hand_relation_weight', 0.2)
+                ) * relation_losses['loss']
 
                 relative_per_sample = metric_relative_wrist_loss(
                     a_hat, actions, qpos,

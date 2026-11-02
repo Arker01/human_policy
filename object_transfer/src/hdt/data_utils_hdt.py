@@ -1279,7 +1279,9 @@ def collate_fn(batch):
             ret_conditioning_dict[key] = torch.stack([c[key] for c in conditioning_list])
 
     for key in ('domain_is_human', 'object_uv', 'object_valid', 'object_quality',
-                'object_present', 'object_present_valid', 'qpos_mean', 'qpos_std'):
+                'object_present', 'object_present_valid', 'object_to_hand_uv',
+                'object_hand_relation_valid', 'object_hand_relation_quality',
+                'qpos_mean', 'qpos_std'):
         if key in conditioning_list[0]:
             ret_conditioning_dict[key] = torch.stack([c[key] for c in conditioning_list])
 

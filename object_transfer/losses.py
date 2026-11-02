@@ -81,3 +81,21 @@ def metric_relative_wrist_loss(
         terms.append((per_step * valid).sum(dim=1) / valid.sum(dim=1).clamp_min(1.0))
     return torch.stack(terms, dim=0).mean(dim=0)
 
+
+def object_hand_relation_loss(
+    predicted_delta_uv: torch.Tensor,
+    target_delta_uv: torch.Tensor,
+    valid: torch.Tensor,
+    quality: torch.Tensor,
+) -> dict[str, torch.Tensor]:
+    """Supervise the image-space vector from object center to hand region."""
+    per_sample = F.smooth_l1_loss(
+        predicted_delta_uv, target_delta_uv, reduction="none").sum(dim=-1)
+    error = (predicted_delta_uv - target_delta_uv).norm(dim=-1)
+    weight = valid.to(per_sample.dtype) * quality.to(per_sample.dtype)
+    return {
+        "loss": _masked_mean(per_sample, weight),
+        "error_norm": _masked_mean(error, valid),
+        "valid_fraction": valid.float().mean(),
+    }
+

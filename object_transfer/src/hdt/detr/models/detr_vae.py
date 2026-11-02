@@ -519,6 +519,7 @@ class DETRVAE(nn.Module):
         self.object_transfer_config = dict(object_transfer_config or {})
         self.use_object_transfer = bool(self.object_transfer_config.get('enabled', False))
         self.object_transfer_outputs = None
+        self.object_hand_relation_uv = None
         if self.use_object_transfer:
             from object_transfer.object_head import ObjectHeatmapHead
             from object_transfer.fusion import GatedObjectFusion
@@ -530,9 +531,17 @@ class DETRVAE(nn.Module):
                 hidden_dim,
                 gate_init=float(self.object_transfer_config.get('gate_init', -6.0)),
             )
+            self.object_relation_head = nn.Sequential(
+                nn.LayerNorm(hidden_dim),
+                nn.Linear(hidden_dim, hidden_dim // 2),
+                nn.GELU(),
+                nn.Linear(hidden_dim // 2, 2),
+                nn.Tanh(),
+            )
         else:
             self.object_head = None
             self.object_fusion = None
+            self.object_relation_head = None
         
         if self.use_language_conditioning:
             # TODO(roger): temporary way to handle language conditioning
@@ -1043,6 +1052,7 @@ class DETRVAE(nn.Module):
             if self.object_transfer_outputs is None:
                 raise RuntimeError('object transfer enabled but current-frame features were not captured')
             hs = self.object_fusion(hs, self.object_transfer_outputs)
+            self.object_hand_relation_uv = self.object_relation_head(hs[:, 0])
 
         a_hat = self.action_head(hs)
         is_pad_hat = self.is_pad_head(hs)

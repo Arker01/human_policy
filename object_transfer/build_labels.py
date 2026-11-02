@@ -91,6 +91,33 @@ def select_classify(detections: list[dict], width: int, height: int):
     return object_box, object_score * max(0.25, 1.0 - distance / 0.12)
 
 
+def select_hand(
+    detections: list[dict],
+    width: int,
+    height: int,
+    object_box: np.ndarray,
+):
+    accepted = []
+    diagonal = math.hypot(width, height)
+    for record in detections:
+        text = f"{record.get('prompt', '')} {record.get('label', '')}"
+        if not _matches(text, HAND_WORDS):
+            continue
+        parsed = _box(record, width, height, 0.35)
+        if parsed is not None:
+            hand_box, score = parsed
+            accepted.append((
+                _edge_distance(object_box, hand_box, diagonal),
+                -score,
+                hand_box,
+                score,
+            ))
+    if not accepted:
+        return None
+    _, _, hand_box, score = min(accepted, key=lambda item: (item[0], item[1]))
+    return hand_box, score
+
+
 def build_one(path: Path, output_root: Path, minimum_quality: float) -> dict:
     metadata = json.loads(path.read_text())
     task = str(metadata["task"])
@@ -102,6 +129,9 @@ def build_one(path: Path, output_root: Path, minimum_quality: float) -> dict:
     target_quality = np.zeros(frames, dtype=np.float32)
     present = np.zeros(frames, dtype=np.uint8)
     present_valid = np.zeros(frames, dtype=np.uint8)
+    object_to_hand_uv = np.zeros((frames, 2), dtype=np.float32)
+    relation_valid = np.zeros(frames, dtype=np.uint8)
+    relation_quality = np.zeros(frames, dtype=np.float32)
 
     events_by_frame: dict[int, list[dict]] = defaultdict(list)
     for event in metadata.get("events", []):
@@ -125,6 +155,14 @@ def build_one(path: Path, output_root: Path, minimum_quality: float) -> dict:
         target_quality[frame] = quality
         present[frame] = 1
         present_valid[frame] = 1
+        hand = select_hand(detections, width, height, box)
+        if hand is not None:
+            hand_box, hand_quality = hand
+            hand_uv = _center(hand_box) / np.asarray(
+                (width, height), dtype=np.float32)
+            object_to_hand_uv[frame] = hand_uv - uv[frame]
+            relation_valid[frame] = 1
+            relation_quality[frame] = min(quality, float(hand_quality))
 
     episode = Path(metadata["source"]).stem
     output_dir = output_root / task / domain
@@ -137,6 +175,9 @@ def build_one(path: Path, output_root: Path, minimum_quality: float) -> dict:
         target_quality=target_quality,
         present=present,
         present_valid=present_valid,
+        object_to_hand_uv=object_to_hand_uv,
+        relation_valid=relation_valid,
+        relation_quality=relation_quality,
     )
     return {
         "episode": episode,
@@ -144,10 +185,12 @@ def build_one(path: Path, output_root: Path, minimum_quality: float) -> dict:
         "domain": domain,
         "frames": frames,
         "valid": int(target_valid.sum()),
+        "relation_valid": int(relation_valid.sum()),
         "valid_fraction": float(target_valid.mean()),
         "output": str(output),
         "source_metadata": str(path),
         "label_semantics": "detector_box_center_not_contact_point",
+        "relation_semantics": "object_center_to_detected_hand_region_center",
     }
 
 
@@ -168,6 +211,7 @@ def main() -> None:
         "episodes": len(records),
         "frames": sum(item["frames"] for item in records),
         "valid": sum(item["valid"] for item in records),
+        "relation_valid": sum(item["relation_valid"] for item in records),
         "by_task_domain": {},
         "records": records,
     }
@@ -178,6 +222,7 @@ def main() -> None:
                 "episodes": len(subset),
                 "frames": sum(r["frames"] for r in subset),
                 "valid": sum(r["valid"] for r in subset),
+                "relation_valid": sum(r["relation_valid"] for r in subset),
             }
     args.output_root.mkdir(parents=True, exist_ok=True)
     (args.output_root / "manifest.json").write_text(json.dumps(summary, indent=2))

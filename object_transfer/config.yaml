@@ -42,6 +42,7 @@ model:
     gate_init: -6.0
     human_action_weight: 0.2
     object_weight: 1.0
+    object_hand_relation_weight: 0.2
     relative_wrist_weight: 0.1
     sigma_patches: 1.0
     uv_weight: 1.0

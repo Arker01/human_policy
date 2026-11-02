@@ -3,7 +3,11 @@ from __future__ import annotations
 import torch
 
 from object_transfer.fusion import GatedObjectFusion
-from object_transfer.losses import domain_weighted_mean, object_localization_loss
+from object_transfer.losses import (
+    domain_weighted_mean,
+    object_hand_relation_loss,
+    object_localization_loss,
+)
 from object_transfer.object_head import ObjectHeatmapHead
 
 
@@ -41,6 +45,17 @@ def test_disabled_gate_preserves_action_hidden():
     output = ObjectHeatmapHead(32, 8)(torch.randn(2, 32, 3, 5))
     fused = fusion(hidden, output)
     assert torch.equal(hidden, fused)
+
+
+def test_object_hand_relation_uses_only_valid_labels():
+    losses = object_hand_relation_loss(
+        torch.tensor([[0.2, -0.1], [0.9, 0.9]]),
+        torch.tensor([[0.1, -0.1], [-0.9, -0.9]]),
+        torch.tensor([1.0, 0.0]),
+        torch.ones(2),
+    )
+    assert torch.isclose(losses["loss"], torch.tensor(0.005))
+    assert torch.isclose(losses["valid_fraction"], torch.tensor(0.5))
 
 
 def test_no_action_translation_constant_in_object_modules():

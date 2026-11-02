@@ -9,7 +9,10 @@ import torch
 class ObjectLabelStore:
     """Lazy reader for immutable, per-episode object label arrays."""
 
-    REQUIRED = ("uv", "target_valid", "target_quality", "present", "present_valid")
+    REQUIRED = (
+        "uv", "target_valid", "target_quality", "present", "present_valid",
+        "object_to_hand_uv", "relation_valid", "relation_quality",
+    )
 
     def __init__(self, root: str | Path, task: str) -> None:
         self.root = Path(root)
@@ -40,6 +43,12 @@ class ObjectLabelStore:
             "object_quality": torch.tensor(float(data["target_quality"][frame]), dtype=torch.float32),
             "object_present": torch.tensor(float(data["present"][frame]), dtype=torch.float32),
             "object_present_valid": torch.tensor(float(data["present_valid"][frame]), dtype=torch.float32),
+            "object_to_hand_uv": torch.as_tensor(
+                data["object_to_hand_uv"][frame], dtype=torch.float32),
+            "object_hand_relation_valid": torch.tensor(
+                float(data["relation_valid"][frame]), dtype=torch.float32),
+            "object_hand_relation_quality": torch.tensor(
+                float(data["relation_quality"][frame]), dtype=torch.float32),
         }
 
     @staticmethod
@@ -50,4 +59,7 @@ class ObjectLabelStore:
             "object_quality": torch.tensor(0.0),
             "object_present": torch.tensor(0.0),
             "object_present_valid": torch.tensor(0.0),
+            "object_to_hand_uv": torch.zeros(2, dtype=torch.float32),
+            "object_hand_relation_valid": torch.tensor(0.0),
+            "object_hand_relation_quality": torch.tensor(0.0),
         }
