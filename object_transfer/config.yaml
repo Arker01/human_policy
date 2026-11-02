@@ -34,7 +34,7 @@ model:
   object_transfer:
     enabled: true
     task: SET_BY_LAUNCHER
-    label_root: /mnt/nvme1n1/human_policy_derived/object_transfer_labels_20261102
+    label_root: /mnt/nvme1n1/human_policy_derived/object_transfer_labels_relation_20261102
     image_override_root: null
     human_image_override_root: null
     head_hidden_dim: 256

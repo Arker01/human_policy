@@ -89,7 +89,8 @@ check_labels.py:
 | classify Human | 75 | 26552 | 298 |
 
 The manifest is stored separately at
-/mnt/nvme1n1/human_policy_derived/object_transfer_labels_20261102; original
+/mnt/nvme1n1/human_policy_derived/object_transfer_labels_relation_20261102;
+original
 HDF5 files are not rewritten. No detector or segmenter is used at inference.
 
 ## Training checks
