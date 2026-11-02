@@ -23,6 +23,7 @@ Run artifacts are under:
 
 /mnt/nvme0n1/human_policy_ckpt/object_transfer_20261102
 
-The source revision used to start the jobs is recorded in each status JSON.
-See AUDIT.md for verified interfaces, label provenance, checks, and current
-limitations.
+Each status JSON records the launcher command and isolated source root. The six
+active jobs were started from source revision cf7586d; a7ab94b adds
+documentation only. See AUDIT.md for verified interfaces, label provenance,
+checks, and current limitations.
