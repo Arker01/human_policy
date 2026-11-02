@@ -25,7 +25,12 @@ def replace_dataset_path(entries: list[dict], *, human: Path | None, robot: Path
     for entry in entries:
         updated = copy.deepcopy(entry)
         path = str(entry["dataset_path"])
-        is_human = "/human/" in path or "1029_" in path or "human_geometry" in path
+        is_human = (
+            str(entry.get("type", "")).lower() == "human"
+            or "/human/" in path
+            or "1029_" in path
+            or "human_geometry" in path
+        )
         if is_human:
             if human is None:
                 continue
