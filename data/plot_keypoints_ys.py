@@ -1215,10 +1215,16 @@ def _save_mp4_matplotlib(frames, out_path, *, fps=20, width=960, height=720):
     if frames and 'head_tracker' in frames[0]['positions']:
         parts.append('head_tracker')
 
-    all_pts = np.concatenate(
-        [np.stack([f['positions'][p] for p in parts])
-         for f in frames], axis=0
+    # Include fingertips and displayed axes when fitting the video viewport.
+    # Wrist positions alone can crop Dex3 fingertips that extend beyond them.
+    point_groups = [_collect_frame_points(frame) for frame in frames]
+    point_groups.extend(
+        np.asarray(frame['axes'][part], dtype=np.float32).reshape(-1, 3)
+        for frame in frames for part in parts
+        if part in frame.get('axes', {})
     )
+    all_pts = np.concatenate(point_groups, axis=0)
+    all_pts = all_pts[np.all(np.isfinite(all_pts), axis=1)]
     margin = 0.1
     xlim = (all_pts[:, 0].min() - margin, all_pts[:, 0].max() + margin)
     ylim = (all_pts[:, 1].min() - margin, all_pts[:, 1].max() + margin)
