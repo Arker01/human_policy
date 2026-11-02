@@ -724,6 +724,7 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
 
     policy.train()
     cur_iter = train_from_iter
+    relation_gradient_checked = False
 
     with tqdm(total=num_epochs, initial=train_from_iter) as pbar:
         for data in train_dataloader:
@@ -805,6 +806,39 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
                 if accelerator.is_main_process:
                     with open(os.path.join(ckpt_dir, 'first_step_gradient_check.json'), 'w') as fp:
                         json.dump(groups, fp, indent=2)
+            if not relation_gradient_checked and len(data) > 4:
+                relation_valid = data[4].get('object_hand_relation_valid')
+                if relation_valid is not None and relation_valid.sum() > 0:
+                    inner_model = accelerator.unwrap_model(policy).model
+                    relation_grads = [
+                        p.grad.detach().float().square().sum()
+                        for name, p in inner_model.named_parameters()
+                        if name.startswith('object_relation_head.')
+                        and p.grad is not None
+                    ]
+                    relation_norm = float(
+                        torch.stack(relation_grads).sum().sqrt()
+                    ) if relation_grads else 0.0
+                    assert np.isfinite(relation_norm) and relation_norm > 0, {
+                        'step': cur_iter,
+                        'object_relation_head': relation_norm,
+                    }
+                    if accelerator.is_main_process:
+                        import json
+                        with open(
+                            os.path.join(
+                                ckpt_dir,
+                                'first_supervised_relation_gradient_check.json',
+                            ),
+                            'w',
+                        ) as fp:
+                            json.dump({
+                                'step': cur_iter,
+                                'object_relation_head': relation_norm,
+                                'valid_fraction': float(
+                                    relation_valid.float().mean()),
+                            }, fp, indent=2)
+                    relation_gradient_checked = True
             optimizer.step()
             scheduler.step()
             optimizer.zero_grad()
