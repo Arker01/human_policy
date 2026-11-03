@@ -102,6 +102,8 @@ def main() -> None:
                 "steps": steps,
                 "robot_equivalent_steps": 100_000,
                 "initialization": "scratch_action_model",
+                "experiment_variant": "geometry",
+                "state_ablation": "noleftwrist_and_qpos_98_128",
                 "dataset_json": str(dataset_path),
                 "model_config": str(model_path),
                 "pretrained": None,

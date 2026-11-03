@@ -105,13 +105,21 @@ def scene_tips(action):
     return torch.stack(hands,dim=-3)
 
 
-def geometry_loss(pred, target, mean, std, weights, is_pad):
+def geometry_loss(pred, target, mean, std, weights, is_pad, reduction='mean'):
     pred = scene_tips(pred*(std[:,None]+1e-6)+mean[:,None])
     target = scene_tips(target*(std[:,None]+1e-6)+mean[:,None])
     distance = torch.linalg.vector_norm(pred-target,dim=-1).mean(-1)
     weight = weights * (~is_pad)[...,None]
     loss = F.smooth_l1_loss(pred,target,reduction='none',beta=.01).mean((-1,-2))/.01
-    return (loss*weight).sum()/weight.sum().clamp_min(1), (distance*weight).sum()/weight.sum().clamp_min(1)*100
+    sample_denominator = weight.sum((1, 2)).clamp_min(1)
+    sample_loss = (loss * weight).sum((1, 2)) / sample_denominator
+    sample_cm = (
+        (distance * weight).sum((1, 2)) / sample_denominator * 100)
+    if reduction == 'none':
+        return sample_loss, sample_cm
+    if reduction != 'mean':
+        raise ValueError(f"unsupported geometry reduction {reduction!r}")
+    return sample_loss.mean(), sample_cm.mean()
 
 
 def dataset_aux(dataset,index,start_ts):

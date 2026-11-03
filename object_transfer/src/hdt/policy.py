@@ -222,12 +222,37 @@ class ACTPolicy(nn.Module):
                 loss_dict['readiness_accuracy'] = (((logits>0)==(target>0)).float()*mask).sum()/mask.sum().clamp_min(1)
                 loss_dict['loss'] = loss_dict['loss'] + .1*ready_loss
             elif self.model.experiment_variant == 'geometry':
-                geom, cm = geometry_loss(a_hat, actions, conditioning_dict['action_mean'],
-                                        conditioning_dict['action_std'],
-                                        conditioning_dict['hand_event_weights'][:,:self.model.num_queries], is_pad)
+                geometry_per_sample, geometry_cm_per_sample = geometry_loss(
+                    a_hat,
+                    actions,
+                    conditioning_dict['action_mean'],
+                    conditioning_dict['action_std'],
+                    conditioning_dict['hand_event_weights'][
+                        :, :self.model.num_queries],
+                    is_pad,
+                    reduction='none',
+                )
+                if self.model.use_object_transfer:
+                    geom, robot_geom, human_geom = domain_weighted_mean(
+                        geometry_per_sample,
+                        domain_is_human,
+                        human_action_weight,
+                    )
+                    cm, robot_cm, human_cm = domain_weighted_mean(
+                        geometry_cm_per_sample,
+                        domain_is_human,
+                        human_action_weight,
+                    )
+                    loss_dict['robot_geometry_loss'] = robot_geom
+                    loss_dict['human_geometry_loss'] = human_geom
+                    loss_dict['robot_geometry_error_cm'] = robot_cm
+                    loss_dict['human_geometry_error_cm'] = human_cm
+                else:
+                    geom = geometry_per_sample.mean()
+                    cm = geometry_cm_per_sample.mean()
                 loss_dict['geometry_loss'] = geom
                 loss_dict['geometry_error_cm'] = cm
-                loss_dict['loss'] = loss_dict['loss'] + .1*geom
+                loss_dict['loss'] = loss_dict['loss'] + .1 * geom
             return loss_dict
         else: # inference time
             a_hat, _, (_, _), _ = self.model(qpos, image, env_state, conditioning_dict=conditioning_dict) # no action, sample from prior

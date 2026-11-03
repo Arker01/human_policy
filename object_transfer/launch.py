@@ -30,6 +30,14 @@ def main() -> None:
         raise ValueError(
             f"scratch job {args.job} unexpectedly has pretrained="
             f"{job.get('pretrained')!r}")
+    if job.get("experiment_variant") != "geometry":
+        raise ValueError(
+            f"{args.job} must use geometry, got "
+            f"{job.get('experiment_variant')!r}")
+    if job.get("state_ablation") != "noleftwrist_and_qpos_98_128":
+        raise ValueError(
+            f"{args.job} has unexpected state ablation "
+            f"{job.get('state_ablation')!r}")
     steps = 3 if args.smoke else int(job["steps"])
     run_name = args.job + (".smoke" if args.smoke else "")
     exptid = args.root / "checkpoints" / run_name
@@ -60,7 +68,7 @@ def main() -> None:
     env = os.environ.copy()
     env.update({
         "CUDA_VISIBLE_DEVICES": str(args.gpu),
-        "HDT_EXPERIMENT": "baseline",
+        "HDT_EXPERIMENT": job["experiment_variant"],
         "PYTHONPATH": (
             f"{source_root.parent}:{source_root / 'src'}:"
             f"{source_root / 'src/hdt'}"
