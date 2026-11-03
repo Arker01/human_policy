@@ -633,21 +633,20 @@ def forward_pass(data, policy, training_step=0):
     return policy(*(data))
 
 class WarmupMultiplicativeLR(torch.optim.lr_scheduler._LRScheduler):
-    """Custom scheduler that multiplies lr by 10 every 1000 steps until reaching max_lr"""
+    """Warm up every optimizer group without erasing its configured LR ratio."""
     def __init__(self, optimizer, initial_lr=1e-7, max_lr=1e-4, warmup_period=1000, last_epoch=-1):
-        self.initial_lr = initial_lr
-        self.max_lr = max_lr
+        reference_lr = float(optimizer.param_groups[0]['lr'])
+        if reference_lr <= 0:
+            raise ValueError(f"reference optimizer LR must be positive, got {reference_lr}")
+        self.initial_factor = float(initial_lr) / reference_lr
+        self.max_factor = float(max_lr) / reference_lr
         self.warmup_period = warmup_period
-        # Set initial lr
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = initial_lr
         super().__init__(optimizer, last_epoch)
     
     def get_lr(self):
-        # Calculate current multiplier based on epoch
         multiplier = 10 ** (self.last_epoch // self.warmup_period)
-        new_lr = min(self.initial_lr * multiplier, self.max_lr)
-        return [new_lr for _ in self.base_lrs]
+        factor = min(self.initial_factor * multiplier, self.max_factor)
+        return [base_lr * factor for base_lr in self.base_lrs]
 
 def maybe_load_ckpt(ckpt_dir, seed, train_from_iter):
     ckpt_names = os.listdir(ckpt_dir)
@@ -848,7 +847,12 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
             
             if accelerator.is_main_process:
                 epoch_summary = detach_dict(forward_dict)
-                epoch_summary['lr'] = torch.tensor(scheduler.get_last_lr()[0])
+                group_lrs = scheduler.get_last_lr()
+                epoch_summary['lr'] = torch.tensor(group_lrs[0])
+                if len(group_lrs) > 1:
+                    epoch_summary['lr_backbone'] = torch.tensor(group_lrs[1])
+                if len(group_lrs) > 2:
+                    epoch_summary['lr_object'] = torch.tensor(group_lrs[2])
                 summary_string = ''
                 for k, v in epoch_summary.items():
                     summary_string += f'{k}: {v.item():.3f} '

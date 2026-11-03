@@ -529,7 +529,9 @@ class DETRVAE(nn.Module):
             self.object_fusion = GatedObjectFusion(
                 object_dim,
                 hidden_dim,
-                gate_init=float(self.object_transfer_config.get('gate_init', -6.0)),
+                gate_init=float(self.object_transfer_config.get('gate_init', 0.0)),
+                use_presence_gate=bool(
+                    self.object_transfer_config.get('use_presence_gate', False)),
             )
             self.object_relation_head = nn.Sequential(
                 nn.LayerNorm(hidden_dim),

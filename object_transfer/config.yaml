@@ -19,7 +19,7 @@ model:
   use_language_conditioning: false
   zero_state_dims: 98:128
   future_dino:
-    enabled: true
+    enabled: false
     weight: 0.0
     target_encoder: dinov2_vits14
     horizon: 45
@@ -39,7 +39,8 @@ model:
     human_image_override_root: null
     head_hidden_dim: 256
     head_lr: 1.0e-4
-    gate_init: -6.0
+    gate_init: 0.0
+    use_presence_gate: false
     human_action_weight: 0.2
     object_weight: 1.0
     object_hand_relation_weight: 0.2

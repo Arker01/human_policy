@@ -13,9 +13,6 @@ TASKS = ("wipe_table", "classify_gadgets")
 OMEGA_ORIGINAL = Path("/mnt/nvme0n1/DATASETS/omega_HOME_4tasks_20261025/hat")
 HUMAN_ALIGNED = Path("/mnt/nvme1n1/human_policy_derived/human_geometry_aligned_20261102")
 DERIVED = Path("/mnt/nvme1n1/human_policy_derived/bg_variants_batch_20261029")
-BASELINE = Path("/mnt/nvme0n1/human_policy_ckpt/omega_HOME_4tasks_geometry_noleftwrist_w0_20261025/checkpoints")
-
-
 def read(path: Path) -> dict:
     return json.loads(path.read_text())
 
@@ -93,20 +90,21 @@ def main() -> None:
             model_path = config_dir / f"{task}.{variant}.yaml"
             model_path.write_text(yaml.safe_dump(model, sort_keys=False))
 
-            # With the existing 50/50 embodiment sampler, a mixed batch contains
-            # half as many robot samples.  Doubling mixed steps preserves the same
-            # expected number of robot samples as the 80k Omega-only control.
-            steps = 160_000 if mixed else 80_000
+            # Train the action model from random initialization.  Match the original
+            # 100k Omega training budget.  With 50/50 embodiment sampling, a mixed
+            # run needs 200k updates for about 100k robot-equivalent updates.
+            steps = 200_000 if mixed else 100_000
             jobs[f"{task}.{variant}"] = {
                 "task": task,
                 "variant": variant,
                 "mixed_human": mixed,
                 "random_background": random_background,
                 "steps": steps,
-                "robot_equivalent_steps": 80_000,
+                "robot_equivalent_steps": 100_000,
+                "initialization": "scratch_action_model",
                 "dataset_json": str(dataset_path),
                 "model_config": str(model_path),
-                "pretrained": str(BASELINE / f"{task}_ckpt/policy_iter_100000_seed_0/pytorch_model.bin"),
+                "pretrained": None,
             }
 
     (args.output_root / "jobs.json").write_text(json.dumps(jobs, indent=2))

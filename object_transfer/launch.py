@@ -22,6 +22,14 @@ def main() -> None:
     jobs = json.loads((args.root / "jobs.json").read_text())
     source_root = Path(__file__).resolve().parent
     job = dict(jobs[args.job])
+    if job.get("initialization") != "scratch_action_model":
+        raise ValueError(
+            f"{args.job} is not marked as scratch_action_model: "
+            f"{job.get('initialization')!r}")
+    if job.get("pretrained") is not None:
+        raise ValueError(
+            f"scratch job {args.job} unexpectedly has pretrained="
+            f"{job.get('pretrained')!r}")
     steps = 3 if args.smoke else int(job["steps"])
     run_name = args.job + (".smoke" if args.smoke else "")
     exptid = args.root / "checkpoints" / run_name
@@ -44,16 +52,10 @@ def main() -> None:
         "--cond_mask_prob", "0.0",
         "--no_wandb",
         "--human_slow_down_factor", "1",
-        "--use_future_dino_head",
-        "--future_dino_weight", "0.0",
-        "--future_dino_warmup_steps", "0",
-        "--future_dino_horizon", "45",
-        "--future_dino_ablation", "none",
         "--robot_target_fps", "30",
         "--action_representation", "original",
         "--lag_aug",
         "--zero_state_dims", "98:128",
-        "--load_pretrained_path", job["pretrained"],
     ]
     env = os.environ.copy()
     env.update({

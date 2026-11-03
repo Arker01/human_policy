@@ -47,6 +47,18 @@ def test_disabled_gate_preserves_action_hidden():
     assert torch.equal(hidden, fused)
 
 
+def test_scratch_gate_starts_half_open_and_ignores_uncalibrated_presence():
+    fusion = GatedObjectFusion(32, 16, gate_init=0.0, use_presence_gate=False)
+    assert torch.equal(fusion.gate_logit.sigmoid(), torch.tensor(0.5))
+    hidden = torch.randn(2, 4, 16)
+    output = ObjectHeatmapHead(32, 8)(torch.randn(2, 32, 3, 5))
+    absent = dict(output)
+    present = dict(output)
+    absent["present_logit"] = torch.full((2,), -100.0)
+    present["present_logit"] = torch.full((2,), 100.0)
+    assert torch.equal(fusion(hidden, absent), fusion(hidden, present))
+
+
 def test_object_hand_relation_uses_only_valid_labels():
     losses = object_hand_relation_loss(
         torch.tensor([[0.2, -0.1], [0.9, 0.9]]),
