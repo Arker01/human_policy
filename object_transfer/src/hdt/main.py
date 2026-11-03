@@ -735,8 +735,12 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
                 with torch.no_grad():
                     policy.eval()
                     validation_dicts = []
-                    for batch_idx, data in enumerate(val_dataloader):
-                        forward_dict = forward_pass(data, policy, training_step=cur_iter)
+                    # Keep the outer training batch intact. Reusing ``data`` here
+                    # silently trained on the final validation batch every 1000
+                    # steps (including step 0), leaking validation episodes.
+                    for batch_idx, val_data in enumerate(val_dataloader):
+                        forward_dict = forward_pass(
+                            val_data, policy, training_step=cur_iter)
                         validation_dicts.append(forward_dict)
                         if batch_idx > 20:
                             break
