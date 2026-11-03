@@ -27,6 +27,12 @@ def _to_float(x):
         return None
 
 def _append_metrics_csv(csv_path, step, metrics: dict):
+    import json
+    row_json = {'step': int(step), **{k: _to_float(v) for k,v in metrics.items()}}
+    with open(os.path.join(os.path.dirname(csv_path), 'metrics.jsonl'), 'a') as jf:
+        jf.write(json.dumps(row_json) + '\n')
+    split = 'val' if any(k.startswith('val/') for k in metrics) else 'train'
+    csv_path = csv_path.replace('metrics.csv', 'metrics_' + split + '.csv')
     os.makedirs(os.path.dirname(csv_path), exist_ok=True)
     row = {"step": int(step)}
     for k, v in metrics.items():
@@ -47,6 +53,7 @@ def _append_metrics_csv(csv_path, step, metrics: dict):
         writer.writerow(row)
 
 def _plot_metrics(csv_path, out_png_path, keys):
+    return
     if not os.path.exists(csv_path):
         return
     with open(csv_path, "r", newline="") as f:
@@ -368,6 +375,26 @@ def main(args, base_dir, processed_dir=None):
         print(f"  History token pooling: {history_cfg.get('token_pool', 2)}x "
               f"(current frame not pooled)")
 
+    # Scheme 23/18 conditioning ablations.  Kept in one shared config so D, HP and
+    # DHP differ only by switches, not by forked dataset/model implementations.
+    hat_conditioning_cfg = trainer_config.get('hat_conditioning', {}) or {}
+    semantic_cfg = hat_conditioning_cfg.get('semantic_dropout', {}) or {}
+    temporal_cfg = hat_conditioning_cfg.get('temporal', {}) or {}
+    if semantic_cfg.get('enabled', False):
+        print("Semantic-block conditioning dropout enabled (train split only):")
+        print(f"  probabilities={semantic_cfg.get('probabilities', {})}")
+        print(f"  max_missing_blocks={semantic_cfg.get('max_missing_blocks', 2)}")
+        print("  mask order=[head_rot, root_rot, right_wrist_rot, right_hand_keypoints, vision]")
+    if temporal_cfg.get('enabled', False):
+        cache_dir = temporal_cfg.get('teacher_cache')
+        if not cache_dir or not os.path.isfile(os.path.join(cache_dir, 'manifest.json')):
+            raise FileNotFoundError(f"temporal teacher cache is not ready: {cache_dir}")
+        print("H+P temporal conditioning enabled:")
+        print(f"  teacher_cache={cache_dir}")
+        print(f"  H samples/span={temporal_cfg.get('history_samples', 8)}/"
+              f"{temporal_cfg.get('history_span_seconds', 2.0)}s")
+        print(f"  P anchors={temporal_cfg.get('plan_anchor_count', 32)}")
+
     # ---- Execution-lag state augmentation (disabled by default) ----
     lag_aug_config = None
     if args.get('lag_aug'):
@@ -461,6 +488,8 @@ def main(args, base_dir, processed_dir=None):
             }
         if zero_state_dims is not None:
             policy_config['zero_state_dims'] = zero_state_dims
+        if semantic_cfg.get('enabled', False) or temporal_cfg.get('enabled', False):
+            policy_config['hat_conditioning_config'] = hat_conditioning_cfg
     elif policy_class == 'RDT':
         assert "visual_backbone" not in trainer_config
         trainer_config["visual_backbone"] = trainer_config["model"]["backbone"]
@@ -476,6 +505,9 @@ def main(args, base_dir, processed_dir=None):
     else:
         raise NotImplementedError
     
+    from auxiliary_tasks import VARIANT
+    policy_config['experiment_variant'] = VARIANT
+
     from accelerate.utils import DistributedDataParallelKwargs
     kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
     accelerator = Accelerator(project_dir=ckpt_dir, kwargs_handlers=[kwargs])
@@ -518,6 +550,19 @@ def main(args, base_dir, processed_dir=None):
         )
         wandb.config.update(config)
     
+    if accelerator.is_main_process:
+        import json
+        from auxiliary_tasks import VARIANT
+        os.makedirs(ckpt_dir, exist_ok=True)
+        with open(os.path.join(ckpt_dir, 'training_config.json'), 'w') as fp:
+            json.dump({'config': config, 'args': args, 'variant': VARIANT,
+                       'world_size': accelerator.num_processes,
+                       'global_batch_size': batch_size_train*accelerator.num_processes}, fp, indent=2)
+        resolved_model_config = dict(trainer_config)
+        resolved_model_config['experiment_variant'] = VARIANT
+        with open(os.path.join(ckpt_dir, 'model.yaml'), 'w') as fp:
+            yaml.safe_dump(resolved_model_config, fp)
+
     visual_encoder, visual_preprocessor = make_visual_encoder(policy_class, policy_config)
     policy = make_policy(policy_class, policy_config, visual_encoder)
     optimizer = make_optimizer(policy_class, policy)
@@ -548,6 +593,7 @@ def main(args, base_dir, processed_dir=None):
                                                         history_offsets=history_offsets,
                                                         lag_aug_config=lag_aug_config,
                                                         visual_aug_config=visual_aug_config,
+                                                        hat_conditioning_config=hat_conditioning_cfg,
                                                         action_representation=action_representation,
                                                         robot_target_fps=robot_target_fps)
 
@@ -630,7 +676,7 @@ def maybe_load_ckpt(ckpt_dir, seed, train_from_iter):
     return train_from_iter, max_ckpt_name
 
 def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, config):
-    num_epochs = config['num_epochs']
+    num_epochs = int(os.environ.get('HDT_SMOKE_STEPS', config['num_epochs']))
     ckpt_dir = config['ckpt_dir']
     seed = config['seed']
     metrics_csv = os.path.join(ckpt_dir, "metrics.csv")
@@ -701,8 +747,8 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
                 with torch.no_grad():
                     policy.eval()
                     validation_dicts = []
-                    for batch_idx, val_data in enumerate(val_dataloader):
-                        forward_dict = forward_pass(val_data, policy, training_step=cur_iter)
+                    for batch_idx, data in enumerate(val_dataloader):
+                        forward_dict = forward_pass(data, policy, training_step=cur_iter)
                         validation_dicts.append(forward_dict)
                         if batch_idx > 20:
                             break
@@ -739,6 +785,22 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
             loss = forward_dict['loss']
 
             accelerator.backward(loss)
+            if cur_iter == 0:
+                import json
+                inner_model = accelerator.unwrap_model(policy).model
+                groups = {}
+                for group in ('action_head', 'input_proj', 'readiness_head', 'future_dino_head'):
+                    grads = [p.grad.detach().float().square().sum() for n,p in inner_model.named_parameters()
+                             if n.startswith(group + '.') and p.grad is not None]
+                    groups[group] = float(torch.stack(grads).sum().sqrt()) if grads else 0.0
+                assert groups['action_head'] > 0 and all(np.isfinite(v) for v in groups.values()), groups
+                if inner_model.experiment_variant == 'readiness':
+                    assert groups['readiness_head'] > 0, groups
+                if inner_model.future_dino_weight > 0:
+                    assert groups['future_dino_head'] > 0, groups
+                if accelerator.is_main_process:
+                    with open(os.path.join(ckpt_dir, 'first_step_gradient_check.json'), 'w') as fp:
+                        json.dump(groups, fp, indent=2)
             optimizer.step()
             scheduler.step()
             optimizer.zero_grad()
@@ -830,7 +892,8 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
         exit(0)
             
     ckpt_path = os.path.join(ckpt_dir, f'policy_last.ckpt')
-    torch.save(policy.state_dict(), ckpt_path)
+    if accelerator.is_main_process:
+        torch.save(accelerator.unwrap_model(policy).state_dict(), ckpt_path)
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

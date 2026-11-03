@@ -96,6 +96,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
                  history_offsets=None,
                  lag_aug_config=None,
                  visual_aug_config=None,
+                 hat_conditioning_config=None,
                  action_representation="original",
                  robot_target_fps=30.0):
         super(EpisodicDataset).__init__()
@@ -255,6 +256,22 @@ class EpisodicDataset(torch.utils.data.Dataset):
         # torchvision.transforms.v2.GaussianBlur(kernel_size=(9,9), sigma=(0.1,2.0)),
         self.training_transforms = torchvision.transforms.v2.Compose(_train_tf)
 
+        # ---- Scheme 23/18 conditioning ablations (disabled by default) ----
+        # The switch is carried in the model yaml.  When both arms are disabled this
+        # creates no new sample fields and leaves the baseline path byte-for-byte.
+        hat_cfg = dict(hat_conditioning_config or {})
+        semantic_cfg = dict(hat_cfg.get("semantic_dropout", {}) or {})
+        temporal_cfg = dict(hat_cfg.get("temporal", {}) or {})
+        self.semantic_dropout = semantic_cfg if semantic_cfg.get("enabled", False) else None
+        self.temporal = temporal_cfg if temporal_cfg.get("enabled", False) else None
+        self.teacher_plan_cache = None
+        if self.temporal is not None and self.train:
+            from hat_conditioning import TeacherPlanCache
+            cache_dir = self.temporal.get("teacher_cache")
+            if not cache_dir:
+                raise ValueError("temporal conditioning requires temporal.teacher_cache")
+            self.teacher_plan_cache = TeacherPlanCache(cache_dir)
+
         self.norm_stats, self.embodiment_list = self.get_norm_stats()
 
         SAMPLER_TYPE = 'norm_by_embodiment_and_task'
@@ -266,6 +283,68 @@ class EpisodicDataset(torch.utils.data.Dataset):
         empty_lang_embed_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "empty_lang_embed.pt")
         empty_lang_embedding = torch.load(empty_lang_embed_path, weights_only=True).float()
         self.cached_lang_embedding_dict[''] = empty_lang_embedding
+
+    def _read_temporal_conditioning(self, root, episode_index, logical_t):
+        """Read strict-past H and a cursor-aligned frozen-teacher P.
+
+        H indexes only logical times below t.  P never reads the current/future GT;
+        its values come exclusively from the immutable teacher cache.
+        """
+        cfg = self.temporal
+        n_hist = int(cfg.get("history_samples", 8))
+        span = int(round(float(cfg.get("history_span_seconds", 2.0)) * 30.0))
+        offsets = np.unique(np.rint(np.linspace(span, 1, n_hist)).astype(np.int64))[::-1]
+        if len(offsets) < n_hist:
+            offsets = np.pad(offsets, (0, n_hist - len(offsets)), constant_values=1)
+        history = np.zeros((n_hist, 128), dtype=np.float32)
+        history_valid = np.zeros(n_hist, dtype=bool)
+        history_time = np.zeros(n_hist, dtype=np.float32)
+        for i, offset in enumerate(offsets[:n_hist]):
+            past_t = int(logical_t) - int(offset)
+            if past_t < 0:
+                continue
+            raw_t = self._raw_index(episode_index, past_t)
+            history[i] = np.asarray(root[self.action_str][raw_t], dtype=np.float32)
+            history_valid[i] = True
+            history_time[i] = -float(offset) / 30.0
+
+        n_anchor = int(cfg.get("plan_anchor_count", 32))
+        plan = np.zeros((n_anchor, 128), dtype=np.float32)
+        plan_valid = np.zeros(n_anchor, dtype=bool)
+        plan_time = np.zeros(n_anchor, dtype=np.float32)
+        plan_age, plan_cursor, t_prev = 0.0, 0, -1
+        if self.teacher_plan_cache is not None:
+            cached = self.teacher_plan_cache.previous(
+                self.dataset_paths[episode_index], int(logical_t),
+                min_age=int(cfg.get("min_plan_age_frames", 3)),
+                max_age=int(cfg.get("max_plan_age_frames", 30)))
+            if cached is not None:
+                from hat_conditioning import anchor_remaining_plan
+                chunk, valid_len, t_prev, plan_cursor = cached
+                plan, plan_valid, plan_time = anchor_remaining_plan(
+                    chunk, valid_len, plan_cursor, n_anchor)
+                plan_age = float(int(logical_t) - int(t_prev)) / 30.0
+
+        # Whole-source missing events are explicit, separate from semantic D.
+        if self.train and random.random() < float(cfg.get("missing_history_probability", 0.10)):
+            history_valid[:] = False
+        if self.train and random.random() < float(cfg.get("missing_plan_probability", 0.20)):
+            plan_valid[:] = False
+        history[~history_valid] = 0.0
+        plan[~plan_valid] = 0.0
+        return {
+            "action_history_raw": history,
+            "history_valid_mask": history_valid,
+            "history_times": history_time,
+            "previous_plan_raw": plan,
+            "plan_valid_mask": plan_valid,
+            "plan_times": plan_time,
+            "history_present": np.float32(history_valid.any()),
+            "plan_present": np.float32(plan_valid.any()),
+            "plan_age_seconds": np.float32(plan_age),
+            "plan_cursor": np.int64(plan_cursor),
+            "plan_source_t": np.int64(t_prev),
+        }
 
     @staticmethod
     def _infer_embodiment(path, value):
@@ -895,13 +974,19 @@ class EpisodicDataset(torch.utils.data.Dataset):
             else:
                 future_cam_images = self._read_cam_images_at(root, future_ts, single_hdf_path)
 
+        temporal_conditioning = None
+        if self.temporal is not None:
+            temporal_conditioning = self._read_temporal_conditioning(root, index, int(start_ts))
+
         if not self.load_hdf_to_cpu:
             lang_instruction = root.attrs.get('description', '')
-            embodiment = root.attrs.get('embodiment', 'default')
+            embodiment = self._infer_embodiment(
+                single_hdf_path, root.attrs.get('embodiment', 'default'))
             root.close()
         else:
             lang_instruction = root['attrs'].get('description', '')
-            embodiment = root['attrs'].get('embodiment', 'default')
+            embodiment = self._infer_embodiment(
+                single_hdf_path, root['attrs'].get('embodiment', 'default'))
         
         padded_action = np.zeros((self.chunk_size, all_time_action.shape[1]), dtype=np.float32)
         padded_action[:all_time_action.shape[0], :] = all_time_action
@@ -1010,6 +1095,23 @@ class EpisodicDataset(torch.utils.data.Dataset):
         _state_masked = random.random() <= self.cond_mask_prob
         qpos_data = torch.zeros_like(qpos_data) if _state_masked \
             else (qpos_data - qpos_mean) / (qpos_std + 1e-6)
+
+        semantic_missing = None
+        if self.semantic_dropout is not None:
+            from hat_conditioning import SEMANTIC_BLOCKS, sample_semantic_missing
+            # Validation and normal deployment see all conditions present.  A debug
+            # override remains possible without silently making validation random.
+            debug_missing = self.semantic_dropout.get("debug_missing_blocks", [])
+            if self.train:
+                semantic_missing = sample_semantic_missing(self.semantic_dropout)
+            else:
+                names = ("head_rot", "root_rot", "right_wrist_rot",
+                         "right_hand_keypoints", "visual_tokens")
+                semantic_missing = torch.tensor([float(n in debug_missing) for n in names])
+            for group_i, name in enumerate(("head_rot", "root_rot", "right_wrist_rot",
+                                            "right_hand_keypoints")):
+                if semantic_missing[group_i] > 0:
+                    qpos_data[SEMANTIC_BLOCKS[name]] = 0.0
         
         if random.random() < self.cond_mask_prob:
             lang_instruction = ''
@@ -1025,6 +1127,33 @@ class EpisodicDataset(torch.utils.data.Dataset):
             "language_embeddings": selected_embedding,
             "plain_text": lang_instruction
         }
+
+        if semantic_missing is not None:
+            conditioning_dict["semantic_missing_mask"] = semantic_missing.float()
+
+        if temporal_conditioning is not None:
+            history = torch.from_numpy(temporal_conditioning.pop("action_history_raw")).float()
+            plan = torch.from_numpy(temporal_conditioning.pop("previous_plan_raw")).float()
+            history_valid = torch.from_numpy(
+                temporal_conditioning.pop("history_valid_mask")).bool()
+            plan_valid = torch.from_numpy(
+                temporal_conditioning.pop("plan_valid_mask")).bool()
+            history = (history - action_mean) / (action_std + 1e-6)
+            plan = (plan - action_mean) / (action_std + 1e-6)
+            history[~history_valid] = 0.0
+            plan[~plan_valid] = 0.0
+            conditioning_dict.update({
+                "action_history": history,
+                "history_valid_mask": history_valid,
+                "history_times": torch.from_numpy(
+                    temporal_conditioning.pop("history_times")).float(),
+                "previous_plan": plan,
+                "plan_valid_mask": plan_valid,
+                "plan_times": torch.from_numpy(
+                    temporal_conditioning.pop("plan_times")).float(),
+            })
+            for key, value in temporal_conditioning.items():
+                conditioning_dict[key] = torch.as_tensor(value)
 
         if self.history_enabled:
             # Rides in conditioning_dict for the same reason the flow target does:
@@ -1047,6 +1176,10 @@ class EpisodicDataset(torch.utils.data.Dataset):
             conditioning_dict["flow_target"] = flow_target
             conditioning_dict["flow_valid"] = flow_valid
             conditioning_dict["flow_anchor_valid"] = flow_anchor_valid
+
+        from auxiliary_tasks import VARIANT, dataset_aux
+        if VARIANT in ('readiness', 'geometry'):
+            conditioning_dict.update(dataset_aux(self, index, int(start_ts)))
 
         if self.future_image_enabled:
             conditioning_dict["future_valid"] = torch.tensor(future_valid, dtype=torch.float32)
@@ -1225,6 +1358,10 @@ def collate_fn(batch):
     # 3D-flow target. This dict is built from an allow-list above, so keys that are
     # not named here get silently dropped -- which is exactly how a flow arm would
     # end up training with no world loss at all and no error to show for it.
+    for key in ('readiness_target', 'readiness_mask', 'hand_event_weights', 'action_mean', 'action_std'):
+        if key in conditioning_list[0]:
+            ret_conditioning_dict[key] = torch.stack([c[key] for c in conditioning_list])
+
     if 'flow_target' in conditioning_list[0]:
         for key in ('flow_target', 'flow_valid', 'flow_anchor_valid'):
             ret_conditioning_dict[key] = torch.stack(
@@ -1234,6 +1371,19 @@ def collate_fn(batch):
     # the current frame only and look like a plain baseline that mysteriously costs 3x.
     if 'hist_image' in conditioning_list[0]:
         for key in ('hist_image', 'hist_qpos'):
+            ret_conditioning_dict[key] = torch.stack(
+                [conditioning[key] for conditioning in conditioning_list])
+
+    # Scheme 23/18 fields are fixed-shape by construction.  Keep this explicit
+    # allow-list: silently dropping one here would make an ablation look like it ran
+    # while the model actually received the baseline inputs.
+    for key in (
+            'semantic_missing_mask',
+            'action_history', 'history_valid_mask', 'history_times',
+            'previous_plan', 'plan_valid_mask', 'plan_times',
+            'history_present', 'plan_present', 'plan_age_seconds',
+            'plan_cursor', 'plan_source_t'):
+        if key in conditioning_list[0]:
             ret_conditioning_dict[key] = torch.stack(
                 [conditioning[key] for conditioning in conditioning_list])
 
@@ -1270,6 +1420,7 @@ def load_data(base_dir,
               history_offsets=None,
               lag_aug_config=None,
               visual_aug_config=None,
+              hat_conditioning_config=None,
               action_representation="original",
               robot_target_fps=30.0):
 
@@ -1322,6 +1473,7 @@ def load_data(base_dir,
                                     history_offsets=history_offsets,
                                     lag_aug_config=lag_aug_config,
                                     visual_aug_config=visual_aug_config,
+                                    hat_conditioning_config=hat_conditioning_config,
                                     action_representation=action_representation,
                                     robot_target_fps=robot_target_fps)
     

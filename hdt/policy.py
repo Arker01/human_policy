@@ -66,6 +66,17 @@ class ACTPolicy(nn.Module):
             loss_dict['l1'] = all_l1.mean()
             loss_dict['kl'] = total_kld[0]
             loss_dict['loss'] = loss_dict['l1'] + loss_dict['kl'] * self.kl_weight
+            if conditioning_dict is not None and 'semantic_missing_mask' in conditioning_dict:
+                missing = conditioning_dict['semantic_missing_mask'].float()
+                names = ('head', 'root', 'right_wrist', 'right_hand', 'vision')
+                for i, name in enumerate(names):
+                    loss_dict[f'missing_{name}_frac'] = missing[:, i].mean()
+                loss_dict['missing_block_count'] = missing.sum(dim=1).mean()
+                loss_dict['missing_head_root_joint_frac'] = (
+                    (missing[:, 0] > 0) & (missing[:, 1] > 0)).float().mean()
+            if conditioning_dict is not None and 'history_present' in conditioning_dict:
+                loss_dict['history_present_frac'] = conditioning_dict['history_present'].float().mean()
+                loss_dict['plan_present_frac'] = conditioning_dict['plan_present'].float().mean()
             if self.USE_EEF_LOSS:
                 loss_dict['eef_loss'] = all_l1[:, :, hdt.constants.OUTPUT_LEFT_EEF].mean() + all_l1[:, :, hdt.constants.OUTPUT_RIGHT_EEF].mean()
                 loss_dict['loss'] = loss_dict['loss'] + loss_dict['eef_loss'] * 2
@@ -125,10 +136,35 @@ class ACTPolicy(nn.Module):
                         flow_weight, device=loss_dict['loss'].device, dtype=loss_dict['loss'].dtype)
                     loss_dict['loss'] = loss_dict['loss'] + flow_weight * future_dino_loss_dict['flow_loss']
 
+            from auxiliary_tasks import VARIANT, balanced_readiness_loss, geometry_loss
+            if self.model.experiment_variant == 'readiness':
+                logits = self.model.readiness_logits
+                target = conditioning_dict['readiness_target']
+                mask = conditioning_dict['readiness_mask']
+                ready_loss = balanced_readiness_loss(logits, target, mask)
+                loss_dict['readiness_loss'] = ready_loss
+                loss_dict['readiness_valid_frac'] = mask.mean()
+                loss_dict['readiness_positive_frac'] = (mask*target).sum()/mask.sum().clamp_min(1)
+                loss_dict['readiness_accuracy'] = (((logits>0)==(target>0)).float()*mask).sum()/mask.sum().clamp_min(1)
+                loss_dict['loss'] = loss_dict['loss'] + .1*ready_loss
+            elif self.model.experiment_variant == 'geometry':
+                geom, cm = geometry_loss(a_hat, actions, conditioning_dict['action_mean'],
+                                        conditioning_dict['action_std'],
+                                        conditioning_dict['hand_event_weights'][:,:self.model.num_queries], is_pad)
+                loss_dict['geometry_loss'] = geom
+                loss_dict['geometry_error_cm'] = cm
+                loss_dict['loss'] = loss_dict['loss'] + .1*geom
             return loss_dict
         else: # inference time
             a_hat, _, (_, _), _ = self.model(qpos, image, env_state, conditioning_dict=conditioning_dict) # no action, sample from prior
             return a_hat
+
+    @torch.no_grad()
+    def predict_with_readiness(self, image, qpos, conditioning_dict=None):
+        trajectory = self(image, qpos, conditioning_dict=conditioning_dict)
+        if self.model.readiness_logits is None:
+            raise RuntimeError('Load a readiness model with HDT_EXPERIMENT=readiness')
+        return trajectory, self.model.readiness_logits.sigmoid()
 
     def configure_optimizers(self):
         return self.optimizer

@@ -108,7 +108,7 @@ class FrozenPatchTargetEncoder(nn.Module):
         if name.startswith('dinov2'):
             if name not in self.DINOV2_EMBED_DIM:
                 raise ValueError(f"Unsupported Future-DINO target encoder {name}")
-            self.body = torch.hub.load('facebookresearch/dinov2', name)
+            self.body = torch.hub.load(os.path.join(torch.hub.get_dir(), 'facebookresearch_dinov2_main'), name, source='local')
             self.kind = 'dinov2'
             self.patch_size = 14
             self.embed_dim = self.DINOV2_EMBED_DIM[name]
@@ -451,7 +451,7 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 
 class DETRVAE(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, backbones, transformer, encoder, state_dim, action_dim, num_queries, camera_names, image_feature_strategy, use_language_conditioning, future_dino_config=None, future_vae_config=None, future_flow_config=None, history_config=None, zero_state_dims=None):
+    def __init__(self, backbones, transformer, encoder, state_dim, action_dim, num_queries, camera_names, image_feature_strategy, use_language_conditioning, future_dino_config=None, future_vae_config=None, future_flow_config=None, history_config=None, zero_state_dims=None, experiment_variant=None, hat_conditioning_config=None):
         """ Initializes the model.
         Parameters:
             backbones: torch module of the backbone to be used. See backbone.py
@@ -495,6 +495,28 @@ class DETRVAE(nn.Module):
         self.action_head = nn.Linear(hidden_dim, action_dim)
         self.is_pad_head = nn.Linear(hidden_dim, 1)
         self.query_embed = nn.Embedding(num_queries, hidden_dim)
+
+        hat_cfg = dict(hat_conditioning_config or {})
+        semantic_cfg = dict(hat_cfg.get('semantic_dropout', {}) or {})
+        temporal_cfg = dict(hat_cfg.get('temporal', {}) or {})
+        self.use_semantic_dropout = bool(semantic_cfg.get('enabled', False))
+        self.use_temporal_conditioning = bool(temporal_cfg.get('enabled', False))
+        if self.use_semantic_dropout:
+            # Five explicit missing flags disambiguate a masked, normalized zero from
+            # a genuinely mean-valued condition.  Zero init preserves the baseline
+            # function at step zero while still allowing the projection to learn.
+            self.semantic_missing_proj = nn.Linear(5, hidden_dim, bias=False)
+            nn.init.zeros_(self.semantic_missing_proj.weight)
+            self.visual_missing_token = nn.Parameter(torch.zeros(1, hidden_dim, 1, 1))
+        if self.use_temporal_conditioning:
+            self.temporal_action_proj = nn.Linear(action_dim, hidden_dim)
+            self.temporal_time_proj = nn.Linear(1, hidden_dim, bias=False)
+            self.history_residual = nn.Linear(hidden_dim, hidden_dim, bias=False)
+            self.plan_residual = nn.Linear(hidden_dim, hidden_dim, bias=False)
+            self.history_missing_embed = nn.Parameter(torch.zeros(1, hidden_dim))
+            self.plan_missing_embed = nn.Parameter(torch.zeros(1, hidden_dim))
+            nn.init.zeros_(self.history_residual.weight)
+            nn.init.zeros_(self.plan_residual.weight)
 
         self.use_language_conditioning = use_language_conditioning
         self.image_feature_strategy = image_feature_strategy
@@ -548,6 +570,10 @@ class DETRVAE(nn.Module):
 
         # decoder extra parameters
         self.latent_out_proj = nn.Linear(self.latent_dim, hidden_dim) # project latent sample to embedding
+        from auxiliary_tasks import VARIANT, ReadinessHead
+        self.experiment_variant = experiment_variant or VARIANT
+        self.readiness_head = ReadinessHead(hidden_dim) if self.experiment_variant == 'readiness' else None
+        self.readiness_logits = None
         self.additional_pos_embed = nn.Embedding(2, hidden_dim) # learned position embedding for proprio and latent
 
         # Optional state-block ablation. Kept as a buffer so the range travels with the
@@ -560,6 +586,10 @@ class DETRVAE(nn.Module):
                 f"zero_state_dims {self.zero_state_dims} out of range for state_dim {state_dim}")
             keep = torch.ones(state_dim)
             keep[lo:hi] = 0.0
+            # Dedicated no-left-wrist experiment: mask encoder inputs only.
+            # Persisted buffer also enforces this in the existing online loader.
+            keep[80:89] = 0.0
+            print('[state ablation] EXTRA left wrist input qpos[80:89] forced to 0; action targets unchanged')
             self.register_buffer('state_keep_mask', keep)
             print(f"[state ablation] normalized qpos[{lo}:{hi}] forced to 0 "
                   f"({hi - lo}/{state_dim} dims), matching the human episodes")
@@ -932,6 +962,15 @@ class DETRVAE(nn.Module):
 
         return torch.cat(all_features, axis=3), torch.cat(all_pos, axis=3)
 
+    def _temporal_summary(self, values, times, valid, missing_embed):
+        token = self.temporal_action_proj(values)
+        token = token + self.temporal_time_proj(times.unsqueeze(-1).to(token.dtype))
+        weight = valid.to(token.dtype).unsqueeze(-1)
+        denom = weight.sum(dim=1).clamp_min(1.0)
+        pooled = (token * weight).sum(dim=1) / denom
+        present = valid.any(dim=1, keepdim=True)
+        return torch.where(present, pooled, missing_embed.expand_as(pooled))
+
     def forward(self, qpos, image, env_state, actions=None, is_pad=None, conditioning_dict=None, future_image=None):
         """
         qpos: batch, qpos_dim
@@ -982,6 +1021,17 @@ class DETRVAE(nn.Module):
         else:
             src, pos = self.get_features_and_pos(image)
 
+        semantic_missing = None
+        if self.use_semantic_dropout:
+            semantic_missing = conditioning_dict.get('semantic_missing_mask')
+            if semantic_missing is None:
+                semantic_missing = torch.zeros(bs, 5, device=qpos.device, dtype=qpos.dtype)
+            else:
+                semantic_missing = semantic_missing.to(qpos.dtype)
+            vision_missing = semantic_missing[:, 4].bool().view(bs, 1, 1, 1)
+            missing_src = self.visual_missing_token.expand(bs, -1, src.shape[2], src.shape[3])
+            src = torch.where(vision_missing, missing_src, src)
+
         # proprioception features
         if self.use_language_conditioning:
             language_embedding = conditioning_dict['language_embeddings'].flatten(start_dim=1)
@@ -999,6 +1049,24 @@ class DETRVAE(nn.Module):
         else:
             proprio_input = self.input_proj_robot_state(qpos)
 
+        if self.use_semantic_dropout:
+            proprio_input = proprio_input + self.semantic_missing_proj(semantic_missing)
+
+        if self.use_temporal_conditioning:
+            if conditioning_dict is None:
+                raise ValueError('temporal model requires an explicit conditioning_dict')
+            history = self._temporal_summary(
+                conditioning_dict['action_history'], conditioning_dict['history_times'],
+                conditioning_dict['history_valid_mask'], self.history_missing_embed)
+            plan = self._temporal_summary(
+                conditioning_dict['previous_plan'], conditioning_dict['plan_times'],
+                conditioning_dict['plan_valid_mask'], self.plan_missing_embed)
+            proprio_input = (proprio_input + self.history_residual(history)
+                              + self.plan_residual(plan))
+
+        # Observation-only: independent of posterior latent and future actions.
+        if self.readiness_head is not None:
+            self.readiness_logits = self.readiness_head(src, pos)
         hs = self.transformer(src, None, self.query_embed.weight, pos, latent_input, proprio_input, self.additional_pos_embed.weight)[0]
 
         a_hat = self.action_head(hs)
@@ -1254,6 +1322,7 @@ def build(args):
     future_flow_config = getattr(args, 'future_flow_config', None)
     history_config = getattr(args, 'history_config', None)
     zero_state_dims = getattr(args, 'zero_state_dims', None)
+    hat_conditioning_config = getattr(args, 'hat_conditioning_config', None)
 
     model = DETRVAE(
         backbones,
@@ -1270,6 +1339,8 @@ def build(args):
         future_flow_config=future_flow_config,
         history_config=history_config,
         zero_state_dims=zero_state_dims,
+        experiment_variant=getattr(args, 'experiment_variant', None),
+        hat_conditioning_config=hat_conditioning_config,
     )
 
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
