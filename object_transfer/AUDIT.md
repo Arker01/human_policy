@@ -1,6 +1,6 @@
 # Object-transfer implementation audit
 
-Date: 2026-11-02
+Date: 2026-11-03
 
 ## Scope and decision override
 
@@ -25,14 +25,14 @@ therefore does not numerically dilute the Robot loss.
   /mnt/nvme0n1/DATASETS/omega_HOME_4tasks_20261025/hat/{task}
 - Geometry-aligned Human source:
   /mnt/nvme1n1/human_policy_derived/human_geometry_aligned_20261102/{task}
-- Baseline initialization:
-  /mnt/nvme0n1/human_policy_ckpt/omega_HOME_4tasks_geometry_noleftwrist_w0_20261025/checkpoints/{task}_ckpt/policy_iter_100000_seed_0/pytorch_model.bin
 - New run root:
-  /mnt/nvme0n1/human_policy_ckpt/object_transfer_20261102
+  /mnt/nvme0n1/human_policy_ckpt/object_transfer_scratch_20261103
 
-The old checkpoint loads with strict=False; only the new Object Head, gated
-fusion, and object-to-hand relation head are missing and initialized from
-scratch.
+No HAT/action checkpoint is loaded. The DETR/HAT encoder, decoder, state path,
+action head, Object Head, gated fusion, and relation head are all randomly
+initialized. The general-purpose V-JEPA 2.1 image backbone retains its released
+pretrained weights and remains frozen, matching the existing HAT visual
+interface.
 
 ## Verified model interface
 
@@ -41,8 +41,10 @@ The existing global visual path remains intact and produces the existing DETR
 action hidden [B, 100, 512]. The new branch predicts a 14x19 spatial
 distribution, normalized UV, presence probability, and pooled 768-D object
 token. A gated residual is applied to the existing action hidden before the
-unchanged 128-D keypoint action head. The gate starts at
-sigmoid(-6) = 0.0024726.
+unchanged 128-D keypoint action head. Because the action model itself starts
+from scratch, the fusion gate starts half open: sigmoid(0) = 0.5.
+The uncalibrated Presence output neither multiplies the gate nor enters the
+fusion context.
 
 ~~~mermaid
 flowchart LR
@@ -99,8 +101,14 @@ HDF5 files are not rewritten. No detector or segmenter is used at inference.
 
 ## Training checks
 
-- Unit tests: 6 passed.
+- Unit tests: 7 passed.
 - Smoke runs completed forward, validation, backward, and checkpoint save.
+- Launch manifests assert initialization=scratch_action_model,
+  pretrained=null, and contain no --load_pretrained_path argument.
+- Action/state/transformer LR is 1e-5; Object Head, fusion, gate, and relation
+  LR is 1e-4. Runtime CSVs confirm both values.
+- Future-DINO is disabled; its previous zero-weight head and target-image
+  loading are absent.
 - Object Head and fusion have finite nonzero first-step gradients. The relation
   head is checked on the first batch containing a valid relation; all six
   formal runs produced finite nonzero relation-head gradients by step 3.
@@ -110,6 +118,9 @@ HDF5 files are not rewritten. No detector or segmenter is used at inference.
   aligned Human state/action remains the source of supervision.
 - Train/validation file lists are split by episode; background variants reuse
   those same lists and cannot cross the split.
+- The previous checkpoint-finetune runs are stopped and preserved separately
+  under /mnt/nvme0n1/human_policy_ckpt/object_transfer_20261102. They are not
+  resumed or used to initialize the scratch runs.
 
 ## Known limitations / TODO
 
