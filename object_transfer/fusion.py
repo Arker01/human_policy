@@ -31,8 +31,14 @@ class GatedObjectFusion(nn.Module):
 
     def forward(self, hidden: torch.Tensor, object_output: dict[str, torch.Tensor]) -> torch.Tensor:
         present = object_output["present_logit"].sigmoid()
+        present_context = present if self.use_presence_gate else torch.zeros_like(present)
         raw_context = torch.cat(
-            (object_output["object_token"], object_output["uv"], present[:, None]), dim=-1
+            (
+                object_output["object_token"],
+                object_output["uv"],
+                present_context[:, None],
+            ),
+            dim=-1,
         )
         context = self.context(raw_context).unsqueeze(1).expand(-1, hidden.shape[1], -1)
         delta = self.delta(torch.cat((hidden, context), dim=-1))
