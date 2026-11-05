@@ -33,7 +33,6 @@ launch_one() {
   fi
   nohup env \
     CUDA_VISIBLE_DEVICES="$gpu" \
-    HDT_EXPERIMENT=geometry \
     PYTHONPATH="$WORKTREE:$WORKTREE/hdt" \
     OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 \
     TOKENIZERS_PARALLELISM=false \
@@ -54,7 +53,7 @@ launch_one() {
   echo "$name launched on GPU $gpu pid=$(cat "$pid_file")"
 }
 
-launch_one gadgets_DH_ordered "$SOURCE_MANIFEST" \
+launch_one gadgets_DH_ordered_baseline "$SOURCE_MANIFEST" \
   hdt/configs/classify_retrain_20261105/gadgets_DH_ordered.yaml 5 false
-launch_one gadgets_D_trimmed_open_boundary "$TRIM_MANIFEST" \
+launch_one gadgets_D_trimmed_open_boundary_baseline "$TRIM_MANIFEST" \
   hdt/configs/classify_retrain_20261105/gadgets_D_trimmed.yaml 6 true
