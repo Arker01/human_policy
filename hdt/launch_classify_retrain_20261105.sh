@@ -6,16 +6,17 @@ EXPERIMENT=/mnt/nvme0n1/human_policy_ckpt/classify_retrain_20261105
 BASELINE=/mnt/nvme0n1/human_policy_ckpt/bg_ablation_5way_20261029
 PYTHON=/home/aigc/miniconda/envs/human_policy/bin/python
 SOURCE_MANIFEST="$BASELINE/configs/classify_gadgets.random_omega_only.dataset.json"
-TRIM_MANIFEST="$EXPERIMENT/data/classify_gadgets.placement_trim.dataset.json"
+TRIM_MANIFEST="$EXPERIMENT/data/classify_gadgets.placement_open_boundary.dataset.json"
 
 mkdir -p "$EXPERIMENT/checkpoints" "$EXPERIMENT/logs" "$EXPERIMENT/data"
 if [[ ! -f "$TRIM_MANIFEST" ]]; then
   "$PYTHON" "$WORKTREE/hdt/build_classify_placement_trim.py" \
     --source-manifest "$SOURCE_MANIFEST" \
-    --output-dir "$EXPERIMENT/data/placement_trim" \
+    --output-dir "$EXPERIMENT/data/placement_open_boundary" \
     --output-manifest "$TRIM_MANIFEST" \
-    --settle-frames 15 \
-    > "$EXPERIMENT/logs/build_trim.log" 2>&1
+    --open-threshold 0.19 \
+    --open-hold-frames 3 \
+    > "$EXPERIMENT/logs/build_open_boundary.log" 2>&1
 fi
 cd "$WORKTREE"
 
@@ -55,5 +56,5 @@ launch_one() {
 
 launch_one gadgets_DH_ordered "$SOURCE_MANIFEST" \
   hdt/configs/classify_retrain_20261105/gadgets_DH_ordered.yaml 5 false
-launch_one gadgets_D_trimmed "$TRIM_MANIFEST" \
+launch_one gadgets_D_trimmed_open_boundary "$TRIM_MANIFEST" \
   hdt/configs/classify_retrain_20261105/gadgets_D_trimmed.yaml 6 true
