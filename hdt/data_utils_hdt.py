@@ -94,6 +94,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
                  flow_grid_hw=(30, 40),
                  flow_horizon=100,
                  history_offsets=None,
+                 history_state_only=False,
                  lag_aug_config=None,
                  visual_aug_config=None,
                  hat_conditioning_config=None,
@@ -131,6 +132,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
         # 30fps episode and robot teleop resampled online from 50fps.
         self.history_offsets = [int(o) for o in (history_offsets or [])]
         self.history_enabled = len(self.history_offsets) > 0
+        self.history_state_only = bool(history_state_only)
         self.camera_names = camera_names
         self.train = train
         self.data_config = data_config
@@ -926,8 +928,10 @@ class EpisodicDataset(torch.utils.data.Dataset):
             # is, so the model can tell "0.33s ago" from "start of episode".
             hist_ts = [self._raw_index(index, int(start_ts) - o)
                        for o in self.history_offsets]
-            hist_cam_images = [self._read_cam_images_at(root, ts, single_hdf_path)
-                               for ts in hist_ts]
+            hist_cam_images = (
+                None if self.history_state_only else
+                [self._read_cam_images_at(root, ts, single_hdf_path) for ts in hist_ts]
+            )
             hist_qpos = np.stack([root['observation.state'][ts] for ts in hist_ts], axis=0)
 
         # ---- Future-DINO: read the frame at t+H (disabled by default) ----
@@ -1008,7 +1012,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
         # frame by its colour statistics alone.
         hist_block = None
         n_hist_rows = 0
-        if self.history_enabled:
+        if self.history_enabled and not self.history_state_only:
             hist_block = np.stack([np.stack(f, axis=0) for f in hist_cam_images], axis=0)
             n_hist = hist_block.shape[0]
             hist_block = hist_block.reshape(-1, *all_cam_images.shape[1:])
@@ -1161,7 +1165,14 @@ class EpisodicDataset(torch.utils.data.Dataset):
             hist_qpos_data = torch.from_numpy(hist_qpos).float()
             hist_qpos_data = torch.zeros_like(hist_qpos_data) if _state_masked \
                 else (hist_qpos_data - qpos_mean) / (qpos_std + 1e-6)
-            conditioning_dict["hist_image"] = hist_image_data
+            if semantic_missing is not None:
+                from hat_conditioning import SEMANTIC_BLOCKS
+                for group_i, name in enumerate(("head_rot", "root_rot", "right_wrist_rot",
+                                                "right_hand_keypoints")):
+                    if semantic_missing[group_i] > 0:
+                        hist_qpos_data[:, SEMANTIC_BLOCKS[name]] = 0.0
+            if not self.history_state_only:
+                conditioning_dict["hist_image"] = hist_image_data
             conditioning_dict["hist_qpos"] = hist_qpos_data
 
         if self.flow_target_enabled:
@@ -1369,8 +1380,8 @@ def collate_fn(batch):
 
     # Same allow-list trap as above: without this the history arm would train on
     # the current frame only and look like a plain baseline that mysteriously costs 3x.
-    if 'hist_image' in conditioning_list[0]:
-        for key in ('hist_image', 'hist_qpos'):
+    for key in ('hist_image', 'hist_qpos'):
+        if key in conditioning_list[0]:
             ret_conditioning_dict[key] = torch.stack(
                 [conditioning[key] for conditioning in conditioning_list])
 
@@ -1418,6 +1429,7 @@ def load_data(base_dir,
               flow_grid_hw=(30, 40),
               flow_horizon=100,
               history_offsets=None,
+              history_state_only=False,
               lag_aug_config=None,
               visual_aug_config=None,
               hat_conditioning_config=None,
@@ -1471,6 +1483,7 @@ def load_data(base_dir,
                                     flow_grid_hw=flow_grid_hw,
                                     flow_horizon=flow_horizon,
                                     history_offsets=history_offsets,
+                                    history_state_only=history_state_only,
                                     lag_aug_config=lag_aug_config,
                                     visual_aug_config=visual_aug_config,
                                     hat_conditioning_config=hat_conditioning_config,

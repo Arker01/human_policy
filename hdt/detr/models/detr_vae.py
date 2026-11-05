@@ -551,12 +551,14 @@ class DETRVAE(nn.Module):
         # whole point of a control.
         self.history_offsets = list((history_config or {}).get('offsets', []))
         self.use_history = len(self.history_offsets) > 0
+        self.history_state_only = bool((history_config or {}).get('state_only', False))
         if self.use_history:
             assert not self.use_language_conditioning, \
                 "history + language conditioning share input_proj_robot_state; not wired"
             n_slot = len(self.history_offsets) + 1          # slot 0 is the current frame
-            self.hist_time_embed = nn.Embedding(n_slot, hidden_dim)
-            nn.init.zeros_(self.hist_time_embed.weight)
+            if not self.history_state_only:
+                self.hist_time_embed = nn.Embedding(n_slot, hidden_dim)
+                nn.init.zeros_(self.hist_time_embed.weight)
             self.input_proj_robot_state = nn.Linear(state_dim * n_slot, hidden_dim)
             self.history_pool = int((history_config or {}).get('token_pool', 2))
 
@@ -1015,7 +1017,7 @@ class DETRVAE(nn.Module):
             latent_input = self.latent_out_proj(latent_sample)
 
         assert self.backbones is not None
-        if self.use_history:
+        if self.use_history and not self.history_state_only:
             hist_image = conditioning_dict['hist_image']
             src, pos = self.get_features_and_pos_with_history(image, hist_image)
         else:
@@ -1044,7 +1046,16 @@ class DETRVAE(nn.Module):
             hist_qpos = conditioning_dict['hist_qpos']
             if self.zero_state_dims is not None:
                 hist_qpos = hist_qpos * self.state_keep_mask.to(hist_qpos.dtype)
-            state_input = torch.cat([qpos, hist_qpos.flatten(start_dim=1)], axis=1)
+            # State-only history is laid out oldest -> newest -> current so a
+            # single linear projection can distinguish direction.  The legacy
+            # image+state history keeps its historical current-first layout for
+            # checkpoint compatibility.
+            state_input = torch.cat(
+                [hist_qpos.flatten(start_dim=1), qpos]
+                if self.history_state_only else
+                [qpos, hist_qpos.flatten(start_dim=1)],
+                axis=1,
+            )
             proprio_input = self.input_proj_robot_state(state_input)
         else:
             proprio_input = self.input_proj_robot_state(qpos)

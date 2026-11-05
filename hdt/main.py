@@ -363,6 +363,7 @@ def main(args, base_dir, processed_dir=None):
     # ---- Real observation history (disabled by default) ----
     history_cfg = trainer_config.get('model', {}).get('history', {}) or {}
     history_offsets = list(history_cfg.get('offsets', [])) if history_cfg.get('enabled', False) else []
+    history_state_only = bool(history_cfg.get('state_only', False)) if history_offsets else False
     if history_offsets:
         assert all(o > 0 for o in history_offsets), (
             "history.offsets are 30fps logical frames back from t and must be > 0; "
@@ -370,8 +371,14 @@ def main(args, base_dir, processed_dir=None):
         print("Real observation history enabled:")
         print(f"  Offsets (30fps logical frames back): {history_offsets}")
         print(f"  At 30fps that is: {[round(o / 30.0, 3) for o in history_offsets]} s ago")
+        history_slot_description = (
+            "ordered state slots in one projection"
+            if history_state_only else
+            "same backbone, learned per-slot time embedding"
+        )
         print(f"  Slots fed to the trunk: {1 + len(history_offsets)} "
-              f"(current + history), same backbone, learned per-slot time embedding")
+              f"(current + history), {history_slot_description}")
+        print(f"  History visual tokens: {'disabled (ordered measured states only)' if history_state_only else 'enabled'}")
         print(f"  History token pooling: {history_cfg.get('token_pool', 2)}x "
               f"(current frame not pooled)")
 
@@ -485,6 +492,7 @@ def main(args, base_dir, processed_dir=None):
             policy_config['history_config'] = {
                 'offsets': history_offsets,
                 'token_pool': int(history_cfg.get('token_pool', 2)),
+                'state_only': history_state_only,
             }
         if zero_state_dims is not None:
             policy_config['zero_state_dims'] = zero_state_dims
@@ -591,6 +599,7 @@ def main(args, base_dir, processed_dir=None):
                                                         flow_grid_hw=future_flow_grid_hw,
                                                         flow_horizon=future_flow_horizon,
                                                         history_offsets=history_offsets,
+                                                        history_state_only=history_state_only,
                                                         lag_aug_config=lag_aug_config,
                                                         visual_aug_config=visual_aug_config,
                                                         hat_conditioning_config=hat_conditioning_cfg,

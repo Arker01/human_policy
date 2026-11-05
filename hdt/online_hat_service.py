@@ -670,7 +670,11 @@ def _parse_history_config(config):
     token_pool = int(history.get("token_pool", 2))
     if token_pool <= 0:
         raise ValueError(f"model.history.token_pool must be positive, got {token_pool}")
-    return {"offsets": list(offsets), "token_pool": token_pool}
+    return {
+        "offsets": list(offsets),
+        "token_pool": token_pool,
+        "state_only": bool(history.get("state_only", False)),
+    }
 
 
 def _act_config(config, chunk_size):
@@ -741,6 +745,10 @@ class OnlineHATPolicy:
         self.history_config = _parse_history_config(self.config)
         self.history_offsets = tuple(
             () if self.history_config is None else self.history_config["offsets"]
+        )
+        self.history_state_only = bool(
+            self.history_config is not None
+            and self.history_config.get("state_only", False)
         )
         history_section = self.config.get("model", {}).get("history", {}) or {}
         self.history_fps = float(history_section.get("fps", 30.0))
@@ -908,18 +916,6 @@ class OnlineHATPolicy:
         history_count = len(self.history_offsets)
         history_conditioning = {}
         if history_count:
-            history_images = np.asarray(history_images)
-            expected_image_prefix = (
-                history_count, len(self.camera_names), 3
-            )
-            if (
-                history_images.ndim != 5
-                or history_images.shape[:3] != expected_image_prefix
-            ):
-                raise ValueError(
-                    "history_images must be shaped "
-                    f"({history_count},camera,C,H,W), got {history_images.shape}"
-                )
             history_states = np.asarray(
                 normalized_history_states, dtype=np.float32
             )
@@ -929,24 +925,37 @@ class OnlineHATPolicy:
                     "normalized_history_states must be shaped "
                     f"{expected_state_shape}, got {history_states.shape}"
                 )
-            flat_history_images = history_images.reshape(
-                history_count * len(self.camera_names),
-                *history_images.shape[2:],
+            history_conditioning["hist_qpos"] = (
+                torch.from_numpy(history_states).unsqueeze(0).to(self.device)
             )
-            processed_history = self.visual_preprocessor(
-                flat_history_images
-            ).float()
-            processed_history = processed_history.reshape(
-                history_count,
-                len(self.camera_names),
-                *processed_history.shape[1:],
-            )
-            history_conditioning = {
-                "hist_image": processed_history.unsqueeze(0).to(self.device),
-                "hist_qpos": torch.from_numpy(history_states)
-                .unsqueeze(0)
-                .to(self.device),
-            }
+            if not self.history_state_only:
+                history_images = np.asarray(history_images)
+                expected_image_prefix = (
+                    history_count, len(self.camera_names), 3
+                )
+                if (
+                    history_images.ndim != 5
+                    or history_images.shape[:3] != expected_image_prefix
+                ):
+                    raise ValueError(
+                        "history_images must be shaped "
+                        f"({history_count},camera,C,H,W), got {history_images.shape}"
+                    )
+                flat_history_images = history_images.reshape(
+                    history_count * len(self.camera_names),
+                    *history_images.shape[2:],
+                )
+                processed_history = self.visual_preprocessor(
+                    flat_history_images
+                ).float()
+                processed_history = processed_history.reshape(
+                    history_count,
+                    len(self.camera_names),
+                    *processed_history.shape[1:],
+                )
+                history_conditioning["hist_image"] = (
+                    processed_history.unsqueeze(0).to(self.device)
+                )
         elif history_images is not None or normalized_history_states is not None:
             raise ValueError("History inputs were provided to a non-history checkpoint")
         if self.is_torchscript:
@@ -1540,9 +1549,10 @@ def main():
             history_state_raw = None
             history_state_normalized = None
             if history_samples:
-                history_images = np.stack(
-                    [item["images"] for item in history_samples], axis=0
-                )
+                if not policy.history_state_only:
+                    history_images = np.stack(
+                        [item["images"] for item in history_samples], axis=0
+                    )
                 history_state_pairs = [
                     policy.prepare_policy_state(item["state"], origin, heading)
                     for item in history_samples
