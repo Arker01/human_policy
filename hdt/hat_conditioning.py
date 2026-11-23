@@ -17,10 +17,12 @@ SEMANTIC_BLOCKS = {
     "root_rot": slice(92, 98),
     "right_wrist_rot": slice(33, 39),
     "right_hand_keypoints": slice(40, 58),
+    "left_wrist_rot": slice(83, 89),
+    "left_hand_keypoints": slice(10, 28),
 }
 SEMANTIC_MASK_ORDER = (
     "head_rot", "root_rot", "right_wrist_rot",
-    "right_hand_keypoints", "visual_tokens",
+    "right_hand_keypoints", "visual_tokens", "left_wrist_rot", "left_hand_keypoints",
 )
 
 
@@ -29,24 +31,23 @@ def episode_cache_key(path):
 
 
 def sample_semantic_missing(config, rng=None):
-    """Return the five logical missing flags with a hard two-block cap.
-
-    The joint head/root event consumes both allowed blocks.  Independent events
-    are sampled afterwards in a fixed order and ignored once the cap is reached;
-    this makes the cap deterministic and prevents accidental all-condition loss.
-    """
+    """Apply the cap without favoring either hand's position in the mask."""
     if rng is None:
         rng = np.random
     probs = config.get("probabilities", {})
-    flags = {name: False for name in SEMANTIC_MASK_ORDER}
+    cap = int(config.get("max_missing_blocks", 2))
+    if cap < 2:
+        raise ValueError("The joint head/root dropout requires at least two mask slots")
     if rng.random() < float(probs.get("head_and_root_rot", 0.05)):
-        flags["head_rot"] = flags["root_rot"] = True
-    for name in SEMANTIC_MASK_ORDER:
-        if sum(flags.values()) >= int(config.get("max_missing_blocks", 2)):
-            break
-        if rng.random() < float(probs.get(name, 0.0)):
-            flags[name] = True
-    return torch.tensor([float(flags[name]) for name in SEMANTIC_MASK_ORDER])
+        missing = {"head_rot", "root_rot"}
+    else:
+        hits = [
+            name for name in SEMANTIC_MASK_ORDER
+            if rng.random() < float(probs.get(name, 0.0))
+        ]
+        missing = set(rng.permutation(hits)[:cap]) if len(hits) > cap else set(hits)
+    return torch.tensor([float(name in missing) for name in SEMANTIC_MASK_ORDER])
+
 
 
 class TeacherPlanCache:

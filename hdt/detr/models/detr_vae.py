@@ -502,10 +502,13 @@ class DETRVAE(nn.Module):
         self.use_semantic_dropout = bool(semantic_cfg.get('enabled', False))
         self.use_temporal_conditioning = bool(temporal_cfg.get('enabled', False))
         if self.use_semantic_dropout:
-            # Five explicit missing flags disambiguate a masked, normalized zero from
+            from hat_conditioning import SEMANTIC_MASK_ORDER
+            self.semantic_mask_dim = len(SEMANTIC_MASK_ORDER)
+            self.semantic_vision_index = SEMANTIC_MASK_ORDER.index("visual_tokens")
+            # Explicit missing flags disambiguate a masked, normalized zero from
             # a genuinely mean-valued condition.  Zero init preserves the baseline
             # function at step zero while still allowing the projection to learn.
-            self.semantic_missing_proj = nn.Linear(5, hidden_dim, bias=False)
+            self.semantic_missing_proj = nn.Linear(self.semantic_mask_dim, hidden_dim, bias=False)
             nn.init.zeros_(self.semantic_missing_proj.weight)
             self.visual_missing_token = nn.Parameter(torch.zeros(1, hidden_dim, 1, 1))
         if self.use_temporal_conditioning:
@@ -574,6 +577,10 @@ class DETRVAE(nn.Module):
         self.experiment_variant = experiment_variant or VARIANT
         self.readiness_head = ReadinessHead(hidden_dim) if self.experiment_variant == 'readiness' else None
         self.readiness_logits = None
+        self.sonic_geometry_head = (
+            nn.Linear(hidden_dim, 2 * 5 * 3)
+            if self.experiment_variant == 'sonic_native_geometry' else None
+        )
         self.additional_pos_embed = nn.Embedding(2, hidden_dim) # learned position embedding for proprio and latent
 
         # Optional state-block ablation. Kept as a buffer so the range travels with the
@@ -586,10 +593,6 @@ class DETRVAE(nn.Module):
                 f"zero_state_dims {self.zero_state_dims} out of range for state_dim {state_dim}")
             keep = torch.ones(state_dim)
             keep[lo:hi] = 0.0
-            # Dedicated no-left-wrist experiment: mask encoder inputs only.
-            # Persisted buffer also enforces this in the existing online loader.
-            keep[80:89] = 0.0
-            print('[state ablation] EXTRA left wrist input qpos[80:89] forced to 0; action targets unchanged')
             self.register_buffer('state_keep_mask', keep)
             print(f"[state ablation] normalized qpos[{lo}:{hi}] forced to 0 "
                   f"({hi - lo}/{state_dim} dims), matching the human episodes")
@@ -1025,10 +1028,10 @@ class DETRVAE(nn.Module):
         if self.use_semantic_dropout:
             semantic_missing = conditioning_dict.get('semantic_missing_mask')
             if semantic_missing is None:
-                semantic_missing = torch.zeros(bs, 5, device=qpos.device, dtype=qpos.dtype)
+                semantic_missing = torch.zeros(bs, self.semantic_mask_dim, device=qpos.device, dtype=qpos.dtype)
             else:
                 semantic_missing = semantic_missing.to(qpos.dtype)
-            vision_missing = semantic_missing[:, 4].bool().view(bs, 1, 1, 1)
+            vision_missing = semantic_missing[:, self.semantic_vision_index].bool().view(bs, 1, 1, 1)
             missing_src = self.visual_missing_token.expand(bs, -1, src.shape[2], src.shape[3])
             src = torch.where(vision_missing, missing_src, src)
 
@@ -1210,6 +1213,10 @@ class DETRVAE(nn.Module):
                 future_dino_loss_dict['flow_pred_mag'] = flow_loss_dict['flow_pred_mag']
                 future_dino_loss_dict['flow_effective_weight'] = flow_loss_dict['effective_weight']
 
+        if self.sonic_geometry_head is not None and actions is not None:
+            if future_dino_loss_dict is None:
+                future_dino_loss_dict = {}
+            future_dino_loss_dict['sonic_scene_tips'] = self.sonic_geometry_head(hs).unflatten(-1, (2, 5, 3))
         return a_hat, is_pad_hat, [mu, logvar], future_dino_loss_dict
 
 class CNNMLP(nn.Module):

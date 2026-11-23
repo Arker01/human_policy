@@ -105,26 +105,50 @@ def scene_tips(action):
     return torch.stack(hands,dim=-3)
 
 
+def fingertip_geometry_loss(pred, target, weights, is_pad):
+    """Use the same scene-frame loss and equal total weight for each hand."""
+    pred, target = pred.float(), target.float()
+    distance = torch.linalg.vector_norm(pred - target, dim=-1).mean(-1)
+    weights = weights * (~is_pad)[..., None]
+    element = F.smooth_l1_loss(pred, target, reduction='none', beta=.01).mean((-1, -2)) / .01
+    per_hand = (element * weights).sum((0, 1)) / weights.sum((0, 1)).clamp_min(1)
+    cm = (distance * weights).sum() / weights.sum().clamp_min(1) * 100
+    return per_hand.mean(), cm, per_hand
+
+
 def geometry_loss(pred, target, mean, std, weights, is_pad):
-    pred = scene_tips(pred*(std[:,None]+1e-6)+mean[:,None])
-    target = scene_tips(target*(std[:,None]+1e-6)+mean[:,None])
-    distance = torch.linalg.vector_norm(pred-target,dim=-1).mean(-1)
-    weight = weights * (~is_pad)[...,None]
-    loss = F.smooth_l1_loss(pred,target,reduction='none',beta=.01).mean((-1,-2))/.01
-    return (loss*weight).sum()/weight.sum().clamp_min(1), (distance*weight).sum()/weight.sum().clamp_min(1)*100
+    scale = std[:, None] + 1e-6
+    pred = scene_tips(pred.float() * scale + mean[:, None])
+    target = scene_tips(target.float() * scale + mean[:, None])
+    return fingertip_geometry_loss(pred, target, weights, is_pad)
 
 
-def dataset_aux(dataset,index,start_ts):
-    if not hasattr(dataset,'_aux_cache'):
-        dataset._aux_cache={}
+def dataset_aux(dataset, index, start_ts, *, native_geometry=False):
+    if not hasattr(dataset, '_aux_cache'):
+        dataset._aux_cache = {}
     if index not in dataset._aux_cache:
         import h5py
-        with h5py.File(dataset.dataset_paths[index],'r') as h:
+        with h5py.File(dataset.dataset_paths[index], 'r') as h:
             states = h['observation.state'][:]
-        dataset._aux_cache[index] = transition_labels(states,dataset.source_fps_list[index])[:3]
+        labels = transition_labels(states, dataset.source_fps_list[index])[:3]
+        dataset._aux_cache[index] = labels
+        if native_geometry:
+            # Native commands and observed wrists/fingertips share a recorded row.
+            if not hasattr(dataset, '_native_scene_tips_cache'):
+                dataset._native_scene_tips_cache = {}
+            dataset._native_scene_tips_cache[index] = scene_tips(torch.from_numpy(states))
     target,mask,weight = dataset._aux_cache[index]
     raw = dataset._raw_index(index,start_ts)
     embodiment = dataset.source_embodiment_list[index]
+    if native_geometry:
+        # Match _read_action_chunk's contiguous native rows, including its pad boundary.
+        count = min(dataset.chunk_size, len(weight) - raw)
+        scene = dataset._native_scene_tips_cache[index]
+        tips = scene.new_zeros((dataset.chunk_size, 2, 5, 3))
+        tips[:count] = scene[raw:raw + count]
+        native_weights = np.zeros((dataset.chunk_size, 2), np.float32)
+        native_weights[:count] = weight[raw:raw + count]
+        return dict(native_scene_tips=tips, hand_event_weights=torch.from_numpy(native_weights))
     # Exactly align event weights with original action-mode interpolation.
     if 'human' in embodiment.lower():
         available = min(dataset.chunk_size,len(weight)-raw)
