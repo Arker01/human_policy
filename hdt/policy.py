@@ -60,9 +60,20 @@ class ACTPolicy(nn.Module):
             loss_dict = dict()
             all_l1 = F.l1_loss(actions, a_hat, reduction='none')
             all_l1 = (all_l1 * ~is_pad.unsqueeze(-1))
-            # neck is not needed downstream; zero its contribution everywhere
-            # (base L1 and any later slices) so the model spends no capacity on it.
-            all_l1[:, :, hdt.constants.OUTPUT_NECK] = 0.0
+            variant = self.model.experiment_variant
+            if variant != 'sonic_native':
+                # neck is not needed downstream; zero its contribution everywhere
+                # (base L1 and any later slices) so the model spends no capacity on it.
+                all_l1[:, :, hdt.constants.OUTPUT_NECK] = 0.0
+            if variant in ('wo_root', 'hat_native'):
+                # Labels and posterior input stay untouched. Only supervised loss
+                # terms for the nine root dimensions are removed.
+                all_l1[:, :, hdt.constants.OUTPUT_WAIST] = 0.0
+            elif variant == 'wo_fingertips':
+                # Keep the repurposed absolute grip scalars at dims 10 and 40;
+                # suppress every other coordinate in the two 18-D fingertip blocks.
+                all_l1[:, :, 11:28] = 0.0
+                all_l1[:, :, 41:58] = 0.0
             loss_dict['l1'] = all_l1.mean()
             loss_dict['kl'] = total_kld[0]
             loss_dict['loss'] = loss_dict['l1'] + loss_dict['kl'] * self.kl_weight
@@ -77,7 +88,7 @@ class ACTPolicy(nn.Module):
             if conditioning_dict is not None and 'history_present' in conditioning_dict:
                 loss_dict['history_present_frac'] = conditioning_dict['history_present'].float().mean()
                 loss_dict['plan_present_frac'] = conditioning_dict['plan_present'].float().mean()
-            if self.USE_EEF_LOSS:
+            if self.USE_EEF_LOSS and variant != 'sonic_native':
                 loss_dict['eef_loss'] = all_l1[:, :, hdt.constants.OUTPUT_LEFT_EEF].mean() + all_l1[:, :, hdt.constants.OUTPUT_RIGHT_EEF].mean()
                 loss_dict['loss'] = loss_dict['loss'] + loss_dict['eef_loss'] * 2
 
@@ -86,8 +97,9 @@ class ACTPolicy(nn.Module):
                 loss_dict['loss'] = loss_dict['loss'] + loss_dict['head_loss'] * 2
 
                 # waist loss: position + 6D rotation, same extra weight as EEF
-                loss_dict['waist_loss'] = all_l1[:, :, hdt.constants.OUTPUT_WAIST].mean()
-                loss_dict['loss'] = loss_dict['loss'] + loss_dict['waist_loss'] * 2
+                if variant not in ('wo_root', 'hat_native'):
+                    loss_dict['waist_loss'] = all_l1[:, :, hdt.constants.OUTPUT_WAIST].mean()
+                    loss_dict['loss'] = loss_dict['loss'] + loss_dict['waist_loss'] * 2
 
             if self.query0_extra_weight > 0:
                 # anchor the query actually used at inference (a_hat[:,0]) to the
@@ -147,7 +159,7 @@ class ACTPolicy(nn.Module):
                 loss_dict['readiness_positive_frac'] = (mask*target).sum()/mask.sum().clamp_min(1)
                 loss_dict['readiness_accuracy'] = (((logits>0)==(target>0)).float()*mask).sum()/mask.sum().clamp_min(1)
                 loss_dict['loss'] = loss_dict['loss'] + .1*ready_loss
-            elif self.model.experiment_variant == 'geometry':
+            elif self.model.experiment_variant in ('geometry', 'wo_root'):
                 geom, cm = geometry_loss(a_hat, actions, conditioning_dict['action_mean'],
                                         conditioning_dict['action_std'],
                                         conditioning_dict['hand_event_weights'][:,:self.model.num_queries], is_pad)
