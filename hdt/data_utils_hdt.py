@@ -204,8 +204,10 @@ class EpisodicDataset(torch.utils.data.Dataset):
                                     actual_cam_name = 'left'
                                 elif 'observation.image.right' in root:
                                     actual_cam_name = 'right'
+                                elif 'observation.image.ego_view' in root:
+                                    actual_cam_name = 'ego_view'
                                 else:
-                                    raise KeyError(f"None of the expected cameras (top, left, right) found in {single_hdf_path}")
+                                    raise KeyError(f"None of the expected cameras (top, left, right, ego_view) found in {single_hdf_path}")
                             self.cached_hdf_dict[single_hdf_path][f'observation.image.{cam_name}'] = root[f'observation.image.{actual_cam_name}'][()]
                         self.cached_hdf_dict[single_hdf_path][self.action_str] =  root[self.action_str][()]
                         self.cached_hdf_dict[single_hdf_path]['attrs'] = {k: v for k, v in root.attrs.items()}
@@ -704,7 +706,9 @@ class EpisodicDataset(torch.utils.data.Dataset):
             return 'left'
         if 'observation.image.right' in root:
             return 'right'
-        raise KeyError(f"None of the expected cameras (top, left, right) found in {single_hdf_path}")
+        if 'observation.image.ego_view' in root:
+            return 'ego_view'
+        raise KeyError(f"None of the expected cameras (top, left, right, ego_view) found in {single_hdf_path}")
 
     def _read_cam_images_at(self, root, raw_ts, single_hdf_path):
         """
@@ -899,8 +903,10 @@ class EpisodicDataset(torch.utils.data.Dataset):
                         actual_cam_name = 'left'
                     elif 'observation.image.right' in root:
                         actual_cam_name = 'right'
+                    elif 'observation.image.ego_view' in root:
+                        actual_cam_name = 'ego_view'
                     else:
-                        raise KeyError(f"None of the expected cameras (top, left, right) found in {single_hdf_path}")
+                        raise KeyError(f"None of the expected cameras (top, left, right, ego_view) found in {single_hdf_path}")
                 
                 image_dict[cam_name] = root[f'observation.image.{actual_cam_name}'][raw_start_ts]
                 if len(image_dict[cam_name].shape) == 1:
@@ -1261,6 +1267,9 @@ def gather_hdf_paths(base_dir, task_names, camera_names=None, extra_base_dirs=No
                                         has_camera = True
                                         break
                                     if 'observation.image.left' in root or 'observation.image.right' in root:
+                                        has_camera = True
+                                        break
+                                    if 'observation.image.ego_view' in root:
                                         has_camera = True
                                         break
                                 if not has_camera:
