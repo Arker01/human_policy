@@ -586,10 +586,6 @@ class DETRVAE(nn.Module):
                 f"zero_state_dims {self.zero_state_dims} out of range for state_dim {state_dim}")
             keep = torch.ones(state_dim)
             keep[lo:hi] = 0.0
-            # Dedicated no-left-wrist experiment: mask encoder inputs only.
-            # Persisted buffer also enforces this in the existing online loader.
-            keep[80:89] = 0.0
-            print('[state ablation] EXTRA left wrist input qpos[80:89] forced to 0; action targets unchanged')
             self.register_buffer('state_keep_mask', keep)
             print(f"[state ablation] normalized qpos[{lo}:{hi}] forced to 0 "
                   f"({hi - lo}/{state_dim} dims), matching the human episodes")
