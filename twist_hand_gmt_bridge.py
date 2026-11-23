@@ -14,6 +14,14 @@ _ISAACGYM_PY = _REPO_ROOT / "isaacgym" / "python"
 if _ISAACGYM_PY.exists() and str(_ISAACGYM_PY) not in sys.path:
     sys.path.insert(0, str(_ISAACGYM_PY))
 
+_CONDA_INCLUDE = Path(sys.prefix) / "include"
+if (_CONDA_INCLUDE / "crypt.h").exists():
+    for _env_key in ("CPATH", "CPLUS_INCLUDE_PATH"):
+        _env_val = os.environ.get(_env_key, "")
+        _parts = [p for p in _env_val.split(os.pathsep) if p]
+        if str(_CONDA_INCLUDE) not in _parts:
+            os.environ[_env_key] = os.pathsep.join([str(_CONDA_INCLUDE)] + _parts)
+
 # isaacgym must be imported before any torch import, so do it here at the top.
 # Batch IK generation does not touch Isaac Gym and may run in a different
 # Python version, so it can opt out with this private env flag.
@@ -49,6 +57,13 @@ _INSPIRE_TIP_NAMES = ["thumb_tip", "index_tip", "middle_tip", "ring_tip", "pinky
 _INSPIRE_DOF_LOWER = np.array([0., 0., 0., 0., 0., 0., 0., 0., -0.1, 0., 0., 0.], dtype=np.float32)
 _INSPIRE_DOF_UPPER = np.array([1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.3, 0.5, 0.8, 1.2], dtype=np.float32)
 _DEFAULT_IK_CACHE_ROOT = _HP_ROOT.parent / "DATASETS" / "IK"
+_DEFAULT_PH2D_CANONICAL_REF = (
+    _HP_ROOT.parent
+    / "DATASETS"
+    / "PH2D"
+    / "402-pick_on_color_pad_right-2025_01_09-16_36_15"
+    / "processed_episode_0.hdf5"
+)
 
 
 def _mat_to_quat_xyzw(mat: np.ndarray) -> np.ndarray:
@@ -94,9 +109,110 @@ def _interp_np(values: np.ndarray, frame_f: np.ndarray) -> np.ndarray:
     return values[lo] * (1.0 - a) + values[hi] * a
 
 
+def _resample_actions_linear(actions: np.ndarray, src_fps: float, dst_fps: float) -> np.ndarray:
+    actions = np.asarray(actions, dtype=np.float32)
+    if actions.ndim != 2:
+        raise ValueError(f"Expected actions shaped (T, D), got {actions.shape}")
+    if len(actions) <= 1 or abs(float(dst_fps) - float(src_fps)) < 1e-6:
+        return actions
+    if src_fps <= 0 or dst_fps <= 0:
+        raise ValueError(f"FPS values must be positive, got src={src_fps}, dst={dst_fps}")
+
+    duration_s = float(len(actions) - 1) / float(src_fps)
+    out_len = int(round(duration_s * float(dst_fps))) + 1
+    frame_f = np.arange(out_len, dtype=np.float32) * (float(src_fps) / float(dst_fps))
+    out = _interp_np(actions, frame_f).astype(np.float32)
+    print(f"[refs] resampled actions {src_fps:g}fps -> {dst_fps:g}fps: {len(actions)} -> {len(out)} frames")
+    return out
+
+
+def _effective_ref_fps(args) -> float:
+    return float(args.interp_ref_fps) if args.interp_ref_fps is not None else float(args.ref_fps)
+
+
+def _prepare_actions_for_refs(actions: np.ndarray, args) -> tuple[np.ndarray, float]:
+    dst_fps = _effective_ref_fps(args)
+    actions = _canonicalize_actions_hand_frame(actions, args)
+    actions = _resample_actions_linear(actions, float(args.ref_fps), dst_fps)
+    return actions, dst_fps
+
+
 def _sample_quat_nearest(quat: np.ndarray, frame_f: np.ndarray) -> np.ndarray:
     idx = np.rint(np.clip(frame_f, 0.0, float(max(len(quat) - 1, 0)))).astype(np.int64)
     return quat[idx].astype(np.float32)
+
+
+def _mat_to_rot6d_np(mat: np.ndarray) -> np.ndarray:
+    mat = np.asarray(mat, dtype=np.float32)
+    return mat[:2, :].reshape(-1).astype(np.float32)
+
+
+def _unit_np(v: np.ndarray) -> np.ndarray:
+    v = np.asarray(v, dtype=np.float64)
+    return v / (np.linalg.norm(v, axis=-1, keepdims=True) + 1e-9)
+
+
+def _hand_local_basis(kpts6: np.ndarray) -> np.ndarray:
+    kpts6 = np.asarray(kpts6, dtype=np.float64)
+    if kpts6.ndim != 3 or kpts6.shape[1:] != (6, 3):
+        raise ValueError(f"Expected hand local keypoints shaped (T,6,3), got {kpts6.shape}")
+
+    rel = kpts6[:, 1:] - kpts6[:, 0:1]
+    finger = _unit_np(rel.mean(axis=(0, 1), keepdims=True))[0, 0]
+    # Use index->pinky to make the palm normal sign deterministic; SVD plane
+    # normals alone can flip by dataset or frame.
+    normal = _unit_np(np.cross(rel[:, 1], rel[:, 4]).mean(axis=0, keepdims=True))[0]
+    normal = _unit_np((normal - finger * np.dot(normal, finger))[None])[0]
+    third = _unit_np(np.cross(normal, finger)[None])[0]
+    finger = _unit_np(np.cross(third, normal)[None])[0]
+    return np.stack([normal, finger, third], axis=1)
+
+
+def _canonical_hand_reference_basis(reference_path: str | Path, side: str) -> np.ndarray:
+    import h5py
+    import hdt.constants as C
+
+    idx = C.OUTPUT_LEFT_KEYPOINTS if side == "left" else C.OUTPUT_RIGHT_KEYPOINTS
+    with h5py.File(reference_path, "r") as f:
+        actions = f["action"][()].astype(np.float32)
+    kpts = actions[:, idx].reshape(actions.shape[0], 6, 3)
+    return _hand_local_basis(kpts)
+
+
+def _canonicalize_actions_hand_frame(actions: np.ndarray, args) -> np.ndarray:
+    import hdt.constants as C
+
+    mode = getattr(args, "canonicalize_hand_frame", "none")
+    if mode == "none":
+        return np.asarray(actions, dtype=np.float32)
+    if mode != "ph2d":
+        raise ValueError(f"Unsupported --canonicalize-hand-frame: {mode}")
+
+    actions = np.asarray(actions, dtype=np.float32).copy()
+    ref_path = Path(getattr(args, "canonical_hand_reference", _DEFAULT_PH2D_CANONICAL_REF)).expanduser()
+    if not ref_path.exists():
+        raise FileNotFoundError(f"Canonical hand reference not found: {ref_path}")
+
+    for side, eef_idx, kpt_idx in (
+        ("left", C.OUTPUT_LEFT_EEF, C.OUTPUT_LEFT_KEYPOINTS),
+        ("right", C.OUTPUT_RIGHT_EEF, C.OUTPUT_RIGHT_KEYPOINTS),
+    ):
+        kpts = actions[:, kpt_idx].reshape(actions.shape[0], 6, 3)
+        current_basis = _hand_local_basis(kpts)
+        target_basis = _canonical_hand_reference_basis(ref_path, side)
+        corr = (target_basis @ current_basis.T).astype(np.float32)
+
+        actions[:, kpt_idx] = np.einsum("ij,tkj->tki", corr, kpts).reshape(actions.shape[0], -1)
+        for t in range(actions.shape[0]):
+            root_rot = _rot6d_to_mat_np(actions[t, eef_idx[3:]])
+            # k_new = corr @ k_old; preserve world tips via R_new @ k_new = R_old @ k_old.
+            actions[t, eef_idx[3:]] = _mat_to_rot6d_np(root_rot @ corr.T)
+
+        print(
+            f"[refs] canonicalized {side} hand local frame to PH2D reference; "
+            f"corr={np.array2string(corr, precision=4, suppress_small=True)}"
+        )
+    return actions
 
 
 def _actions_to_hand_refs(actions: np.ndarray, fps: float) -> dict[str, np.ndarray]:
@@ -340,6 +456,46 @@ class _PinocchioInspireIK:
             rows.append(jac[:3, :])
         return np.concatenate(rows, axis=0)
 
+    def solve_frame(
+        self,
+        target_local: np.ndarray,
+        q_prev: np.ndarray | None = None,
+    ) -> tuple[np.ndarray, float]:
+        """Solve one causal IK step, warm-started from the previous command."""
+        target = np.asarray(target_local, dtype=np.float64)
+        if target.shape != (len(self.tip_ids), 3):
+            raise ValueError(
+                f"Expected one five-tip target shaped ({len(self.tip_ids)}, 3), "
+                f"got {target.shape}"
+            )
+        q_previous = (
+            np.zeros((len(_INSPIRE_DOF_NAMES),), dtype=np.float64)
+            if q_prev is None
+            else np.asarray(q_prev, dtype=np.float64)
+        )
+        q = q_previous.copy()
+        eye = np.eye(len(_INSPIRE_DOF_NAMES), dtype=np.float64)
+        for _ in range(self.iters):
+            pred = self._fk_tips(q)
+            err = (target - pred).reshape(-1)
+            jac = self._jacobian(q)
+            lhs = jac.T @ jac + (
+                self.damping**2 + self.smooth_w + self.reg_w
+            ) * eye
+            rhs = (
+                jac.T @ err
+                - self.smooth_w * (q - q_previous)
+                - self.reg_w * q
+            )
+            dq = np.linalg.solve(lhs, rhs)
+            q = np.clip(q + self.step * dq, self.lower, self.upper)
+            if np.mean(np.linalg.norm(target - self._fk_tips(q), axis=-1)) < 1e-4:
+                break
+        mean_error = float(
+            np.mean(np.linalg.norm(target - self._fk_tips(q), axis=-1))
+        )
+        return q.astype(np.float32), mean_error
+
     def solve(self, target_local: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         from tqdm import tqdm
 
@@ -347,23 +503,12 @@ class _PinocchioInspireIK:
         q_prev = np.zeros((len(_INSPIRE_DOF_NAMES),), dtype=np.float64)
         out = []
         errs = []
-        eye = np.eye(len(_INSPIRE_DOF_NAMES), dtype=np.float64)
-        desc = f"[ik:{self.side}:pinocchio]"
+        desc = f"[ik:{self.side}:pino]"
         for target in tqdm(targets, desc=desc, unit="frame"):
-            q = q_prev.copy()
-            for _ in range(self.iters):
-                pred = self._fk_tips(q)
-                err = (target - pred).reshape(-1)
-                jac = self._jacobian(q)
-                lhs = jac.T @ jac + (self.damping ** 2 + self.smooth_w + self.reg_w) * eye
-                rhs = jac.T @ err - self.smooth_w * (q - q_prev) - self.reg_w * q
-                dq = np.linalg.solve(lhs, rhs)
-                q = np.clip(q + self.step * dq, self.lower, self.upper)
-                if np.mean(np.linalg.norm((target - self._fk_tips(q)), axis=-1)) < 1e-4:
-                    break
+            q, err = self.solve_frame(target, q_prev)
             q_prev = q
-            out.append(q.astype(np.float32))
-            errs.append(float(np.mean(np.linalg.norm(target - self._fk_tips(q), axis=-1))))
+            out.append(q)
+            errs.append(err)
         return np.stack(out, axis=0), np.asarray(errs, dtype=np.float32)
 
 
@@ -377,7 +522,7 @@ def _resolve_ik_backend(requested: str) -> str:
         pass
     try:
         import pinocchio  # noqa: F401
-        return "pinocchio"
+        return "pino"
     except Exception:
         pass
     raise RuntimeError("No IK backend available. Install pytorch_kinematics or pinocchio, or pass --ik-backend none.")
@@ -402,8 +547,16 @@ def _add_ik_refs(refs: dict[str, np.ndarray], args) -> dict[str, np.ndarray]:
     backend = _resolve_ik_backend(args.ik_backend)
     cache_source = getattr(args, "_ik_cache_source", None)
     cache_path = None
+    cache_transform_active = (
+        getattr(args, "interp_ref_fps", None) is not None
+        or getattr(args, "canonicalize_hand_frame", "none") != "none"
+    )
     if getattr(args, "ik_cache", True) and cache_source:
-        cache_path = _ik_cache_path(cache_source, backend, getattr(args, "ik_cache_root", None))
+        if cache_transform_active:
+            print("[ik] cache disabled because refs were transformed by --interp-ref-fps or --canonicalize-hand-frame")
+        else:
+            cache_path = _ik_cache_path(cache_source, backend, getattr(args, "ik_cache_root", None))
+    if cache_path is not None:
         if cache_path.exists() and not args.force_recompute_ik:
             cached_refs = _load_refs_npz(str(cache_path))
             if _has_full_ik(cached_refs, expected_len):
@@ -431,7 +584,7 @@ def _add_ik_refs(refs: dict[str, np.ndarray], args) -> dict[str, np.ndarray]:
                 smooth_w=args.ik_smooth_weight,
                 reg_w=args.ik_reg_weight,
             )
-        elif backend == "pinocchio":
+        elif backend == "pino":
             solver = _PinocchioInspireIK(
                 side,
                 iters=args.ik_iters,
@@ -601,6 +754,13 @@ def _build_compare_debug_lines(gt_head, gt_rh_full, gt_lh_full,
     verts = np.array(segs, dtype=np.float32).reshape(-1, 3)
     colors = np.repeat(np.array(cols, dtype=np.float32), 2, axis=0)
     return len(segs), verts, colors
+
+
+def _append_viewer_frame(env, writer, tmp_png: str, imageio_mod) -> None:
+    """Append the current Isaac Gym viewer image to an imageio writer."""
+    env.gym.write_viewer_image_to_file(env.viewer, tmp_png)
+    img = imageio_mod.imread(tmp_png)
+    writer.append_data(img[:, :, :3] if img.shape[-1] == 4 else img)
 
 
 def _lookat_from_head_wrists(head, left_wrist, right_wrist, distance_scale=2.5):
@@ -941,6 +1101,37 @@ def _resolve_hand_gmt_checkpoint(args) -> Path | None:
     return None
 
 
+def _checkpoint_single_motion_obs(args) -> int | None:
+    ckpt_path = _resolve_hand_gmt_checkpoint(args)
+    if ckpt_path is None or not ckpt_path.exists():
+        return None
+    try:
+        import torch
+
+        state = torch.load(str(ckpt_path), map_location="cpu")
+        weight = state["model_state_dict"]["actor.motion_encoder.encoder.0.weight"]
+        return int(weight.shape[1])
+    except Exception as exc:
+        print(f"[hand-gmt cfg] could not inspect checkpoint obs shape: {exc}")
+        return None
+
+
+def _adapt_env_cfg_to_checkpoint(env_cfg, args) -> None:
+    single_motion_obs = _checkpoint_single_motion_obs(args)
+    if single_motion_obs != 42:
+        return
+    if getattr(env_cfg.env, "hand_obs_global", False) and getattr(env_cfg.env, "include_wrist_pos_in_proprio", False):
+        return
+
+    env_cfg.env.hand_obs_global = True
+    env_cfg.env.include_wrist_pos_in_proprio = True
+    env_cfg.env.include_wrist_error_obs = False
+    print(
+        "[hand-gmt cfg] checkpoint expects single motion obs=42; "
+        "enabling global hand obs and wrist-position proprio"
+    )
+
+
 def _load_checkpoint_json_cfgs(env_cfg, train_cfg, args) -> None:
     if not args.hand_gmt_ckpt:
         return
@@ -975,6 +1166,18 @@ def _load_checkpoint_json_cfgs(env_cfg, train_cfg, args) -> None:
         f"key_local={getattr(scales, 'tracking_keybody_pos_rh', None)} "
         f"key_global={getattr(scales, 'tracking_keybody_pos_global_rh', None)}"
     )
+
+
+def _resolve_twist_asset_path(asset_file: str, fallback_file: Path) -> str:
+    from legged_gym import LEGGED_GYM_ROOT_DIR
+
+    asset_path = Path(asset_file.format(LEGGED_GYM_ROOT_DIR=LEGGED_GYM_ROOT_DIR)).expanduser()
+    if asset_path.exists():
+        return str(asset_path)
+    if fallback_file.exists():
+        print(f"[asset] {asset_path} not found; using {fallback_file}")
+        return str(fallback_file)
+    return str(asset_path)
 
 
 def _load_hand_policy(env, train_cfg, twist_args, args):
@@ -1123,9 +1326,7 @@ def _run_gt_only(args, env, refs, head_pos_seq,
             env.gym.draw_viewer(env.viewer, env.sim, True)
 
             if writer is not None:
-                env.gym.write_viewer_image_to_file(env.viewer, tmp_png)
-                img = imageio.imread(tmp_png)
-                writer.append_data(img[:, :, :3] if img.shape[-1] == 4 else img)
+                _append_viewer_frame(env, writer, tmp_png, imageio)
 
         if args.step_delay > 0:
             _time.sleep(args.step_delay)
@@ -1225,9 +1426,7 @@ def _run_compare_gt_policy(args, env, gt_refs, policy_refs, has_viewer, env_ptr)
             env.gym.draw_viewer(env.viewer, env.sim, True)
 
             if writer is not None:
-                env.gym.write_viewer_image_to_file(env.viewer, tmp_png)
-                img = imageio.imread(tmp_png)
-                writer.append_data(img[:, :, :3] if img.shape[-1] == 4 else img)
+                _append_viewer_frame(env, writer, tmp_png, imageio)
 
         if args.step_delay > 0:
             _time.sleep(args.step_delay)
@@ -1244,7 +1443,8 @@ def run(args) -> None:
     args._ik_cache_source = None
     if args.compare_gt_policy:
         gt_actions = _load_gt_actions(args)
-        gt_refs = _actions_to_hand_refs(gt_actions, fps=args.ref_fps)
+        gt_actions, ref_fps = _prepare_actions_for_refs(gt_actions, args)
+        gt_refs = _actions_to_hand_refs(gt_actions, fps=ref_fps)
         if args.ref_npz:
             policy_refs = _load_refs_npz(args.ref_npz)
             policy_actions = np.zeros((0, 128), dtype=np.float32)
@@ -1252,7 +1452,11 @@ def run(args) -> None:
             policy_args = SimpleNamespace(**vars(args))
             policy_args.use_gt_actions = False
             policy_actions = _load_or_predict_actions(policy_args)
-            policy_refs = _actions_to_hand_refs(policy_actions, fps=args.ref_fps)
+            if len(policy_actions) > 0 and len(gt_actions) > 0:
+                policy_actions[0] = gt_actions[0]
+                print("[compare] forced human_policy frame 0 to match GT frame 0")
+            policy_actions, policy_ref_fps = _prepare_actions_for_refs(policy_actions, args)
+            policy_refs = _actions_to_hand_refs(policy_actions, fps=policy_ref_fps)
         compare_refs = (gt_refs, policy_refs)
         refs = gt_refs
         actions_128 = gt_actions
@@ -1263,7 +1467,8 @@ def run(args) -> None:
             actions_128 = np.zeros((0, 128), dtype=np.float32)
         else:
             actions_128 = _load_or_predict_actions(args)
-            refs = _actions_to_hand_refs(actions_128, fps=args.ref_fps)
+            actions_128, ref_fps = _prepare_actions_for_refs(actions_128, args)
+            refs = _actions_to_hand_refs(actions_128, fps=ref_fps)
     else:
         if not args.use_policy_refs and not args.pred_hdf5 and not args.ref_npz:
             args.use_gt_actions = True
@@ -1274,7 +1479,8 @@ def run(args) -> None:
             args._ik_cache_source = args.ref_npz
         else:
             actions_128 = _load_or_predict_actions(args)
-            refs = _actions_to_hand_refs(actions_128, fps=args.ref_fps)
+            actions_128, ref_fps = _prepare_actions_for_refs(actions_128, args)
+            refs = _actions_to_hand_refs(actions_128, fps=ref_fps)
             if args.pred_hdf5:
                 args._ik_cache_source = args.pred_hdf5
             elif args.use_gt_actions:
@@ -1285,7 +1491,7 @@ def run(args) -> None:
     if not args.gt_only and not args.compare_gt_policy:
         refs = _add_ik_refs(refs, args)
         if args.hand_control_mode == "ik" and ("rh_dof_pos" not in refs or "lh_dof_pos" not in refs):
-            raise ValueError("--hand-control-mode ik needs IK refs; use --ik-backend auto/pytorch/pinocchio or a --ref-npz with rh/lh_dof_pos.")
+            raise ValueError("--hand-control-mode ik needs IK refs; use --ik-backend auto/pytorch/pino or a --ref-npz with rh/lh_dof_pos.")
     if args.dump_ref_npz:
         _save_refs_npz(args.dump_ref_npz, refs)
         if args.skip_gmt:
@@ -1309,7 +1515,8 @@ def run(args) -> None:
         and (args.use_policy_refs or args.pred_hdf5 or args.ref_npz)
         and (args.gt_dir or args.episode_hdf5)
     ):
-        gt_camera_refs = _actions_to_hand_refs(_load_gt_actions(args), fps=args.ref_fps)
+        gt_camera_actions, gt_camera_fps = _prepare_actions_for_refs(_load_gt_actions(args), args)
+        gt_camera_refs = _actions_to_hand_refs(gt_camera_actions, fps=gt_camera_fps)
         if np.linalg.norm(world_viz_offset) > 1e-8:
             gt_camera_refs = _offset_world_refs(gt_camera_refs, world_viz_offset)
         camera_refs_for_viz = gt_camera_refs
@@ -1367,6 +1574,15 @@ def run(args) -> None:
         twist_args = _twist_args(args)
         env_cfg, train_cfg = task_registry.get_cfgs(name="dexhand_mimic_direct")
         _load_checkpoint_json_cfgs(env_cfg, train_cfg, args)
+        _adapt_env_cfg_to_checkpoint(env_cfg, args)
+        env_cfg.asset.rh_file = _resolve_twist_asset_path(
+            env_cfg.asset.rh_file,
+            _INSPIRE_ASSET_ROOT / "inspire_hand_right.urdf",
+        )
+        env_cfg.asset.lh_file = _resolve_twist_asset_path(
+            env_cfg.asset.lh_file,
+            _INSPIRE_ASSET_ROOT / "inspire_hand_left.urdf",
+        )
         env_cfg.env.num_envs = 1
         env_cfg.env.rand_reset = False
         env_cfg.env.training = False
@@ -1456,6 +1672,8 @@ def run(args) -> None:
 
         has_viewer = args.viewer and env.viewer is not None
         _env_ptr = env.envs[0]
+        if writer is not None:
+            print(f"[record] saving TWIST record camera frames with bridge camera pose -> {args.out_video}")
 
         if has_viewer:
             print(f"[viz] head_z_max={head_z_max:.4f}; viz_offset={viz_offset.tolist()}")
@@ -1513,6 +1731,19 @@ def run(args) -> None:
             env.gym.step_graphics(env.sim)
             env.gym.draw_viewer(env.viewer, env.sim, True)
 
+        def _set_twist_record_camera(step_i: int) -> None:
+            handles = getattr(env, "_rendering_camera_handles", None)
+            if not handles:
+                return
+            head_viz = cam_head_seq[step_i].astype(np.float32) + viz_offset
+            lh_wrist_viz = cam_lh_wrist_seq[step_i].astype(np.float32) + viz_offset
+            rh_wrist_viz = cam_rh_wrist_seq[step_i].astype(np.float32) + viz_offset
+            record_cam_pos, record_cam_target = _lookat_from_head_wrists(head_viz, lh_wrist_viz, rh_wrist_viz)
+            cam_pos = gymapi.Vec3(float(record_cam_pos[0]), float(record_cam_pos[1]), float(record_cam_pos[2]))
+            cam_target = gymapi.Vec3(float(record_cam_target[0]), float(record_cam_target[1]), float(record_cam_target[2]))
+            for env_i, cam in enumerate(handles):
+                env.gym.set_camera_location(cam, env.envs[env_i], cam_pos, cam_target)
+
         import time as _time
 
         # ── Skeleton-only modes: hide the dexhands and draw debug reference lines ──
@@ -1558,6 +1789,7 @@ def run(args) -> None:
                 _time.sleep(args.step_delay)
 
             if writer is not None and step_i % args.video_stride == 0:
+                _set_twist_record_camera(step_i)
                 imgs = env.render_record(mode="rgb_array")
                 if imgs is not None and len(imgs) > 0:
                     writer.append_data(imgs[0])
@@ -1612,7 +1844,8 @@ def run(args) -> None:
             rh_ik_dof_pos=refs.get("rh_dof_pos", np.zeros((0, len(_INSPIRE_DOF_NAMES)), dtype=np.float32)),
             lh_ik_dof_pos=refs.get("lh_dof_pos", np.zeros((0, len(_INSPIRE_DOF_NAMES)), dtype=np.float32)),
             hand_control_mode=np.asarray(args.hand_control_mode),
-            ref_fps=np.asarray(args.ref_fps, dtype=np.float32),
+            ref_fps=np.asarray(float(refs.get("fps", _effective_ref_fps(args))), dtype=np.float32),
+            input_ref_fps=np.asarray(args.ref_fps, dtype=np.float32),
         )
         print(f"Saved hand actions: {out_actions}")
         if args.record_video:
@@ -1652,7 +1885,7 @@ def main() -> None:
     p.add_argument("--gmt-device", type=str, default="cuda:0")
     p.add_argument("--hand-control-mode", choices=["gmt", "ik"], default="gmt",
                    help="gmt: track references with the trained GMT policy. ik: directly send IK dof targets as actions.")
-    p.add_argument("--ik-backend", choices=["auto", "pytorch", "pinocchio", "none"], default="auto",
+    p.add_argument("--ik-backend", choices=["auto", "pytorch", "pino", "none"], default="auto",
                    help="IK solver backend. auto prefers pytorch_kinematics, then pinocchio.")
     p.add_argument("--ik-device", type=str, default=None,
                    help="Torch device for --ik-backend pytorch. Defaults to --gmt-device.")
@@ -1674,7 +1907,14 @@ def main() -> None:
     p.add_argument("--no-exact-ik-reset", dest="exact_ik_reset", action="store_false",
                    help="Keep TWIST's reset dof randomization instead of exactly setting frame-0 IK dofs.")
     p.set_defaults(exact_ik_reset=True)
-    p.add_argument("--ref-fps", type=float, default=30.0)
+    p.add_argument("--ref-fps", type=float, default=30.0,
+                   help="Input action/reference FPS for HDF5 action sequences.")
+    p.add_argument("--interp-ref-fps", type=float, default=None,
+                   help="Optionally resample HDF5/policy action refs to this FPS before feeding TWIST/GMT, e.g. 60.")
+    p.add_argument("--canonicalize-hand-frame", choices=["none", "ph2d"], default="none",
+                   help="Rotate hand-local fingertip refs and wrist rotations into a canonical PH2D/Inspire local frame.")
+    p.add_argument("--canonical-hand-reference", type=str, default=str(_DEFAULT_PH2D_CANONICAL_REF),
+                   help="PH2D HDF5 reference used by --canonicalize-hand-frame ph2d.")
     p.add_argument("--rollout-steps", type=int, default=None)
     p.add_argument("--record-video", action="store_true")
     p.add_argument("--viewer", action="store_true", help="Run Isaac Gym with viewer/graphics device. Requires a display or virtual display.")

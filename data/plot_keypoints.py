@@ -664,15 +664,23 @@ def _save_html(fig, out_path):
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     pio.write_html(fig, out_path, auto_open=False, include_plotlyjs="cdn")
 
+def _ffmpeg_executable():
+    import shutil
+
+    executable = shutil.which("ffmpeg")
+    if executable is None:
+        import imageio_ffmpeg
+        executable = imageio_ffmpeg.get_ffmpeg_exe()
+    return executable
+
+
 def _save_mp4(fig, out_path, *, fps=20, width=960, height=720, frames=None):
     import subprocess
     import tempfile
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
 
-    ffmpeg = subprocess.run(["bash", "-lc", "command -v ffmpeg"], capture_output=True, text=True)
-    if ffmpeg.returncode != 0:
-        raise RuntimeError("ffmpeg not found in PATH. Please install ffmpeg to export mp4.")
+    ffmpeg = _ffmpeg_executable()
 
     if frames is not None:
         _save_mp4_matplotlib(frames, out_path, fps=fps, width=width, height=height)
@@ -693,13 +701,37 @@ def _save_mp4(fig, out_path, *, fps=20, width=960, height=720, frames=None):
             with open(frame_path, "wb") as f:
                 f.write(png_bytes)
 
-        cmd = (
-            f"ffmpeg -y -framerate {int(fps)} -i {os.path.join(tmpdir, 'frame_%06d.png')} "
-            f"-c:v libx264 -pix_fmt yuv420p {out_path}"
-        )
-        proc = subprocess.run(["bash", "-lc", cmd], capture_output=True, text=True)
+        cmd = [ffmpeg, "-y", "-framerate", str(int(fps)), "-i",
+               os.path.join(tmpdir, "frame_%06d.png"), "-c:v", "libx264",
+               "-pix_fmt", "yuv420p", out_path]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
         if proc.returncode != 0:
-            raise RuntimeError(f"ffmpeg failed: {proc.stderr.strip()}")
+            # Some development environments ship a very small ffmpeg build
+            # without the image2/PNG input demuxer.  OpenCV bundles a fuller
+            # video backend, so keep the rendered frames alive and use it as a
+            # local fallback instead of losing an otherwise complete render.
+            import cv2
+
+            first = cv2.imread(os.path.join(tmpdir, "frame_000000.png"))
+            if first is None:
+                raise RuntimeError(f"ffmpeg failed and rendered PNGs are unreadable: {proc.stderr.strip()}")
+            frame_h, frame_w = first.shape[:2]
+            writer = cv2.VideoWriter(
+                out_path,
+                cv2.VideoWriter_fourcc(*"mp4v"),
+                float(fps),
+                (frame_w, frame_h),
+            )
+            if not writer.isOpened():
+                raise RuntimeError(f"ffmpeg failed and OpenCV could not open MP4 writer: {proc.stderr.strip()}")
+            try:
+                for i in range(len(fig.frames)):
+                    image = cv2.imread(os.path.join(tmpdir, f"frame_{i:06d}.png"))
+                    if image is None:
+                        raise RuntimeError(f"Missing rendered frame {i}")
+                    writer.write(image)
+            finally:
+                writer.release()
 
 
 def _save_mp4_matplotlib(frames, out_path, *, fps=20, width=960, height=720):
@@ -783,14 +815,34 @@ def _save_mp4_matplotlib(frames, out_path, *, fps=20, width=960, height=720):
             fig_m.savefig(frame_path, dpi=dpi)
             plt.close(fig_m)
 
-        cmd = (
-            f"ffmpeg -y -framerate {int(fps)} -i {os.path.join(tmpdir, 'frame_%06d.png')} "
-            f"-vf \"scale=trunc(iw/2)*2:trunc(ih/2)*2\" "
-            f"-c:v libx264 -pix_fmt yuv420p {out_path}"
-        )
-        proc = subprocess.run(["bash", "-lc", cmd], capture_output=True, text=True)
+        cmd = [_ffmpeg_executable(), "-y", "-framerate", str(int(fps)), "-i",
+               os.path.join(tmpdir, "frame_%06d.png"), "-vf",
+               "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx264",
+               "-pix_fmt", "yuv420p", out_path]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
         if proc.returncode != 0:
-            raise RuntimeError(f"ffmpeg failed: {proc.stderr.strip()}")
+            import cv2
+
+            first = cv2.imread(os.path.join(tmpdir, "frame_000000.png"))
+            if first is None:
+                raise RuntimeError(f"ffmpeg failed and rendered PNGs are unreadable: {proc.stderr.strip()}")
+            frame_h, frame_w = first.shape[:2]
+            writer = cv2.VideoWriter(
+                out_path,
+                cv2.VideoWriter_fourcc(*"mp4v"),
+                float(fps),
+                (frame_w, frame_h),
+            )
+            if not writer.isOpened():
+                raise RuntimeError(f"ffmpeg failed and OpenCV could not open MP4 writer: {proc.stderr.strip()}")
+            try:
+                for i in range(len(frames)):
+                    image = cv2.imread(os.path.join(tmpdir, f"frame_{i:06d}.png"))
+                    if image is None:
+                        raise RuntimeError(f"Missing rendered frame {i}")
+                    writer.write(image)
+            finally:
+                writer.release()
 
 if __name__ == "__main__":
     import argparse

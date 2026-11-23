@@ -1,0 +1,30 @@
+{
+  "frame": 150,
+  "video_time_s": 3.0,
+  "dataset": "action",
+  "look_direction": [
+    0.40121294304405364,
+    -0.00045226206231308437,
+    -0.9159846995408581
+  ],
+  "camera_up": [
+    0.8934488790059132,
+    0.22064863962687326,
+    0.39123302318936143
+  ],
+  "vertical_fov_deg": 99.24284118678948,
+  "note": "Eye at each saved head point, common look-at direction toward both hands; not calibrated physical camera intrinsics/extrinsics.",
+  "hand_geometry": "Existing plot_keypoints full_hand interpolation of the five fingertip labels",
+  "eyes": {
+    "old": [
+      0.00018437765538692474,
+      -0.037953607738018036,
+      0.002825021743774414
+    ],
+    "new": [
+      6.299465894699097e-05,
+      -0.03800996392965317,
+      0.002825021743774414
+    ]
+  }
+}

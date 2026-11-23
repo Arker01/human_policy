@@ -1,0 +1,60 @@
+{
+  "vive_planar_alignment_yaw_deg": 0.0,
+  "yaw_calibration_episodes": [],
+  "calibrations": {
+    "dataset": {
+      "vive_planar_alignment_yaw_deg": 0.0,
+      "yaw_calibration_episodes": []
+    }
+  },
+  "episodes": [
+    {
+      "episode": 0,
+      "frames": 2854,
+      "output": "/root/shengyin/human_policy/data/scalebfm_20261107_172407_hat_rootfix_coupled_motor/ScaleBFM_Dex5_20261107_172407_ep_0000_rootfix.hdf5",
+      "tracker_samples_total": 0,
+      "tracker_samples_valid": 0,
+      "tracker_raw_coverage": 0.0,
+      "tracker_raw_max_step_m": 0.0,
+      "tracker_raw_vertical_range_m": 0.0,
+      "tracker_missing_fallback": true,
+      "tracker_fallback_reason": "No tracker agrees with robot IMU in /root/shengyin/human_policy/data/scalebfm_20261107_172407_curated/tracker_data/pico_scalebfm_20261107_172407_episode_000000.jsonl: {'tracker1': 29.08172700046936, 'tracker2': 8.675134100989938}",
+      "vive_measurement_valid_frames": 2854,
+      "vive_measurement_valid_fraction": 1.0,
+      "vive_longest_fallback_seconds": 0.0,
+      "vive_xy_displacement_m": 0.7996807528299493,
+      "fused_xy_displacement_m": 0.7996807528299493,
+      "fk_xy_displacement_m": 0.7996807528299493,
+      "fused_z_range_m": 0.21506130695343018,
+      "calibration_group": "dataset"
+    },
+    {
+      "episode": 1,
+      "frames": 1087,
+      "output": "/root/shengyin/human_policy/data/scalebfm_20261107_172407_hat_rootfix_coupled_motor/ScaleBFM_Dex5_20261107_172407_ep_0001_rootfix.hdf5",
+      "tracker_samples_total": 2816,
+      "tracker_samples_valid": 2753,
+      "tracker_raw_coverage": 0.9776278409090909,
+      "tracker_raw_max_step_m": 0.23203494581688822,
+      "tracker_raw_vertical_range_m": 0.17622029781341553,
+      "tracker1_valid_samples": 2695,
+      "tracker1_position_radius95_m": 0.008229554930464688,
+      "tracker1_rotation95_deg": 0.16902733527588662,
+      "tracker1_imu_angle_error90_deg": 36.07739754811024,
+      "tracker2_valid_samples": 2753,
+      "tracker2_position_radius95_m": 0.685043885433181,
+      "tracker2_rotation95_deg": 30.625988939828595,
+      "tracker2_imu_angle_error90_deg": 4.617565760984697,
+      "waist_tracker_selection": "synchronized_relative_rotation_match_to_robot_imu",
+      "vive_tracker_name": "tracker2",
+      "vive_measurement_valid_frames": 688,
+      "vive_measurement_valid_fraction": 0.6329346826126955,
+      "vive_longest_fallback_seconds": 4.6,
+      "vive_xy_displacement_m": 0.6932804343048518,
+      "fused_xy_displacement_m": 0.6451927944230222,
+      "fk_xy_displacement_m": 0.6984151918148028,
+      "fused_z_range_m": 0.17144102573480025,
+      "calibration_group": "dataset"
+    }
+  ]
+}

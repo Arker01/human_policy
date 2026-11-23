@@ -1,0 +1,462 @@
+[
+  {
+    "episode": "episode_000000",
+    "frames": 1582,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.3358704936662613,
+    "root_xy_path_length_m": 1.5553018151451867,
+    "root_z_range_m": 0.04176190583818984,
+    "max_horizontal_speed_mps": 0.5043613219451901,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0000_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000001",
+    "frames": 1858,
+    "stance_switches": 2,
+    "root_xy_displacement_m": 0.31202988099372014,
+    "root_xy_path_length_m": 2.769483908900941,
+    "root_z_range_m": 0.03386377023638143,
+    "max_horizontal_speed_mps": 0.733164895799392,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0001_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000002",
+    "frames": 1783,
+    "stance_switches": 2,
+    "root_xy_displacement_m": 0.4513226447995075,
+    "root_xy_path_length_m": 1.56507245712241,
+    "root_z_range_m": 0.03873683179233156,
+    "max_horizontal_speed_mps": 0.43189716350267443,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0002_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000003",
+    "frames": 2359,
+    "stance_switches": 4,
+    "root_xy_displacement_m": 0.4213367652264403,
+    "root_xy_path_length_m": 2.5273418066739537,
+    "root_z_range_m": 0.034820102163459876,
+    "max_horizontal_speed_mps": 0.6786648654113804,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0003_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000004",
+    "frames": 1095,
+    "stance_switches": 2,
+    "root_xy_displacement_m": 0.45014318815142274,
+    "root_xy_path_length_m": 1.3043765103508058,
+    "root_z_range_m": 0.029760860187049598,
+    "max_horizontal_speed_mps": 0.3095894815506194,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0004_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000005",
+    "frames": 1926,
+    "stance_switches": 2,
+    "root_xy_displacement_m": 0.49926921743322117,
+    "root_xy_path_length_m": 2.313267841342466,
+    "root_z_range_m": 0.04177468352291869,
+    "max_horizontal_speed_mps": 0.5642147216541432,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0005_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000006",
+    "frames": 1395,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.32890911584548066,
+    "root_xy_path_length_m": 1.0262681134239013,
+    "root_z_range_m": 0.03632463643418571,
+    "max_horizontal_speed_mps": 0.362628607534617,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0006_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000007",
+    "frames": 1224,
+    "stance_switches": 2,
+    "root_xy_displacement_m": 0.18786924895546603,
+    "root_xy_path_length_m": 0.9415198329856214,
+    "root_z_range_m": 0.030183398115388282,
+    "max_horizontal_speed_mps": 0.23220214570555983,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0007_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000008",
+    "frames": 1401,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.26023526295849,
+    "root_xy_path_length_m": 1.0828108668210603,
+    "root_z_range_m": 0.038940399209445475,
+    "max_horizontal_speed_mps": 0.2932561647352405,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0008_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000009",
+    "frames": 1048,
+    "stance_switches": 2,
+    "root_xy_displacement_m": 0.3478214910904082,
+    "root_xy_path_length_m": 1.0271972665062574,
+    "root_z_range_m": 0.03675312132713826,
+    "max_horizontal_speed_mps": 0.2917594770630751,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0009_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000010",
+    "frames": 925,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.3088783083843935,
+    "root_xy_path_length_m": 0.7181753320706387,
+    "root_z_range_m": 0.02591869598469665,
+    "max_horizontal_speed_mps": 0.26124938441834483,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0010_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000011",
+    "frames": 1428,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.15346798907967985,
+    "root_xy_path_length_m": 1.4490078089991387,
+    "root_z_range_m": 0.027740794190016516,
+    "max_horizontal_speed_mps": 1.3070188334856734,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0011_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000012",
+    "frames": 1287,
+    "stance_switches": 3,
+    "root_xy_displacement_m": 0.36918404820568607,
+    "root_xy_path_length_m": 1.2565729229414373,
+    "root_z_range_m": 0.02446433187295982,
+    "max_horizontal_speed_mps": 0.31575995358083114,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0012_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000013",
+    "frames": 1111,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.2695940769678465,
+    "root_xy_path_length_m": 0.698806943732222,
+    "root_z_range_m": 0.03152099369723804,
+    "max_horizontal_speed_mps": 0.3370944805761109,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0013_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000014",
+    "frames": 1318,
+    "stance_switches": 2,
+    "root_xy_displacement_m": 0.24910132800684145,
+    "root_xy_path_length_m": 1.0425050779580176,
+    "root_z_range_m": 0.026452650275616385,
+    "max_horizontal_speed_mps": 0.28642272838131166,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0014_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000015",
+    "frames": 1729,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.13120114971025756,
+    "root_xy_path_length_m": 1.0968557891620874,
+    "root_z_range_m": 0.023084282357459296,
+    "max_horizontal_speed_mps": 0.2751685678617922,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0015_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000016",
+    "frames": 1177,
+    "stance_switches": 3,
+    "root_xy_displacement_m": 0.21448804257449533,
+    "root_xy_path_length_m": 1.0399078124274166,
+    "root_z_range_m": 0.02979200091448464,
+    "max_horizontal_speed_mps": 0.9663836212602237,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0016_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000017",
+    "frames": 2054,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.42920357782463836,
+    "root_xy_path_length_m": 1.6426423497806004,
+    "root_z_range_m": 0.023789719788259056,
+    "max_horizontal_speed_mps": 0.5519991108782591,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0017_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000018",
+    "frames": 2242,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.3336429367518221,
+    "root_xy_path_length_m": 1.4820338637003352,
+    "root_z_range_m": 0.03337886025009995,
+    "max_horizontal_speed_mps": 0.5240319453343998,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0018_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000019",
+    "frames": 1683,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.43370475840996064,
+    "root_xy_path_length_m": 1.0862372877645152,
+    "root_z_range_m": 0.04363112012748205,
+    "max_horizontal_speed_mps": 0.8152532025285943,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0019_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000020",
+    "frames": 1426,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.44470705855834874,
+    "root_xy_path_length_m": 1.3023923797525923,
+    "root_z_range_m": 0.03366237368908087,
+    "max_horizontal_speed_mps": 0.9008016339072574,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0020_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000021",
+    "frames": 1191,
+    "stance_switches": 3,
+    "root_xy_displacement_m": 0.2737528462599717,
+    "root_xy_path_length_m": 1.2299380980463777,
+    "root_z_range_m": 0.033846783009371606,
+    "max_horizontal_speed_mps": 0.9368772164698111,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0021_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000022",
+    "frames": 1337,
+    "stance_switches": 2,
+    "root_xy_displacement_m": 0.4482650536638437,
+    "root_xy_path_length_m": 1.1409744058645446,
+    "root_z_range_m": 0.02289337986825335,
+    "max_horizontal_speed_mps": 0.4739718168073227,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0022_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000023",
+    "frames": 1344,
+    "stance_switches": 3,
+    "root_xy_displacement_m": 0.2970701417561449,
+    "root_xy_path_length_m": 1.333831815085928,
+    "root_z_range_m": 0.024304951190479263,
+    "max_horizontal_speed_mps": 0.41955758606468296,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0023_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000024",
+    "frames": 1198,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.3780428648464857,
+    "root_xy_path_length_m": 1.2846709681650665,
+    "root_z_range_m": 0.02727578104163708,
+    "max_horizontal_speed_mps": 0.7215334588182344,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0024_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000025",
+    "frames": 1321,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.4271330264959977,
+    "root_xy_path_length_m": 1.2632304003131225,
+    "root_z_range_m": 0.04120975555101847,
+    "max_horizontal_speed_mps": 0.6925949441554301,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0025_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000026",
+    "frames": 1022,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.4465162320173345,
+    "root_xy_path_length_m": 0.9033291801462067,
+    "root_z_range_m": 0.04276521610388773,
+    "max_horizontal_speed_mps": 0.4491066940860806,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0026_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000027",
+    "frames": 1059,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.3722036658283861,
+    "root_xy_path_length_m": 0.7590417997551293,
+    "root_z_range_m": 0.033821683038948724,
+    "max_horizontal_speed_mps": 0.5236879350319461,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0027_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000028",
+    "frames": 874,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.5035888304244357,
+    "root_xy_path_length_m": 0.9895159933178037,
+    "root_z_range_m": 0.037896714640759055,
+    "max_horizontal_speed_mps": 0.6588418715863148,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0028_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000029",
+    "frames": 1867,
+    "stance_switches": 2,
+    "root_xy_displacement_m": 0.5128893294285862,
+    "root_xy_path_length_m": 1.6261841047073942,
+    "root_z_range_m": 0.04021585113194126,
+    "max_horizontal_speed_mps": 1.0702171087453785,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0029_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000030",
+    "frames": 1469,
+    "stance_switches": 2,
+    "root_xy_displacement_m": 0.13495081731652683,
+    "root_xy_path_length_m": 1.454874224248341,
+    "root_z_range_m": 0.032711976328116066,
+    "max_horizontal_speed_mps": 0.9097848295657919,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0030_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000031",
+    "frames": 1085,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.4148171164441931,
+    "root_xy_path_length_m": 0.8712013687782859,
+    "root_z_range_m": 0.028800944906930415,
+    "max_horizontal_speed_mps": 0.4716592193101853,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0031_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000032",
+    "frames": 1162,
+    "stance_switches": 2,
+    "root_xy_displacement_m": 0.29019433129211164,
+    "root_xy_path_length_m": 1.0726388581076596,
+    "root_z_range_m": 0.033663946090007224,
+    "max_horizontal_speed_mps": 0.8283813521428266,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0032_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000033",
+    "frames": 934,
+    "stance_switches": 2,
+    "root_xy_displacement_m": 0.3749593195421798,
+    "root_xy_path_length_m": 0.8299062565195277,
+    "root_z_range_m": 0.04215696026269411,
+    "max_horizontal_speed_mps": 0.43355355491950154,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0033_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000034",
+    "frames": 611,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.4743906208111529,
+    "root_xy_path_length_m": 0.865925818719279,
+    "root_z_range_m": 0.03540672935807221,
+    "max_horizontal_speed_mps": 0.6189711930308122,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0034_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000035",
+    "frames": 1580,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.4641742403142252,
+    "root_xy_path_length_m": 1.2873633217102944,
+    "root_z_range_m": 0.047960407972658214,
+    "max_horizontal_speed_mps": 1.0700120104602064,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0035_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000036",
+    "frames": 916,
+    "stance_switches": 2,
+    "root_xy_displacement_m": 0.5347013899643636,
+    "root_xy_path_length_m": 1.0287642167726543,
+    "root_z_range_m": 0.04954978740863458,
+    "max_horizontal_speed_mps": 0.605629165834424,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0036_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000037",
+    "frames": 1305,
+    "stance_switches": 3,
+    "root_xy_displacement_m": 0.2881686389970044,
+    "root_xy_path_length_m": 1.0631457138992002,
+    "root_z_range_m": 0.04701655424439022,
+    "max_horizontal_speed_mps": 0.8883306418310356,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0037_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000038",
+    "frames": 2570,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.3189393042600839,
+    "root_xy_path_length_m": 2.219159616756074,
+    "root_z_range_m": 0.04252741834620122,
+    "max_horizontal_speed_mps": 0.9191492009463931,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0038_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000039",
+    "frames": 1616,
+    "stance_switches": 3,
+    "root_xy_displacement_m": 0.5310721058956258,
+    "root_xy_path_length_m": 1.9134883172090293,
+    "root_z_range_m": 0.033340319995587064,
+    "max_horizontal_speed_mps": 1.2422985024784798,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0039_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000040",
+    "frames": 991,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.26392268027111404,
+    "root_xy_path_length_m": 0.8507975430023369,
+    "root_z_range_m": 0.034107581238267515,
+    "max_horizontal_speed_mps": 0.403012208025919,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0040_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000041",
+    "frames": 1303,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.4605117852483854,
+    "root_xy_path_length_m": 1.012835087737742,
+    "root_z_range_m": 0.04564253713533584,
+    "max_horizontal_speed_mps": 0.6147414812929651,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0041_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000042",
+    "frames": 792,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.501181589318642,
+    "root_xy_path_length_m": 0.9373038861778722,
+    "root_z_range_m": 0.045964279906238525,
+    "max_horizontal_speed_mps": 0.605375326563111,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0042_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000043",
+    "frames": 897,
+    "stance_switches": 2,
+    "root_xy_displacement_m": 0.3899268856841402,
+    "root_xy_path_length_m": 0.8875761174656571,
+    "root_z_range_m": 0.04985658747223165,
+    "max_horizontal_speed_mps": 0.4356041774339301,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0043_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000044",
+    "frames": 1154,
+    "stance_switches": 1,
+    "root_xy_displacement_m": 0.4744860564836401,
+    "root_xy_path_length_m": 1.1350434085602672,
+    "root_z_range_m": 0.0471941759853427,
+    "max_horizontal_speed_mps": 0.7175741489688972,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0044_rootfix.hdf5"
+  },
+  {
+    "episode": "episode_000045",
+    "frames": 1503,
+    "stance_switches": 3,
+    "root_xy_displacement_m": 0.5268835086768986,
+    "root_xy_path_length_m": 1.7233019387802728,
+    "root_z_range_m": 0.04439815676048475,
+    "max_horizontal_speed_mps": 0.9214533196980188,
+    "output": "/root/shengyin/human_policy/data/sonic_real_teleop_20260903_hat_rootfix/SONIC_Dex5_20260903_ep_0045_rootfix.hdf5"
+  }
+]
