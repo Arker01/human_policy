@@ -68,7 +68,7 @@ class ACTPolicy(nn.Module):
             loss_dict['loss'] = loss_dict['l1'] + loss_dict['kl'] * self.kl_weight
             if conditioning_dict is not None and 'semantic_missing_mask' in conditioning_dict:
                 missing = conditioning_dict['semantic_missing_mask'].float()
-                names = ('head', 'root', 'right_wrist', 'right_hand', 'vision')
+                names = ('head', 'root', 'right_wrist', 'right_hand', 'vision', 'left_wrist', 'left_hand')
                 for i, name in enumerate(names):
                     loss_dict[f'missing_{name}_frac'] = missing[:, i].mean()
                 loss_dict['missing_block_count'] = missing.sum(dim=1).mean()
@@ -136,7 +136,8 @@ class ACTPolicy(nn.Module):
                         flow_weight, device=loss_dict['loss'].device, dtype=loss_dict['loss'].dtype)
                     loss_dict['loss'] = loss_dict['loss'] + flow_weight * future_dino_loss_dict['flow_loss']
 
-            from auxiliary_tasks import VARIANT, balanced_readiness_loss, geometry_loss
+            from auxiliary_tasks import balanced_readiness_loss, geometry_loss, fingertip_geometry_loss
+            geom = None
             if self.model.experiment_variant == 'readiness':
                 logits = self.model.readiness_logits
                 target = conditioning_dict['readiness_target']
@@ -148,12 +149,14 @@ class ACTPolicy(nn.Module):
                 loss_dict['readiness_accuracy'] = (((logits>0)==(target>0)).float()*mask).sum()/mask.sum().clamp_min(1)
                 loss_dict['loss'] = loss_dict['loss'] + .1*ready_loss
             elif self.model.experiment_variant == 'geometry':
-                geom, cm = geometry_loss(a_hat, actions, conditioning_dict['action_mean'],
+                geom, cm, per_hand = geometry_loss(a_hat, actions, conditioning_dict['action_mean'],
                                         conditioning_dict['action_std'],
                                         conditioning_dict['hand_event_weights'][:,:self.model.num_queries], is_pad)
+            if geom is not None:
                 loss_dict['geometry_loss'] = geom
+                loss_dict['geometry_left_loss'], loss_dict['geometry_right_loss'] = per_hand
                 loss_dict['geometry_error_cm'] = cm
-                loss_dict['loss'] = loss_dict['loss'] + .1*geom
+                loss_dict['loss'] = loss_dict['loss'] + .1 * geom
             return loss_dict
         else: # inference time
             a_hat, _, (_, _), _ = self.model(qpos, image, env_state, conditioning_dict=conditioning_dict) # no action, sample from prior

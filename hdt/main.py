@@ -384,7 +384,8 @@ def main(args, base_dir, processed_dir=None):
         print("Semantic-block conditioning dropout enabled (train split only):")
         print(f"  probabilities={semantic_cfg.get('probabilities', {})}")
         print(f"  max_missing_blocks={semantic_cfg.get('max_missing_blocks', 2)}")
-        print("  mask order=[head_rot, root_rot, right_wrist_rot, right_hand_keypoints, vision]")
+        from hat_conditioning import SEMANTIC_MASK_ORDER
+        print(f"  mask order={SEMANTIC_MASK_ORDER}")
     if temporal_cfg.get('enabled', False):
         cache_dir = temporal_cfg.get('teacher_cache')
         if not cache_dir or not os.path.isfile(os.path.join(cache_dir, 'manifest.json')):
@@ -412,7 +413,7 @@ def main(args, base_dir, processed_dir=None):
         assert 0.0 <= lag_aug_config['min_m'] <= lag_aug_config['max_m'], \
             "lag_aug_min_m must be <= lag_aug_max_m"
         print("Execution-lag state augmentation enabled (train split only):")
-        print(f"  Backtrack prob: {lag_aug_config['prob']} "
+        print(f"  Backtrack prob per hand: {lag_aug_config['prob']} "
               f"over {lag_aug_config['min_m'] * 100:.0f}-{lag_aug_config['max_m'] * 100:.0f} cm "
               f"(search window {lag_aug_config['search_frames']} frames)")
         print(f"  Random 3D offset prob: {lag_aug_config['offset_prob']} "
@@ -784,11 +785,30 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
             # backward
             loss = forward_dict['loss']
 
+            geometry_gradients = {}
+            if cur_iter == 0:
+                inner_model = accelerator.unwrap_model(policy).model
+                if inner_model.experiment_variant in ('geometry', 'sonic_native_geometry'):
+                    geometry_loss = forward_dict['geometry_loss']
+                    assert torch.isfinite(geometry_loss) and geometry_loss > 0, geometry_loss
+                    from hdt.constants import OUTPUT_LEFT_EEF, OUTPUT_RIGHT_EEF
+                    from hdt.constants import OUTPUT_LEFT_KEYPOINTS, OUTPUT_RIGHT_KEYPOINTS
+                    keep = inner_model.state_keep_mask
+                    for dims in (OUTPUT_LEFT_EEF, OUTPUT_RIGHT_EEF,
+                                 OUTPUT_LEFT_KEYPOINTS, OUTPUT_RIGHT_KEYPOINTS):
+                        assert torch.all(keep[dims.tolist()] == 1), dims
+                    parameter = inner_model.query_embed.weight
+                    for side in ('left', 'right'):
+                        side_loss = forward_dict[f'geometry_{side}_loss']
+                        grad, = torch.autograd.grad(side_loss, parameter, retain_graph=True)
+                        value = float(grad.detach().float().norm())
+                        assert np.isfinite(value) and value > 0, (side, value)
+                        geometry_gradients[f'geometry_{side}_to_query'] = value
             accelerator.backward(loss)
             if cur_iter == 0:
                 import json
                 inner_model = accelerator.unwrap_model(policy).model
-                groups = {}
+                groups = dict(geometry_gradients)
                 for group in ('action_head', 'input_proj', 'readiness_head', 'future_dino_head'):
                     grads = [p.grad.detach().float().square().sum() for n,p in inner_model.named_parameters()
                              if n.startswith(group + '.') and p.grad is not None]

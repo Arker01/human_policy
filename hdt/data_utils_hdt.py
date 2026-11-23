@@ -221,14 +221,6 @@ class EpisodicDataset(torch.utils.data.Dataset):
                 "lag_aug perturbs the current state only; the un-perturbed history "
                 "states would let the trunk extrapolate the true current wrist pose "
                 "and undo the augmentation. Decide how history should lag first.")
-            # Right arm is the manipulator in this task: OUTPUT_RIGHT_EEF is 3 pos + 6D
-            # rot, OUTPUT_RIGHT_KEYPOINTS are palm-LOCAL fingertips, which is why the
-            # finger block can be desynced from the wrist without contradicting it.
-            _w0 = int(OUTPUT_RIGHT_EEF[0])
-            self.lag_wrist_pos_slice = slice(_w0, _w0 + 3)
-            self.lag_wrist_slice = slice(_w0, int(OUTPUT_RIGHT_EEF[-1]) + 1)
-            self.lag_finger_slice = slice(int(OUTPUT_RIGHT_KEYPOINTS[0]),
-                                          int(OUTPUT_RIGHT_KEYPOINTS[-1]) + 1)
 
         # ---- Visual localization augmentation (disabled by default) ----
         # RandomResizedCrop back to the SAME resolution, so every shape downstream
@@ -811,58 +803,43 @@ class EpisodicDataset(torch.utils.data.Dataset):
                 torch.from_numpy(anchor))
 
     def _apply_lag_aug(self, root, index, raw_start_ts, qpos):
-        """Simulate "the BFM did not keep up" on the INPUT state.
-
-        Two independent perturbations, both on the raw (pre-normalization) state so the
-        thresholds stay in metres:
-
-        1. Trajectory backtrack. Sample a target lag distance d ~ U[min_m, max_m] and
-           replace the wrist block (pos + 6D rot) with the value at the MOST RECENT past
-           frame that sits at least d away. "Most recent" matters: a trajectory that
-           revisits a position would otherwise send the lag arbitrarily far back in time.
-           A lagging wrist also has a lagging orientation, hence the whole 9-dim block.
-        2. Random 3D offset on the wrist position, for tracking error that is not a pure
-           lag along the path.
-
-        Optionally the fingertip block is read at a DIFFERENT lag than the wrist, which is
-        the finger-vs-wrist progress desync: fingers already closing while the wrist is
-        still behind, or the reverse.
-
-        The action chunk is deliberately not touched anywhere in here.
-        """
+        """Perturb both input wrists and fingertips with the same parameters."""
         cfg = self.lag_aug
         ds = root['observation.state']
         first_ts = int(self.valid_start_list[index])
-        # load_hdf_to_cpu hands back a VIEW into the cached episode array, so mutating
-        # in place would poison the cache for every later sample.
+        # The input may alias the cached episode.
         qpos = np.array(qpos, copy=True)
+        for eef, keypoints in ((OUTPUT_LEFT_EEF, OUTPUT_LEFT_KEYPOINTS),
+                               (OUTPUT_RIGHT_EEF, OUTPUT_RIGHT_KEYPOINTS)):
+            wrist_pos = slice(int(eef[0]), int(eef[0]) + 3)
+            wrist = slice(int(eef[0]), int(eef[-1]) + 1)
+            fingers = slice(int(keypoints[0]), int(keypoints[-1]) + 1)
+            if random.random() < cfg['prob'] and raw_start_ts > first_ts:
+                target_m = random.uniform(cfg['min_m'], cfg['max_m'])
+                lo = max(first_ts, raw_start_ts - int(cfg['search_frames']))
+                past = np.asarray(ds[lo:raw_start_ts, wrist_pos], dtype=np.float64)
+                here = np.asarray(qpos[wrist_pos], dtype=np.float64)
+                dist = np.linalg.norm(past - here, axis=1)
+                hit = np.nonzero(dist >= target_m)[0]
+                # Nothing in the window is far enough (slow phase near the episode start):
+                # take the farthest frame available rather than skipping the sample, so the
+                # augmentation still fires, just at a smaller lag than requested.
+                j = int(hit[-1]) if len(hit) else int(np.argmax(dist))
+                lag_frames = raw_start_ts - (lo + j)
+                qpos[wrist] = ds[lo + j, wrist]
 
-        if random.random() < cfg['prob'] and raw_start_ts > first_ts:
-            target_m = random.uniform(cfg['min_m'], cfg['max_m'])
-            lo = max(first_ts, raw_start_ts - int(cfg['search_frames']))
-            past = np.asarray(ds[lo:raw_start_ts, self.lag_wrist_pos_slice], dtype=np.float64)
-            here = np.asarray(qpos[self.lag_wrist_pos_slice], dtype=np.float64)
-            dist = np.linalg.norm(past - here, axis=1)
-            hit = np.nonzero(dist >= target_m)[0]
-            # Nothing in the window is far enough (slow phase near the episode start):
-            # take the farthest frame available rather than skipping the sample, so the
-            # augmentation still fires, just at a smaller lag than requested.
-            j = int(hit[-1]) if len(hit) else int(np.argmax(dist))
-            lag_frames = raw_start_ts - (lo + j)
-            qpos[self.lag_wrist_slice] = ds[lo + j, self.lag_wrist_slice]
+                if lag_frames > 0 and random.random() < cfg['finger_prob']:
+                    # finger_scale > 1 lets the fingers lag MORE than the wrist as well as less.
+                    f_lag = int(round(random.uniform(0.0, cfg['finger_scale']) * lag_frames))
+                    f_ts = max(first_ts, raw_start_ts - f_lag)
+                    qpos[fingers] = ds[f_ts, fingers]
 
-            if lag_frames > 0 and random.random() < cfg['finger_prob']:
-                # finger_scale > 1 lets the fingers lag MORE than the wrist as well as less.
-                f_lag = int(round(random.uniform(0.0, cfg['finger_scale']) * lag_frames))
-                f_ts = max(first_ts, raw_start_ts - f_lag)
-                qpos[self.lag_finger_slice] = ds[f_ts, self.lag_finger_slice]
-
-        if random.random() < cfg['offset_prob']:
-            off = np.random.randn(3) * cfg['offset_sigma_m']
-            norm = float(np.linalg.norm(off))
-            if norm > cfg['offset_clip_m'] > 0:
-                off = off * (cfg['offset_clip_m'] / norm)
-            qpos[self.lag_wrist_pos_slice] = qpos[self.lag_wrist_pos_slice] + off
+            if random.random() < cfg['offset_prob']:
+                off = np.random.randn(3) * cfg['offset_sigma_m']
+                norm = float(np.linalg.norm(off))
+                if norm > cfg['offset_clip_m'] > 0:
+                    off = off * (cfg['offset_clip_m'] / norm)
+                qpos[wrist_pos] = qpos[wrist_pos] + off
 
         return qpos
 
@@ -1098,21 +1075,18 @@ class EpisodicDataset(torch.utils.data.Dataset):
 
         semantic_missing = None
         if self.semantic_dropout is not None:
-            from hat_conditioning import SEMANTIC_BLOCKS, sample_semantic_missing
-            # Validation and normal deployment see all conditions present.  A debug
-            # override remains possible without silently making validation random.
+            from hat_conditioning import SEMANTIC_BLOCKS, SEMANTIC_MASK_ORDER, sample_semantic_missing
             debug_missing = self.semantic_dropout.get("debug_missing_blocks", [])
             if self.train:
                 semantic_missing = sample_semantic_missing(self.semantic_dropout)
             else:
-                names = ("head_rot", "root_rot", "right_wrist_rot",
-                         "right_hand_keypoints", "visual_tokens")
-                semantic_missing = torch.tensor([float(n in debug_missing) for n in names])
-            for group_i, name in enumerate(("head_rot", "root_rot", "right_wrist_rot",
-                                            "right_hand_keypoints")):
-                if semantic_missing[group_i] > 0:
+                semantic_missing = torch.tensor([
+                    float(name in debug_missing) for name in SEMANTIC_MASK_ORDER
+                ])
+            for group_i, name in enumerate(SEMANTIC_MASK_ORDER):
+                if name in SEMANTIC_BLOCKS and semantic_missing[group_i] > 0:
                     qpos_data[SEMANTIC_BLOCKS[name]] = 0.0
-        
+
         if random.random() < self.cond_mask_prob:
             lang_instruction = ''
         
