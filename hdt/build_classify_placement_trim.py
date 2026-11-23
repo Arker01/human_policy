@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Build zero-copy classify episodes ending at the final release boundary.
+"""Build zero-copy classify episodes ending near a selected release boundary.
 
-The classify demonstrations finish by opening the right hand over the last box,
-then moving the empty hand back across the workspace.  That return is precisely
-the competing target this experiment removes.  The retained last frame is the
-first raw-open frame confirmed by a short future hold; confirmation frames are
-not retained, so a fast withdrawal cannot leak into the label.  Files are HDF5
-virtual slices, so image payloads stay in the immutable source dataset.
+The release is selected by its zero-based event index.  Index 0 retains the
+first pick-and-place only; index -1 preserves the historical final-release
+behavior.  By default, the retained last frame is the first raw-open frame
+confirmed by a short future hold.  An optional fixed number of frames after
+that confirmed-open frame can also be retained.  Files are HDF5 virtual
+slices, so image payloads stay in the immutable source dataset.
 """
 
 import argparse
@@ -17,7 +17,7 @@ import h5py
 import numpy as np
 
 
-def final_open(action, open_threshold):
+def selected_open(action, open_threshold, event_index):
     points = action[:, 40:58].reshape(-1, 6, 3)
     spread = np.linalg.norm(points[:, 1:] - points[:, :1], axis=2).mean(axis=1)
     smooth = np.convolve(spread, np.ones(7, dtype=np.float32) / 7.0, mode="same")
@@ -33,7 +33,11 @@ def final_open(action, open_threshold):
             events.append(index)
     if len(events) < 4:
         raise RuntimeError(f"expected at least four placement opens, found {events}")
-    return events[-1], len(events), spread
+    if not -len(events) <= event_index < len(events):
+        raise RuntimeError(
+            f"open event index {event_index} is invalid for detected events {events}"
+        )
+    return events[event_index], len(events), spread
 
 
 def confirmed_open_frame(spread, event, open_threshold, hold_frames):
@@ -42,7 +46,7 @@ def confirmed_open_frame(spread, event, open_threshold, hold_frames):
         if np.all(spread[index:index + hold_frames] > open_threshold):
             return index
     raise RuntimeError(
-        f"no {hold_frames}-frame confirmed opening after final event {event}"
+        f"no {hold_frames}-frame confirmed opening after selected event {event}"
     )
 
 
@@ -87,7 +91,18 @@ def main():
     parser.add_argument("--output-manifest", required=True)
     parser.add_argument("--open-threshold", type=float, default=0.19)
     parser.add_argument("--open-hold-frames", type=int, default=3)
+    parser.add_argument(
+        "--open-event-index", type=int, default=-1,
+        help="zero-based placement-open event to retain through; 0 keeps only "
+             "the first pick-and-place, while -1 keeps the historical final event",
+    )
+    parser.add_argument(
+        "--post-confirmed-open-frames", type=int, default=0,
+        help="number of raw frames to retain after the confirmed-open frame",
+    )
     args = parser.parse_args()
+    if args.post_confirmed_open_frames < 0:
+        parser.error("--post-confirmed-open-frames must be nonnegative")
     manifest = json.load(open(args.source_manifest))
     result = {}
     summary = []
@@ -102,8 +117,8 @@ def main():
                 source_path = os.path.join(entry["dataset_path"], filename)
                 with h5py.File(source_path, "r") as source:
                     action = np.asarray(source["action"])
-                event, event_count, spread = final_open(
-                    action, float(args.open_threshold)
+                event, event_count, spread = selected_open(
+                    action, float(args.open_threshold), int(args.open_event_index)
                 )
                 open_frame = confirmed_open_frame(
                     spread,
@@ -112,18 +127,24 @@ def main():
                     int(args.open_hold_frames),
                 )
                 # HDF5 slices are exclusive at the right edge.  Retain the first
-                # confirmed-open frame, but not the look-ahead frames used to prove
-                # it is a real release rather than threshold noise.
-                cutoff = open_frame + 1
+                # confirmed-open frame plus the requested number of raw frames.
+                cutoff = min(
+                    len(action),
+                    open_frame + 1 + int(args.post_confirmed_open_frames),
+                )
                 metadata = {
                     "source": os.path.abspath(source_path),
                     "source_frames": len(action),
                     "cutoff_frames": cutoff,
-                    "final_open_frame": event,
+                    "selected_open_frame": event,
+                    "selected_open_event_index": int(args.open_event_index),
                     "confirmed_open_frame": open_frame,
                     "detected_open_events": event_count,
                     "open_threshold": float(args.open_threshold),
                     "open_hold_frames": int(args.open_hold_frames),
+                    "post_confirmed_open_frames": int(
+                        args.post_confirmed_open_frames
+                    ),
                 }
                 virtual_slice(
                     source_path,
