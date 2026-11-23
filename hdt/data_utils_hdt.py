@@ -16,7 +16,11 @@ import torchvision.transforms.v2
 from hdt.constants import *
 
 import hdt.inference_utils
-from hdt.action_representation import ACTION_REPRESENTATIONS, convert_action_chunk
+from hdt.action_representation import (
+    ACTION_REPRESENTATIONS,
+    convert_action_chunk,
+    rotation_6d_to_matrix,
+)
 
 EARLY_JUMP_CHECK_SLICES = (
     OUTPUT_HEAD_EEF[0:3],
@@ -98,7 +102,10 @@ class EpisodicDataset(torch.utils.data.Dataset):
                  visual_aug_config=None,
                  hat_conditioning_config=None,
                  action_representation="original",
-                 robot_target_fps=30.0):
+                 robot_target_fps=30.0,
+                 experiment_variant="baseline",
+                 grip_stats=None,
+                 action_dim=ACTION_STATE_VEC_SIZE):
         super(EpisodicDataset).__init__()
         # Future-DINO: when disabled (default) every code path below is byte-for-byte
         # the original one and read_one() still returns the original 5-tuple.
@@ -148,6 +155,10 @@ class EpisodicDataset(torch.utils.data.Dataset):
         self.robot_target_fps = (
             None if robot_target_fps is None else float(robot_target_fps)
         )
+        self.experiment_variant = str(experiment_variant)
+        self.action_dim = int(action_dim)
+        self.sonic_native = self.experiment_variant == "sonic_native"
+        self.grip_enabled = self.experiment_variant == "wo_fingertips"
         if self.robot_target_fps is not None and self.robot_target_fps <= 0:
             raise ValueError("robot_target_fps must be positive or None")
 
@@ -171,6 +182,19 @@ class EpisodicDataset(torch.utils.data.Dataset):
             [max(1, len(indices) - (self.action_representation == 'relative_chunk'))
              for indices in self.episode_frame_indices], dtype=np.int64)
         self.cumulative_len = np.cumsum(self.episode_len_list)
+
+        # The one-dimensional grip ablation uses source-specific TRAIN statistics.
+        # Validation is required to receive the already-computed train mapping; it
+        # must never estimate min/max from held-out episodes.
+        self.grip_stats = None
+        if self.grip_enabled:
+            if grip_stats is None:
+                if not self.train:
+                    raise ValueError(
+                        "wo_fingertips validation requires grip_stats from train split")
+                self.grip_stats = self._compute_grip_stats()
+            else:
+                self.grip_stats = dict(grip_stats)
 
         self.sum_dataset_len_l = np.cumsum([0] + [np.sum(episode_len) for episode_len in self.episode_len_list])
         
@@ -204,8 +228,10 @@ class EpisodicDataset(torch.utils.data.Dataset):
                                     actual_cam_name = 'left'
                                 elif 'observation.image.right' in root:
                                     actual_cam_name = 'right'
+                                elif 'observation.image.ego_view' in root:
+                                    actual_cam_name = 'ego_view'
                                 else:
-                                    raise KeyError(f"None of the expected cameras (top, left, right) found in {single_hdf_path}")
+                                    raise KeyError(f"None of the expected cameras (top, left, right, ego_view) found in {single_hdf_path}")
                             self.cached_hdf_dict[single_hdf_path][f'observation.image.{cam_name}'] = root[f'observation.image.{actual_cam_name}'][()]
                         self.cached_hdf_dict[single_hdf_path][self.action_str] =  root[self.action_str][()]
                         self.cached_hdf_dict[single_hdf_path]['attrs'] = {k: v for k, v in root.attrs.items()}
@@ -425,6 +451,91 @@ class EpisodicDataset(torch.utils.data.Dataset):
         logical_ts = min(max(int(logical_ts), 0), len(timeline) - 1)
         return int(timeline[logical_ts])
 
+    @staticmethod
+    def _grip_source_key(path):
+        return os.path.abspath(os.path.dirname(path))
+
+    @staticmethod
+    def _raw_grip_distances(actions):
+        """Return [N,2] thumb-tip to index-tip distances in metres."""
+        actions = np.asarray(actions)
+        values = []
+        for offset in (int(OUTPUT_LEFT_KEYPOINTS[0]),
+                       int(OUTPUT_RIGHT_KEYPOINTS[0])):
+            points = actions[..., offset:offset + 18].reshape(
+                actions.shape[:-1] + (6, 3))
+            # Retarget order is [palm origin, thumb, index, middle, ring, pinky].
+            values.append(np.linalg.norm(points[..., 1, :] - points[..., 2, :],
+                                         axis=-1))
+        return np.stack(values, axis=-1).astype(np.float32)
+
+    def _compute_grip_stats(self):
+        extrema = {}
+        for index, path in enumerate(self.dataset_paths):
+            key = self._grip_source_key(path)
+            with h5py.File(path, "r") as root:
+                actions = np.asarray(root[self.action_str][
+                    self.episode_frame_indices[index]], dtype=np.float32)
+            grip = self._raw_grip_distances(actions)
+            if key not in extrema:
+                extrema[key] = {
+                    "min": grip.min(axis=0), "max": grip.max(axis=0),
+                    "frames": int(len(grip)),
+                }
+            else:
+                extrema[key]["min"] = np.minimum(extrema[key]["min"],
+                                                   grip.min(axis=0))
+                extrema[key]["max"] = np.maximum(extrema[key]["max"],
+                                                   grip.max(axis=0))
+                extrema[key]["frames"] += int(len(grip))
+
+        result = {}
+        for key, row in extrema.items():
+            span = row["max"] - row["min"]
+            # The left hand is unused in these locomotion tasks. Some sources
+            # therefore contain a constant geometric left hand even when an
+            # auxiliary 6-D recorder command changes. Treat that unsupervised
+            # channel as fully open, as explicitly approved for this experiment.
+            left_constant_open = bool(span[0] < 1e-6)
+            if span[1] < 1e-6:
+                raise RuntimeError(
+                    "Degenerate RIGHT grip range requires a raw Inspire-command audit "
+                    f"before training: source={key}, min={row['min'].tolist()}, "
+                    f"max={row['max'].tolist()}")
+            result[key] = {
+                "left_min_m": float(row["min"][0]),
+                "left_max_m": float(row["max"][0]),
+                "left_constant_open": left_constant_open,
+                "right_min_m": float(row["min"][1]),
+                "right_max_m": float(row["max"][1]),
+                "train_frames": int(row["frames"]),
+            }
+        return result
+
+    def _write_grip_labels(self, path, absolute, encoded):
+        if not self.grip_enabled or len(absolute) == 0:
+            return encoded
+        key = self._grip_source_key(path)
+        if key not in self.grip_stats:
+            raise KeyError(f"No train-split grip statistics for source {key}")
+        row = self.grip_stats[key]
+        limits = np.asarray([
+            [row["left_min_m"], row["left_max_m"]],
+            [row["right_min_m"], row["right_max_m"]],
+        ], dtype=np.float32)
+        distance = self._raw_grip_distances(absolute)
+        denominator = limits[:, 1] - limits[:, 0]
+        denominator = np.where(denominator < 1e-6, 1.0, denominator)
+        grip = np.clip((distance - limits[:, 0]) / denominator, 0.0, 1.0)
+        if row.get("left_constant_open", False):
+            grip[..., 0] = 1.0
+        result = np.array(encoded, copy=True)
+        # Deliberately written AFTER relative conversion: these two scalars stay
+        # absolute [0,1] even if a future SAIL checkpoint uses relative_chunk.
+        result[..., int(OUTPUT_LEFT_KEYPOINTS[0])] = grip[..., 0]
+        result[..., int(OUTPUT_RIGHT_KEYPOINTS[0])] = grip[..., 1]
+        return result
+
     def _compute_valid_start_list(self):
         valid_starts = np.zeros(len(self.dataset_paths), dtype=np.int64)
         if not self.auto_trim_dirty_start:
@@ -437,7 +548,12 @@ class EpisodicDataset(torch.utils.data.Dataset):
                     if self.action_str not in root:
                         continue
                     n = min(self.dirty_start_check_frames, int(root[self.action_str].shape[0]))
-                    actions = root[self.action_str][:n]
+                    # SONIC-native labels are quantized latent codes, so applying
+                    # Cartesian jump detection to their first fields is meaningless.
+                    # The input state is identical to SAIL and therefore gives the
+                    # same dirty-start decision as the corresponding SAIL episode.
+                    key = 'observation.state' if self.sonic_native else self.action_str
+                    actions = root[key][:n]
                 valid_start = _detect_valid_start_from_actions(
                     actions,
                     check_frames=self.dirty_start_check_frames,
@@ -556,6 +672,15 @@ class EpisodicDataset(torch.utils.data.Dataset):
         anchor = np.asarray(states[raw_start], dtype=np.float32)
         remaining = int(self.episode_len_list[index]) - int(logical_ts)
 
+        if self.sonic_native:
+            if self.action_representation != 'original':
+                raise ValueError("sonic_native supports only original actions")
+            # The anchor follows SAIL's common 30-Hz logical timeline, while the
+            # native SONIC target stays on the recorded 50-Hz timeline.  A 167-step
+            # chunk is therefore ~3.34 s, matching SAIL's 100/30 s horizon.
+            stop = min(raw_start + self.chunk_size, int(actions.shape[0]))
+            return np.asarray(actions[raw_start:stop], dtype=np.float32), anchor
+
         if self.action_representation == 'relative_chunk':
             if 'human' in embodiment.lower():
                 # Human trajectories are intentionally slowed in action space.  A
@@ -569,7 +694,9 @@ class EpisodicDataset(torch.utils.data.Dataset):
                 timeline = self.episode_frame_indices[index]
                 raw_indices = timeline[int(logical_ts) + 1:int(logical_ts) + 1 + self.chunk_size]
                 chunk = np.asarray(actions[raw_indices], dtype=np.float32)
-            return convert_action_chunk(anchor, chunk, self.action_representation), anchor
+            encoded = convert_action_chunk(anchor, chunk, self.action_representation)
+            return self._write_grip_labels(
+                self.dataset_paths[index], chunk, encoded), anchor
 
         if 'human' in embodiment.lower():
             raw = np.asarray(actions[raw_start:raw_start + self.chunk_size])
@@ -582,7 +709,8 @@ class EpisodicDataset(torch.utils.data.Dataset):
             timeline = self.episode_frame_indices[index]
             raw_indices = timeline[int(logical_ts):int(logical_ts) + self.chunk_size]
             chunk = np.asarray(actions[raw_indices], dtype=np.float32)
-        return chunk, anchor
+        return self._write_grip_labels(
+            self.dataset_paths[index], chunk, chunk), anchor
 
     @staticmethod
     def _update_moments(accumulator, values):
@@ -617,8 +745,8 @@ class EpisodicDataset(torch.utils.data.Dataset):
             norm_stats_dict.setdefault(embodiment, {
                 'action_moments': {
                     'count': 0,
-                    'sum': np.zeros(ACTION_STATE_VEC_SIZE, dtype=np.float64),
-                    'sum_sq': np.zeros(ACTION_STATE_VEC_SIZE, dtype=np.float64),
+                    'sum': np.zeros(self.action_dim, dtype=np.float64),
+                    'sum_sq': np.zeros(self.action_dim, dtype=np.float64),
                 },
                 'state_moments': {
                     'count': 0,
@@ -639,8 +767,12 @@ class EpisodicDataset(torch.utils.data.Dataset):
                 states[timeline[:int(self.episode_len_list[index])]])
 
             if self.action_representation == 'original':
+                action_rows = (actions[int(timeline[0]):]
+                               if self.sonic_native else actions[timeline])
+                action_rows = self._write_grip_labels(
+                    hdf_path, action_rows, action_rows)
                 self._update_moments(
-                    norm_stats_dict[embodiment]['action_moments'], actions[timeline])
+                    norm_stats_dict[embodiment]['action_moments'], action_rows)
             else:
                 # Relative values depend on both the anchor and the future horizon,
                 # so their statistics must be measured after conversion rather than
@@ -660,7 +792,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
                             actions,
                             np.minimum(positions, int(actions.shape[0]) - 1).reshape(-1)
                         ).reshape(
-                                len(logical), self.chunk_size, ACTION_STATE_VEC_SIZE)
+                                len(logical), self.chunk_size, self.action_dim)
                     else:
                         future_logical = logical[:, None] + horizon[None, :]
                         valid = future_logical < len(timeline)
@@ -669,6 +801,8 @@ class EpisodicDataset(torch.utils.data.Dataset):
                         future = actions[future_raw]
                     relative = convert_action_chunk(
                         anchors, future, self.action_representation)
+                    relative = self._write_grip_labels(
+                        hdf_path, future, relative)
                     self._update_moments(
                         norm_stats_dict[embodiment]['action_moments'], relative[valid])
 
@@ -687,6 +821,58 @@ class EpisodicDataset(torch.utils.data.Dataset):
             })
 
         return norm_stats_dict, list(self.source_embodiment_list)
+
+    def deployment_metadata(self):
+        """Constants derived exclusively from measured train-split states."""
+        metadata = {"variant": self.experiment_variant,
+                    "state_dim": 128, "action_dim": self.action_dim}
+        if self.experiment_variant in ("wo_root", "hat_native"):
+            offsets = []
+            vertical = []
+            for index, path in enumerate(self.dataset_paths):
+                with h5py.File(path, "r") as root:
+                    state = np.asarray(root["observation.state"][
+                        self.episode_frame_indices[index]], dtype=np.float64)
+                head_rotation = rotation_6d_to_matrix(
+                    state[:, OUTPUT_HEAD_EEF[3:9]])
+                yaw = np.arctan2(head_rotation[:, 1, 0],
+                                 head_rotation[:, 0, 0])
+                delta = state[:, OUTPUT_WAIST[:2]] - state[:, OUTPUT_HEAD_EEF[:2]]
+                c, s = np.cos(yaw), np.sin(yaw)
+                offsets.append(np.stack((c * delta[:, 0] + s * delta[:, 1],
+                                         -s * delta[:, 0] + c * delta[:, 1]),
+                                        axis=-1))
+                vertical.append(state[:, OUTPUT_HEAD_EEF[2]] -
+                                state[:, OUTPUT_WAIST[2]])
+            offset = np.concatenate(offsets, axis=0)
+            dz = np.concatenate(vertical, axis=0)
+            metadata["root_from_head"] = {
+                "offset_xy_head_yaw_m": offset.mean(axis=0).tolist(),
+                "d_head_pelvis_m": float(np.median(dz)),
+                "train_frame_count": int(len(dz)),
+                "rotation": "head_yaw_with_zero_roll_pitch",
+                "network_root_dims_ignored": [89, 98],
+            }
+        if self.sonic_native:
+            metadata.update({
+                "output_interface": "sonic_native",
+                "token_dims": [0, 64],
+                "left_hand_dims": [64, 70],
+                "right_hand_dims": [70, 76],
+                "native_action_fps": 50.0,
+                "chunk_execution": "latency_trim_then_direct_replace",
+                "token_blending": False,
+            })
+        if self.experiment_variant == "wo_fingertips":
+            metadata["grip"] = {
+                "dims": {"left": 10, "right": 40},
+                "source_train_minmax": self.grip_stats,
+                "clip": [0.0, 1.0],
+                "u_open": {"left": [1.0] * 6, "right": [1.0] * 6},
+                "u_fist_suggested": {"left": None, "right": None},
+                "u_fist_status": "pending_user_confirmation",
+            }
+        return metadata
     
     def __len__(self):
         return np.iinfo(int).max
@@ -704,7 +890,9 @@ class EpisodicDataset(torch.utils.data.Dataset):
             return 'left'
         if 'observation.image.right' in root:
             return 'right'
-        raise KeyError(f"None of the expected cameras (top, left, right) found in {single_hdf_path}")
+        if 'observation.image.ego_view' in root:
+            return 'ego_view'
+        raise KeyError(f"None of the expected cameras (top, left, right, ego_view) found in {single_hdf_path}")
 
     def _read_cam_images_at(self, root, raw_ts, single_hdf_path):
         """
@@ -899,8 +1087,10 @@ class EpisodicDataset(torch.utils.data.Dataset):
                         actual_cam_name = 'left'
                     elif 'observation.image.right' in root:
                         actual_cam_name = 'right'
+                    elif 'observation.image.ego_view' in root:
+                        actual_cam_name = 'ego_view'
                     else:
-                        raise KeyError(f"None of the expected cameras (top, left, right) found in {single_hdf_path}")
+                        raise KeyError(f"None of the expected cameras (top, left, right, ego_view) found in {single_hdf_path}")
                 
                 image_dict[cam_name] = root[f'observation.image.{actual_cam_name}'][raw_start_ts]
                 if len(image_dict[cam_name].shape) == 1:
@@ -1178,7 +1368,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
             conditioning_dict["flow_anchor_valid"] = flow_anchor_valid
 
         from auxiliary_tasks import VARIANT, dataset_aux
-        if VARIANT in ('readiness', 'geometry'):
+        if VARIANT in ('readiness', 'geometry', 'wo_root'):
             conditioning_dict.update(dataset_aux(self, index, int(start_ts)))
 
         if self.future_image_enabled:
@@ -1261,6 +1451,9 @@ def gather_hdf_paths(base_dir, task_names, camera_names=None, extra_base_dirs=No
                                         has_camera = True
                                         break
                                     if 'observation.image.left' in root or 'observation.image.right' in root:
+                                        has_camera = True
+                                        break
+                                    if 'observation.image.ego_view' in root:
                                         has_camera = True
                                         break
                                 if not has_camera:
@@ -1422,7 +1615,9 @@ def load_data(base_dir,
               visual_aug_config=None,
               hat_conditioning_config=None,
               action_representation="original",
-              robot_target_fps=30.0):
+              robot_target_fps=30.0,
+              experiment_variant="baseline",
+              action_dim=ACTION_STATE_VEC_SIZE):
 
 
     assert os.path.exists(dataset_json_path)
@@ -1432,7 +1627,9 @@ def load_data(base_dir,
     
     dataset_dict = {}
     
-    for split in dataset_config:
+    for split in ("train", "val"):
+        if split not in dataset_config:
+            raise ValueError(f"dataset config is missing required split {split!r}")
         assert split in ['train', 'val'], "Only train and val splits now supported, you gave {}".format(split)
         task_names = dataset_config[split]
         # 对任务列表进行排序，支持字典和字符串格式
@@ -1475,7 +1672,13 @@ def load_data(base_dir,
                                     visual_aug_config=visual_aug_config,
                                     hat_conditioning_config=hat_conditioning_config,
                                     action_representation=action_representation,
-                                    robot_target_fps=robot_target_fps)
+                                    robot_target_fps=robot_target_fps,
+                                    experiment_variant=experiment_variant,
+                                    action_dim=action_dim,
+                                    grip_stats=(
+                                        dataset_dict["train"].grip_stats
+                                        if split == "val" and experiment_variant == "wo_fingertips"
+                                        else None))
     
     train_dataset = dataset_dict['train']
     val_dataset = dataset_dict['val']
