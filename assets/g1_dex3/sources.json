@@ -1,0 +1,26 @@
+{
+  "unitree_ros_commit": "3ae893d905d11795ddf1075825ee5010364a1109",
+  "xr_teleoperate_commit": "817fb00c63cde15e5f24a0f8fa08e1e33ed89d3b",
+  "sources": {
+    "g1_29dof_with_hand_rev_1_0.urdf": {
+      "url": "https://github.com/unitreerobotics/unitree_ros/blob/3ae893d905d11795ddf1075825ee5010364a1109/robots/g1_description/g1_29dof_with_hand_rev_1_0.urdf",
+      "sha256": "97da67732d067c3147fc5fb7b7bafc8982718f4e7f8c92ff82266a4d9c07200d"
+    },
+    "LICENSE": {
+      "url": "https://github.com/unitreerobotics/unitree_ros/blob/3ae893d905d11795ddf1075825ee5010364a1109/LICENSE",
+      "sha256": "84aac59fd3246e3ddc49d1387644e8fcf43b0def4f0b9fe687f372e90446df2d"
+    },
+    "unitree_dex3_left.urdf": {
+      "url": "https://github.com/unitreerobotics/xr_teleoperate/blob/817fb00c63cde15e5f24a0f8fa08e1e33ed89d3b/assets/unitree_hand/unitree_dex3_left.urdf",
+      "sha256": "569e4d8ca55b1b76e51cd41df3cd6f655c5475a3e02e908f673f999759c51bd0"
+    },
+    "unitree_dex3_right.urdf": {
+      "url": "https://github.com/unitreerobotics/xr_teleoperate/blob/817fb00c63cde15e5f24a0f8fa08e1e33ed89d3b/assets/unitree_hand/unitree_dex3_right.urdf",
+      "sha256": "4e36e939466d386524d38079f8e2ff84d9dd4d3a7f8db6319374067970ad7075"
+    },
+    "LICENSE.xr_teleoperate": {
+      "url": "https://github.com/unitreerobotics/xr_teleoperate/blob/817fb00c63cde15e5f24a0f8fa08e1e33ed89d3b/LICENSE",
+      "sha256": "63762ccebdb836cf2bae6b1ae0de526e7499dbf45e554c790ebc45942cce3e36"
+    }
+  }
+}

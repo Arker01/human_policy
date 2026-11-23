@@ -1,0 +1,147 @@
+{
+  "status": "pass",
+  "checked_at": "2026-11-06T00:44:20.084428+08:00",
+  "tasks": {
+    "block_stacking": {
+      "dataset_path": "/mnt/nvme0n1/lirui_backup/public_data/block/episodes_g1_fov125",
+      "episodes": 301,
+      "frames": 281196,
+      "train": 271,
+      "val": 30,
+      "jpeg_frames_decoded": 903,
+      "state_action_exactly_equal_previous": true,
+      "train_val_membership_exactly_equal_previous": true,
+      "no_train_val_overlap": true,
+      "all_files_covered": true,
+      "all_numeric_values_finite": true,
+      "left_eef_and_three_fingers_valid": true,
+      "max_left_eef_range_m": [
+        0.22471892833709717,
+        0.19622349739074707,
+        0.39600905776023865
+      ],
+      "transform": {
+        "version": "g1_fov125_v1",
+        "crop_xyxy_exclusive": [
+          32,
+          40,
+          288,
+          232
+        ],
+        "input_hw": [
+          240,
+          320
+        ],
+        "output_hw": [
+          240,
+          320
+        ],
+        "zoom": 1.25,
+        "interpolation": "cv2.INTER_LINEAR",
+        "jpeg_quality": 95,
+        "channel_conversion": "none; preserve direct-imdecode training convention",
+        "cameras": [
+          "left",
+          "top (hard-link alias of left)"
+        ],
+        "deployment_HAT_CAMERA_SCALE": 1.0
+      },
+      "processing_report_sha256": "e4e7638c819c574fec3917bfeb0e71dc816f4abbb9344ec8e0ac21da63b87a4d",
+      "content_hash_checked_episode": "episode_000000.hdf5"
+    },
+    "pick_apple": {
+      "dataset_path": "/mnt/nvme0n1/lirui_backup/public_data/pick_apple/episodes_g1_fov125",
+      "episodes": 201,
+      "frames": 152569,
+      "train": 181,
+      "val": 20,
+      "jpeg_frames_decoded": 603,
+      "state_action_exactly_equal_previous": true,
+      "train_val_membership_exactly_equal_previous": true,
+      "no_train_val_overlap": true,
+      "all_files_covered": true,
+      "all_numeric_values_finite": true,
+      "left_eef_and_three_fingers_valid": true,
+      "max_left_eef_range_m": [
+        0.22386838495731354,
+        0.23288007080554962,
+        0.24774688482284546
+      ],
+      "transform": {
+        "version": "g1_fov125_v1",
+        "crop_xyxy_exclusive": [
+          32,
+          40,
+          288,
+          232
+        ],
+        "input_hw": [
+          240,
+          320
+        ],
+        "output_hw": [
+          240,
+          320
+        ],
+        "zoom": 1.25,
+        "interpolation": "cv2.INTER_LINEAR",
+        "jpeg_quality": 95,
+        "channel_conversion": "none; preserve direct-imdecode training convention",
+        "cameras": [
+          "left",
+          "top (hard-link alias of left)"
+        ],
+        "deployment_HAT_CAMERA_SCALE": 1.0
+      },
+      "processing_report_sha256": "d6b0d30fd3a42aeaaf2cb3816ef29322aa731e65a6c843baec35ec2bb5d7c572",
+      "content_hash_checked_episode": "episode_000000.hdf5"
+    },
+    "pouring": {
+      "dataset_path": "/mnt/nvme0n1/lirui_backup/public_data/pour/episodes_g1_fov125",
+      "episodes": 311,
+      "frames": 121587,
+      "train": 280,
+      "val": 31,
+      "jpeg_frames_decoded": 933,
+      "state_action_exactly_equal_previous": true,
+      "train_val_membership_exactly_equal_previous": true,
+      "no_train_val_overlap": true,
+      "all_files_covered": true,
+      "all_numeric_values_finite": true,
+      "left_eef_and_three_fingers_valid": true,
+      "max_left_eef_range_m": [
+        0.04399380087852478,
+        0.05133520066738129,
+        0.04724147915840149
+      ],
+      "transform": {
+        "version": "g1_fov125_v1",
+        "crop_xyxy_exclusive": [
+          32,
+          40,
+          288,
+          232
+        ],
+        "input_hw": [
+          240,
+          320
+        ],
+        "output_hw": [
+          240,
+          320
+        ],
+        "zoom": 1.25,
+        "interpolation": "cv2.INTER_LINEAR",
+        "jpeg_quality": 95,
+        "channel_conversion": "none; preserve direct-imdecode training convention",
+        "cameras": [
+          "left",
+          "top (hard-link alias of left)"
+        ],
+        "deployment_HAT_CAMERA_SCALE": 1.0
+      },
+      "processing_report_sha256": "7494649aea9eb30bde29f6a8ab954793a3ba451d057bb88c641199de6b98928d",
+      "content_hash_checked_episode": "episode_000000.hdf5"
+    }
+  }
+}

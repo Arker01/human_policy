@@ -1,0 +1,72 @@
+{
+  "original": {
+    "samples": 3,
+    "batch_image": [
+      3,
+      1,
+      3,
+      240,
+      320
+    ],
+    "batch_state": [
+      3,
+      128
+    ],
+    "batch_action": [
+      3,
+      16,
+      128
+    ],
+    "batch_future": [
+      3,
+      1,
+      3,
+      240,
+      320
+    ],
+    "batch_history": [
+      3,
+      2,
+      1,
+      3,
+      240,
+      320
+    ],
+    "all_finite": true
+  },
+  "relative_chunk": {
+    "samples": 3,
+    "batch_image": [
+      3,
+      1,
+      3,
+      240,
+      320
+    ],
+    "batch_state": [
+      3,
+      128
+    ],
+    "batch_action": [
+      3,
+      16,
+      128
+    ],
+    "batch_future": [
+      3,
+      1,
+      3,
+      240,
+      320
+    ],
+    "batch_history": [
+      3,
+      2,
+      1,
+      3,
+      240,
+      320
+    ],
+    "all_finite": true
+  }
+}

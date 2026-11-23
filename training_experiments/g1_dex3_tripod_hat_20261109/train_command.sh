@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd /home/aigc/human_policy
+export PYTHONPATH=/home/aigc/human_policy/training_experiments/g1_dex3_tripod_hat_20261109/source:/home/aigc/human_policy/training_experiments/g1_dex3_tripod_hat_20261109/source/hdt:/home/aigc/human_policy/training_experiments/g1_dex3_tripod_hat_20261109/source/hdt/detr:/home/aigc/human_policy
+export OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 WANDB_MODE=disabled MPLBACKEND=Agg PYTHONDONTWRITEBYTECODE=1
+exec /home/aigc/miniconda/envs/human_policy/bin/python -u /home/aigc/human_policy/training_experiments/g1_dex3_tripod_hat_20261109/source/hdt/main.py --batch_size 64 --num_epochs 100000 --lr 1e-5 --chunk_size 100 --seed 0 --exptid /mnt/nvme0n1/human_policy_ckpt/g1_dex3_tripod_hat_20261109/tripod --dataset_json_path /home/aigc/human_policy/training_experiments/g1_dex3_tripod_hat_20261109/configs/tripod.json --model_cfg_path /home/aigc/human_policy/training_experiments/g1_dex3_tripod_hat_20261109/configs/model.yaml --base_dir /home/aigc/human_policy/data --cond_mask_prob 0.0 --no_wandb --human_slow_down_factor 4 --use_future_dino_head --future_dino_weight 0.0 --future_dino_warmup_steps 0 --future_dino_horizon 45 --future_dino_ablation none --robot_target_fps 30 --action_representation original --lag_aug --visual_aug --zero_state_dims 98:128

@@ -1,0 +1,17 @@
+{
+    "train": [
+        "106-grasping-zedbox-human_2024-11-13_15-27-43",
+        "107-grasping-chocolate-human_2024-11-13_15-15-09",
+        "108-grasping-water-human _2024-11-13_15-00-20",
+        "109-grasping-mtn-human_2024-11-13_14-40-07",
+        "302-grasp_coke_random-2024_12_09-21_39_30",
+        "303-grasp_coke_random-2024_12_12-19_13_53",
+        "304-grasp_coke_random-2024_12_12-19_58_36",
+        "1400_grasping_three_items_zed-2025_01_23-20_13_12",
+        "1401_grasping_three_items_2025-01-23_19-24-05",
+        "2061_rw_pepsi_grasp_alan_2025_02_15-16_27_13"
+    ],
+    "val": [
+        "901-grasping-val-2024_11_18-17_36_04"
+    ]
+}

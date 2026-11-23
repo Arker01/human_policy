@@ -1,0 +1,6594 @@
+{
+  "format": "unitree_dex3_hat_v1",
+  "conversion_signature": "dda327bd3efc692675b57ba04911e78c41abe9f13c888c29f0caf64f6a723e15",
+  "options": {
+    "width": 320,
+    "height": 240,
+    "jpeg_quality": 80,
+    "signature": "dda327bd3efc692675b57ba04911e78c41abe9f13c888c29f0caf64f6a723e15"
+  },
+  "model_sha256": {
+    "unitree_dex3_left.urdf": "569e4d8ca55b1b76e51cd41df3cd6f655c5475a3e02e908f673f999759c51bd0",
+    "unitree_dex3_right.urdf": "4e36e939466d386524d38079f8e2ff84d9dd4d3a7f8db6319374067970ad7075",
+    "g1_29dof_with_hand_rev_1_0.urdf": "97da67732d067c3147fc5fb7b7bafc8982718f4e7f8c92ff82266a4d9c07200d"
+  },
+  "tasks": {
+    "block_stacking": {
+      "source": "/mnt/nvme0n1/lirui_backup/public_data/https-huggingface-co-datasets-unitreerobotics-g1-3/outputs/datasets/G1_Dex3_BlockStacking_Dataset",
+      "expected_episodes": 301,
+      "expected_frames": 281196,
+      "episodes": [
+        {
+          "episode_index": 0,
+          "frames": 1173,
+          "bytes": 46423763,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 1,
+          "frames": 962,
+          "bytes": 38425836,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 2,
+          "frames": 1196,
+          "bytes": 48447805,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 3,
+          "frames": 1019,
+          "bytes": 40874655,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 4,
+          "frames": 1099,
+          "bytes": 44710243,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 5,
+          "frames": 1131,
+          "bytes": 44863580,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 6,
+          "frames": 861,
+          "bytes": 33313257,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 7,
+          "frames": 1034,
+          "bytes": 39782138,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 8,
+          "frames": 1023,
+          "bytes": 39246552,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 9,
+          "frames": 1254,
+          "bytes": 50322130,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 10,
+          "frames": 1091,
+          "bytes": 43110767,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 11,
+          "frames": 1008,
+          "bytes": 39738247,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 12,
+          "frames": 1150,
+          "bytes": 44939903,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 13,
+          "frames": 1015,
+          "bytes": 40105282,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 14,
+          "frames": 973,
+          "bytes": 38327505,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 15,
+          "frames": 885,
+          "bytes": 36425990,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 16,
+          "frames": 1016,
+          "bytes": 40513198,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 17,
+          "frames": 919,
+          "bytes": 35458935,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 18,
+          "frames": 985,
+          "bytes": 39452150,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 19,
+          "frames": 928,
+          "bytes": 36627615,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 20,
+          "frames": 1041,
+          "bytes": 41252898,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 21,
+          "frames": 1019,
+          "bytes": 41001223,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 22,
+          "frames": 913,
+          "bytes": 36478886,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 23,
+          "frames": 933,
+          "bytes": 36745890,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 24,
+          "frames": 980,
+          "bytes": 38355633,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 25,
+          "frames": 1092,
+          "bytes": 43516287,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 26,
+          "frames": 956,
+          "bytes": 37194014,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 27,
+          "frames": 969,
+          "bytes": 38291740,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 28,
+          "frames": 1236,
+          "bytes": 49051187,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 29,
+          "frames": 928,
+          "bytes": 36541701,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 30,
+          "frames": 910,
+          "bytes": 35922722,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 31,
+          "frames": 1035,
+          "bytes": 41136913,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 32,
+          "frames": 948,
+          "bytes": 36535750,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 33,
+          "frames": 1053,
+          "bytes": 40891256,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 34,
+          "frames": 948,
+          "bytes": 37218508,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 35,
+          "frames": 990,
+          "bytes": 39222038,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 36,
+          "frames": 1008,
+          "bytes": 40038661,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 37,
+          "frames": 905,
+          "bytes": 36102828,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 38,
+          "frames": 810,
+          "bytes": 31995661,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 39,
+          "frames": 874,
+          "bytes": 35271456,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 40,
+          "frames": 1031,
+          "bytes": 41630636,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 41,
+          "frames": 1014,
+          "bytes": 40763973,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 42,
+          "frames": 913,
+          "bytes": 36024572,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 43,
+          "frames": 866,
+          "bytes": 34992557,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 44,
+          "frames": 900,
+          "bytes": 36114087,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 45,
+          "frames": 885,
+          "bytes": 34472803,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 46,
+          "frames": 835,
+          "bytes": 33698620,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 47,
+          "frames": 835,
+          "bytes": 33915425,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 48,
+          "frames": 882,
+          "bytes": 34658778,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 49,
+          "frames": 873,
+          "bytes": 34579727,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 50,
+          "frames": 1217,
+          "bytes": 48977374,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 51,
+          "frames": 796,
+          "bytes": 30732240,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 52,
+          "frames": 921,
+          "bytes": 35779252,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 53,
+          "frames": 965,
+          "bytes": 38187070,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 54,
+          "frames": 1005,
+          "bytes": 39955221,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 55,
+          "frames": 885,
+          "bytes": 34945460,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 56,
+          "frames": 905,
+          "bytes": 37074249,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 57,
+          "frames": 919,
+          "bytes": 35960793,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 58,
+          "frames": 897,
+          "bytes": 35387758,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 59,
+          "frames": 885,
+          "bytes": 35395859,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 60,
+          "frames": 962,
+          "bytes": 37972870,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 61,
+          "frames": 864,
+          "bytes": 35686480,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 62,
+          "frames": 964,
+          "bytes": 39263162,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 63,
+          "frames": 947,
+          "bytes": 37282112,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 64,
+          "frames": 991,
+          "bytes": 38648714,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 65,
+          "frames": 1033,
+          "bytes": 40321977,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 66,
+          "frames": 954,
+          "bytes": 37401031,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 67,
+          "frames": 897,
+          "bytes": 35587955,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 68,
+          "frames": 878,
+          "bytes": 34533515,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 69,
+          "frames": 907,
+          "bytes": 35294071,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 70,
+          "frames": 916,
+          "bytes": 34863748,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 71,
+          "frames": 920,
+          "bytes": 36659853,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 72,
+          "frames": 836,
+          "bytes": 32952017,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 73,
+          "frames": 1213,
+          "bytes": 47974967,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 74,
+          "frames": 892,
+          "bytes": 34224847,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 75,
+          "frames": 892,
+          "bytes": 35103913,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 76,
+          "frames": 887,
+          "bytes": 35028872,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 77,
+          "frames": 839,
+          "bytes": 33843153,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 78,
+          "frames": 878,
+          "bytes": 34387136,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 79,
+          "frames": 1364,
+          "bytes": 56107801,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 80,
+          "frames": 839,
+          "bytes": 32856268,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 81,
+          "frames": 983,
+          "bytes": 40948147,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 82,
+          "frames": 774,
+          "bytes": 31104025,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 83,
+          "frames": 1070,
+          "bytes": 43496263,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 84,
+          "frames": 900,
+          "bytes": 35180914,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 85,
+          "frames": 758,
+          "bytes": 29078272,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 86,
+          "frames": 845,
+          "bytes": 33146672,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 87,
+          "frames": 773,
+          "bytes": 31508377,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 88,
+          "frames": 995,
+          "bytes": 39420096,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 89,
+          "frames": 879,
+          "bytes": 34592229,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 90,
+          "frames": 1444,
+          "bytes": 57816431,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 91,
+          "frames": 803,
+          "bytes": 32018546,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 92,
+          "frames": 960,
+          "bytes": 38216551,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 93,
+          "frames": 971,
+          "bytes": 37864506,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 94,
+          "frames": 986,
+          "bytes": 37351998,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 95,
+          "frames": 1032,
+          "bytes": 39800032,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 96,
+          "frames": 874,
+          "bytes": 35674986,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 97,
+          "frames": 876,
+          "bytes": 35761419,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 98,
+          "frames": 797,
+          "bytes": 31447701,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 99,
+          "frames": 888,
+          "bytes": 35299416,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 100,
+          "frames": 735,
+          "bytes": 29977979,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 101,
+          "frames": 716,
+          "bytes": 27599874,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 102,
+          "frames": 896,
+          "bytes": 35176906,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 103,
+          "frames": 910,
+          "bytes": 34913988,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 104,
+          "frames": 889,
+          "bytes": 35568759,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 105,
+          "frames": 1027,
+          "bytes": 40549981,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 106,
+          "frames": 730,
+          "bytes": 28229862,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 107,
+          "frames": 920,
+          "bytes": 36456491,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 108,
+          "frames": 720,
+          "bytes": 28087298,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 109,
+          "frames": 745,
+          "bytes": 30290599,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 110,
+          "frames": 884,
+          "bytes": 35662372,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 111,
+          "frames": 843,
+          "bytes": 34968421,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 112,
+          "frames": 805,
+          "bytes": 32306576,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 113,
+          "frames": 725,
+          "bytes": 28884613,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 114,
+          "frames": 950,
+          "bytes": 36232601,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 115,
+          "frames": 1150,
+          "bytes": 44906540,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 116,
+          "frames": 965,
+          "bytes": 38287569,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 117,
+          "frames": 848,
+          "bytes": 31437398,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 118,
+          "frames": 1023,
+          "bytes": 39049812,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 119,
+          "frames": 825,
+          "bytes": 31459321,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 120,
+          "frames": 828,
+          "bytes": 32680316,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 121,
+          "frames": 1054,
+          "bytes": 41250297,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 122,
+          "frames": 887,
+          "bytes": 34186115,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 123,
+          "frames": 899,
+          "bytes": 34634761,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 124,
+          "frames": 924,
+          "bytes": 36259297,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 125,
+          "frames": 1000,
+          "bytes": 38643370,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 126,
+          "frames": 902,
+          "bytes": 35561200,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 127,
+          "frames": 1094,
+          "bytes": 41891746,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 128,
+          "frames": 951,
+          "bytes": 37288808,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 129,
+          "frames": 1015,
+          "bytes": 41079146,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 130,
+          "frames": 924,
+          "bytes": 36947619,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 131,
+          "frames": 931,
+          "bytes": 36628034,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 132,
+          "frames": 1085,
+          "bytes": 44220294,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 133,
+          "frames": 917,
+          "bytes": 36298005,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 134,
+          "frames": 886,
+          "bytes": 35853744,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 135,
+          "frames": 1005,
+          "bytes": 41167785,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 136,
+          "frames": 985,
+          "bytes": 39821554,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 137,
+          "frames": 859,
+          "bytes": 33607670,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 138,
+          "frames": 994,
+          "bytes": 39547196,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 139,
+          "frames": 955,
+          "bytes": 39115726,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 140,
+          "frames": 931,
+          "bytes": 35417386,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 141,
+          "frames": 910,
+          "bytes": 36490892,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 142,
+          "frames": 993,
+          "bytes": 39731470,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 143,
+          "frames": 1006,
+          "bytes": 39513690,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 144,
+          "frames": 933,
+          "bytes": 35925568,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 145,
+          "frames": 881,
+          "bytes": 35008285,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 146,
+          "frames": 979,
+          "bytes": 38501278,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 147,
+          "frames": 911,
+          "bytes": 35517339,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 148,
+          "frames": 1539,
+          "bytes": 60047001,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 149,
+          "frames": 945,
+          "bytes": 37241916,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 150,
+          "frames": 846,
+          "bytes": 33613793,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 151,
+          "frames": 931,
+          "bytes": 35647131,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 152,
+          "frames": 772,
+          "bytes": 28775812,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 153,
+          "frames": 943,
+          "bytes": 35826917,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 154,
+          "frames": 804,
+          "bytes": 30212545,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 155,
+          "frames": 931,
+          "bytes": 34679692,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 156,
+          "frames": 1709,
+          "bytes": 64007125,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 157,
+          "frames": 747,
+          "bytes": 28246448,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 158,
+          "frames": 797,
+          "bytes": 30549026,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 159,
+          "frames": 786,
+          "bytes": 29595416,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 160,
+          "frames": 1070,
+          "bytes": 40175366,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 161,
+          "frames": 890,
+          "bytes": 33033133,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 162,
+          "frames": 861,
+          "bytes": 33018722,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 163,
+          "frames": 842,
+          "bytes": 31698216,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 164,
+          "frames": 853,
+          "bytes": 31849628,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 165,
+          "frames": 739,
+          "bytes": 27793018,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 166,
+          "frames": 816,
+          "bytes": 31342250,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 167,
+          "frames": 1010,
+          "bytes": 38384008,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 168,
+          "frames": 1072,
+          "bytes": 39491005,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 169,
+          "frames": 872,
+          "bytes": 32803331,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 170,
+          "frames": 6791,
+          "bytes": 234908542,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 171,
+          "frames": 906,
+          "bytes": 35694170,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 172,
+          "frames": 919,
+          "bytes": 36049604,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 173,
+          "frames": 849,
+          "bytes": 33195270,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 174,
+          "frames": 904,
+          "bytes": 35017879,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 175,
+          "frames": 851,
+          "bytes": 33270801,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 176,
+          "frames": 898,
+          "bytes": 34950265,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 177,
+          "frames": 856,
+          "bytes": 33367970,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 178,
+          "frames": 790,
+          "bytes": 30442287,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 179,
+          "frames": 900,
+          "bytes": 35580337,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 180,
+          "frames": 745,
+          "bytes": 28474365,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 181,
+          "frames": 918,
+          "bytes": 36134796,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 182,
+          "frames": 870,
+          "bytes": 33130762,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 183,
+          "frames": 878,
+          "bytes": 34680356,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 184,
+          "frames": 1100,
+          "bytes": 43838193,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 185,
+          "frames": 1021,
+          "bytes": 40808148,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 186,
+          "frames": 947,
+          "bytes": 36327603,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 187,
+          "frames": 973,
+          "bytes": 37667983,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 188,
+          "frames": 1052,
+          "bytes": 40530753,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 189,
+          "frames": 832,
+          "bytes": 32465735,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 190,
+          "frames": 891,
+          "bytes": 34037953,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 191,
+          "frames": 712,
+          "bytes": 27317736,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 192,
+          "frames": 776,
+          "bytes": 29810821,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 193,
+          "frames": 769,
+          "bytes": 29754115,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 194,
+          "frames": 841,
+          "bytes": 32436642,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 195,
+          "frames": 1045,
+          "bytes": 39106169,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 196,
+          "frames": 878,
+          "bytes": 33047489,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 197,
+          "frames": 971,
+          "bytes": 37818877,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 198,
+          "frames": 943,
+          "bytes": 35815869,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 199,
+          "frames": 864,
+          "bytes": 32923602,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 200,
+          "frames": 1365,
+          "bytes": 52080634,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 201,
+          "frames": 1086,
+          "bytes": 39670256,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 202,
+          "frames": 832,
+          "bytes": 32090490,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 203,
+          "frames": 781,
+          "bytes": 29808233,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 204,
+          "frames": 868,
+          "bytes": 33692327,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 205,
+          "frames": 895,
+          "bytes": 37125627,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 206,
+          "frames": 833,
+          "bytes": 34361744,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 207,
+          "frames": 1073,
+          "bytes": 44192643,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 208,
+          "frames": 874,
+          "bytes": 36064391,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 209,
+          "frames": 740,
+          "bytes": 30348483,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 210,
+          "frames": 838,
+          "bytes": 33876963,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 211,
+          "frames": 875,
+          "bytes": 35481987,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 212,
+          "frames": 911,
+          "bytes": 36904402,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 213,
+          "frames": 854,
+          "bytes": 35753013,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 214,
+          "frames": 805,
+          "bytes": 33502093,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 215,
+          "frames": 854,
+          "bytes": 35661856,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 216,
+          "frames": 880,
+          "bytes": 36279722,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 217,
+          "frames": 889,
+          "bytes": 36758407,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 218,
+          "frames": 1050,
+          "bytes": 43174162,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 219,
+          "frames": 1041,
+          "bytes": 41503819,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 220,
+          "frames": 917,
+          "bytes": 36866485,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 221,
+          "frames": 789,
+          "bytes": 30082212,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 222,
+          "frames": 951,
+          "bytes": 36963984,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 223,
+          "frames": 843,
+          "bytes": 32378576,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 224,
+          "frames": 886,
+          "bytes": 33130684,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 225,
+          "frames": 826,
+          "bytes": 31030310,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 226,
+          "frames": 1971,
+          "bytes": 74724617,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 227,
+          "frames": 867,
+          "bytes": 31541006,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 228,
+          "frames": 873,
+          "bytes": 33227259,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 229,
+          "frames": 889,
+          "bytes": 33909042,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 230,
+          "frames": 802,
+          "bytes": 32213309,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 231,
+          "frames": 882,
+          "bytes": 33251704,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 232,
+          "frames": 829,
+          "bytes": 32079748,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 233,
+          "frames": 828,
+          "bytes": 32561826,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 234,
+          "frames": 754,
+          "bytes": 28807233,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 235,
+          "frames": 847,
+          "bytes": 33564231,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 236,
+          "frames": 839,
+          "bytes": 31138615,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 237,
+          "frames": 727,
+          "bytes": 27730530,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 238,
+          "frames": 814,
+          "bytes": 30981252,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 239,
+          "frames": 760,
+          "bytes": 28086919,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 240,
+          "frames": 760,
+          "bytes": 29185906,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 241,
+          "frames": 869,
+          "bytes": 34171513,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 242,
+          "frames": 912,
+          "bytes": 34377477,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 243,
+          "frames": 823,
+          "bytes": 32116876,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 244,
+          "frames": 979,
+          "bytes": 38289939,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 245,
+          "frames": 953,
+          "bytes": 38732067,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 246,
+          "frames": 787,
+          "bytes": 30674525,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 247,
+          "frames": 672,
+          "bytes": 25568191,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 248,
+          "frames": 913,
+          "bytes": 35775702,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 249,
+          "frames": 751,
+          "bytes": 29239354,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 250,
+          "frames": 707,
+          "bytes": 27266231,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 251,
+          "frames": 789,
+          "bytes": 29936916,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 252,
+          "frames": 803,
+          "bytes": 30282585,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 253,
+          "frames": 705,
+          "bytes": 26977493,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 254,
+          "frames": 870,
+          "bytes": 33173708,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 255,
+          "frames": 787,
+          "bytes": 30633948,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 256,
+          "frames": 766,
+          "bytes": 30382511,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 257,
+          "frames": 794,
+          "bytes": 29429192,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 258,
+          "frames": 842,
+          "bytes": 32624708,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 259,
+          "frames": 734,
+          "bytes": 28702953,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 260,
+          "frames": 879,
+          "bytes": 33687091,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 261,
+          "frames": 797,
+          "bytes": 30753603,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 262,
+          "frames": 774,
+          "bytes": 29281753,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 263,
+          "frames": 825,
+          "bytes": 32064234,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 264,
+          "frames": 783,
+          "bytes": 31129988,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 265,
+          "frames": 786,
+          "bytes": 30387381,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 266,
+          "frames": 730,
+          "bytes": 28706584,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 267,
+          "frames": 758,
+          "bytes": 29155939,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 268,
+          "frames": 831,
+          "bytes": 33016796,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 269,
+          "frames": 872,
+          "bytes": 33678076,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 270,
+          "frames": 842,
+          "bytes": 33751184,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 271,
+          "frames": 860,
+          "bytes": 32798851,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 272,
+          "frames": 1047,
+          "bytes": 40778944,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 273,
+          "frames": 762,
+          "bytes": 30012567,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 274,
+          "frames": 813,
+          "bytes": 31987594,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 275,
+          "frames": 897,
+          "bytes": 34780440,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 276,
+          "frames": 875,
+          "bytes": 34250595,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 277,
+          "frames": 860,
+          "bytes": 33337027,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 278,
+          "frames": 857,
+          "bytes": 33546127,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 279,
+          "frames": 666,
+          "bytes": 25619099,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 280,
+          "frames": 808,
+          "bytes": 30773867,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 281,
+          "frames": 940,
+          "bytes": 35005750,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 282,
+          "frames": 766,
+          "bytes": 29348493,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 283,
+          "frames": 737,
+          "bytes": 27947377,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 284,
+          "frames": 874,
+          "bytes": 34145261,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 285,
+          "frames": 1096,
+          "bytes": 41497051,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 286,
+          "frames": 988,
+          "bytes": 38045172,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 287,
+          "frames": 923,
+          "bytes": 34315058,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 288,
+          "frames": 798,
+          "bytes": 30406537,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 289,
+          "frames": 968,
+          "bytes": 36056836,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 290,
+          "frames": 923,
+          "bytes": 34970880,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 291,
+          "frames": 1033,
+          "bytes": 38900691,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 292,
+          "frames": 896,
+          "bytes": 32719242,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 293,
+          "frames": 831,
+          "bytes": 30385217,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 294,
+          "frames": 767,
+          "bytes": 29561363,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 295,
+          "frames": 977,
+          "bytes": 36939674,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 296,
+          "frames": 1046,
+          "bytes": 38823295,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 297,
+          "frames": 793,
+          "bytes": 30746787,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 298,
+          "frames": 843,
+          "bytes": 32657763,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 299,
+          "frames": 840,
+          "bytes": 32225395,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 300,
+          "frames": 791,
+          "bytes": 29558257,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        }
+      ],
+      "converted_episodes": 301,
+      "converted_frames": 281196,
+      "bytes": 10970210870,
+      "repaired_joint_samples": 0,
+      "split": {
+        "config": "/home/aigc/human_policy/configs/datasets/unitree_g1_dex3_block_stacking.json",
+        "train_episodes": 271,
+        "val_episodes": 30,
+        "train_episode_indices": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          47,
+          48,
+          49,
+          50,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          62,
+          63,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          93,
+          94,
+          95,
+          96,
+          97,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120,
+          121,
+          122,
+          123,
+          124,
+          125,
+          126,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136,
+          137,
+          138,
+          139,
+          140,
+          141,
+          142,
+          143,
+          144,
+          145,
+          146,
+          147,
+          148,
+          149,
+          150,
+          151,
+          152,
+          153,
+          154,
+          155,
+          156,
+          157,
+          158,
+          159,
+          160,
+          161,
+          162,
+          163,
+          164,
+          165,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172,
+          173,
+          174,
+          175,
+          176,
+          177,
+          178,
+          179,
+          180,
+          181,
+          182,
+          183,
+          185,
+          186,
+          187,
+          188,
+          189,
+          190,
+          191,
+          193,
+          194,
+          195,
+          196,
+          197,
+          198,
+          199,
+          200,
+          201,
+          203,
+          204,
+          205,
+          206,
+          207,
+          208,
+          210,
+          211,
+          212,
+          213,
+          214,
+          215,
+          216,
+          217,
+          218,
+          219,
+          221,
+          222,
+          223,
+          224,
+          225,
+          226,
+          227,
+          228,
+          229,
+          230,
+          231,
+          232,
+          233,
+          234,
+          237,
+          239,
+          240,
+          241,
+          242,
+          243,
+          244,
+          246,
+          247,
+          248,
+          249,
+          250,
+          251,
+          252,
+          253,
+          255,
+          256,
+          257,
+          258,
+          259,
+          260,
+          261,
+          262,
+          263,
+          264,
+          265,
+          266,
+          267,
+          268,
+          269,
+          270,
+          271,
+          273,
+          275,
+          277,
+          278,
+          280,
+          281,
+          283,
+          284,
+          286,
+          287,
+          288,
+          289,
+          290,
+          291,
+          292,
+          293,
+          294,
+          295,
+          296,
+          299,
+          300
+        ],
+        "val_episode_indices": [
+          0,
+          19,
+          26,
+          46,
+          51,
+          61,
+          64,
+          77,
+          92,
+          98,
+          127,
+          166,
+          184,
+          192,
+          202,
+          209,
+          220,
+          235,
+          236,
+          238,
+          245,
+          254,
+          272,
+          274,
+          276,
+          279,
+          282,
+          285,
+          297,
+          298
+        ],
+        "seed": 42
+      }
+    },
+    "pick_apple": {
+      "source": "/mnt/nvme0n1/lirui_backup/public_data/https-huggingface-co-datasets-unitreerobotics-g1-3/outputs/datasets/G1_Dex3_PickApple_Dataset",
+      "expected_episodes": 201,
+      "expected_frames": 152569,
+      "episodes": [
+        {
+          "episode_index": 0,
+          "frames": 1179,
+          "bytes": 26260222,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 1,
+          "frames": 1617,
+          "bytes": 35713614,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 2,
+          "frames": 1008,
+          "bytes": 22467887,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 3,
+          "frames": 895,
+          "bytes": 20267686,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 4,
+          "frames": 819,
+          "bytes": 17756876,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 5,
+          "frames": 1179,
+          "bytes": 25798275,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 6,
+          "frames": 1488,
+          "bytes": 33151196,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 7,
+          "frames": 1504,
+          "bytes": 33002650,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 8,
+          "frames": 1602,
+          "bytes": 33772906,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 9,
+          "frames": 1336,
+          "bytes": 29643948,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 10,
+          "frames": 1134,
+          "bytes": 25435109,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 11,
+          "frames": 1100,
+          "bytes": 23846203,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 12,
+          "frames": 874,
+          "bytes": 19763473,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 13,
+          "frames": 962,
+          "bytes": 20777515,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 14,
+          "frames": 1025,
+          "bytes": 22726858,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 15,
+          "frames": 870,
+          "bytes": 18967411,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 16,
+          "frames": 716,
+          "bytes": 16099241,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 17,
+          "frames": 2557,
+          "bytes": 56635517,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 18,
+          "frames": 1488,
+          "bytes": 32455527,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 19,
+          "frames": 895,
+          "bytes": 19913644,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 20,
+          "frames": 989,
+          "bytes": 21908327,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 21,
+          "frames": 1703,
+          "bytes": 37145977,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 22,
+          "frames": 860,
+          "bytes": 19045313,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 23,
+          "frames": 658,
+          "bytes": 14528520,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 24,
+          "frames": 807,
+          "bytes": 17211173,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 25,
+          "frames": 701,
+          "bytes": 15150104,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 26,
+          "frames": 530,
+          "bytes": 11423085,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 27,
+          "frames": 666,
+          "bytes": 14572214,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 28,
+          "frames": 1542,
+          "bytes": 32470044,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 29,
+          "frames": 990,
+          "bytes": 21928752,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 30,
+          "frames": 725,
+          "bytes": 15940241,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 31,
+          "frames": 720,
+          "bytes": 15354017,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 32,
+          "frames": 611,
+          "bytes": 13402921,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 33,
+          "frames": 1280,
+          "bytes": 27784042,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 34,
+          "frames": 538,
+          "bytes": 11742919,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 35,
+          "frames": 610,
+          "bytes": 13282607,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 36,
+          "frames": 573,
+          "bytes": 12526851,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 37,
+          "frames": 843,
+          "bytes": 18655879,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 38,
+          "frames": 640,
+          "bytes": 14069013,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 39,
+          "frames": 612,
+          "bytes": 13431605,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 40,
+          "frames": 583,
+          "bytes": 12721019,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 41,
+          "frames": 603,
+          "bytes": 13097425,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 42,
+          "frames": 572,
+          "bytes": 12425677,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 43,
+          "frames": 746,
+          "bytes": 16512762,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 44,
+          "frames": 538,
+          "bytes": 11878519,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 45,
+          "frames": 523,
+          "bytes": 11428481,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 46,
+          "frames": 467,
+          "bytes": 10254844,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 47,
+          "frames": 517,
+          "bytes": 11379317,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 48,
+          "frames": 665,
+          "bytes": 14249170,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 49,
+          "frames": 599,
+          "bytes": 12806217,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 50,
+          "frames": 541,
+          "bytes": 11864645,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 51,
+          "frames": 498,
+          "bytes": 10772849,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 52,
+          "frames": 862,
+          "bytes": 18832839,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 53,
+          "frames": 554,
+          "bytes": 11905101,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 54,
+          "frames": 873,
+          "bytes": 19436498,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 55,
+          "frames": 493,
+          "bytes": 10854506,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 56,
+          "frames": 917,
+          "bytes": 20525939,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 57,
+          "frames": 508,
+          "bytes": 11186495,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 58,
+          "frames": 844,
+          "bytes": 18272031,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 59,
+          "frames": 560,
+          "bytes": 12324090,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 60,
+          "frames": 813,
+          "bytes": 18103910,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 61,
+          "frames": 715,
+          "bytes": 15816590,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 62,
+          "frames": 751,
+          "bytes": 16324727,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 63,
+          "frames": 585,
+          "bytes": 12688382,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 64,
+          "frames": 483,
+          "bytes": 10511716,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 65,
+          "frames": 803,
+          "bytes": 17722875,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 66,
+          "frames": 850,
+          "bytes": 18440585,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 67,
+          "frames": 663,
+          "bytes": 14792895,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 68,
+          "frames": 455,
+          "bytes": 10014933,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 69,
+          "frames": 465,
+          "bytes": 10209721,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 70,
+          "frames": 924,
+          "bytes": 20423168,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 71,
+          "frames": 510,
+          "bytes": 11067831,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 72,
+          "frames": 542,
+          "bytes": 11826352,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 73,
+          "frames": 484,
+          "bytes": 10864649,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 74,
+          "frames": 1027,
+          "bytes": 22797177,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 75,
+          "frames": 522,
+          "bytes": 11246195,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 76,
+          "frames": 807,
+          "bytes": 17505685,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 77,
+          "frames": 526,
+          "bytes": 11546980,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 78,
+          "frames": 1243,
+          "bytes": 27267802,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 79,
+          "frames": 476,
+          "bytes": 10331419,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 80,
+          "frames": 506,
+          "bytes": 11049777,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 81,
+          "frames": 443,
+          "bytes": 9664474,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 82,
+          "frames": 502,
+          "bytes": 11123234,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 83,
+          "frames": 392,
+          "bytes": 8639246,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 84,
+          "frames": 461,
+          "bytes": 10038722,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 85,
+          "frames": 464,
+          "bytes": 10254006,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 86,
+          "frames": 532,
+          "bytes": 11816440,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 87,
+          "frames": 477,
+          "bytes": 10553408,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 88,
+          "frames": 586,
+          "bytes": 12678291,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 89,
+          "frames": 1067,
+          "bytes": 23755485,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 90,
+          "frames": 417,
+          "bytes": 8992259,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 91,
+          "frames": 737,
+          "bytes": 16394505,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 92,
+          "frames": 458,
+          "bytes": 9979465,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 93,
+          "frames": 547,
+          "bytes": 11997466,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 94,
+          "frames": 474,
+          "bytes": 10468558,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 95,
+          "frames": 958,
+          "bytes": 21541123,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 96,
+          "frames": 553,
+          "bytes": 11992330,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 97,
+          "frames": 592,
+          "bytes": 12990767,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 98,
+          "frames": 1254,
+          "bytes": 27779391,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 99,
+          "frames": 650,
+          "bytes": 14246367,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 100,
+          "frames": 956,
+          "bytes": 20811412,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 101,
+          "frames": 517,
+          "bytes": 11288513,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 102,
+          "frames": 643,
+          "bytes": 14147166,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 103,
+          "frames": 658,
+          "bytes": 14291843,
+          "repaired_joint_samples": 1,
+          "resumed": false
+        },
+        {
+          "episode_index": 104,
+          "frames": 519,
+          "bytes": 11273056,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 105,
+          "frames": 663,
+          "bytes": 14248969,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 106,
+          "frames": 576,
+          "bytes": 12327284,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 107,
+          "frames": 656,
+          "bytes": 15343418,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 108,
+          "frames": 522,
+          "bytes": 11927581,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 109,
+          "frames": 666,
+          "bytes": 15573646,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 110,
+          "frames": 523,
+          "bytes": 11909199,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 111,
+          "frames": 657,
+          "bytes": 15174347,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 112,
+          "frames": 497,
+          "bytes": 11264141,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 113,
+          "frames": 682,
+          "bytes": 15965930,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 114,
+          "frames": 553,
+          "bytes": 12439585,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 115,
+          "frames": 714,
+          "bytes": 16581995,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 116,
+          "frames": 561,
+          "bytes": 12685573,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 117,
+          "frames": 754,
+          "bytes": 17401915,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 118,
+          "frames": 521,
+          "bytes": 11883714,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 119,
+          "frames": 539,
+          "bytes": 12299230,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 120,
+          "frames": 719,
+          "bytes": 16555872,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 121,
+          "frames": 630,
+          "bytes": 14447306,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 122,
+          "frames": 539,
+          "bytes": 12312610,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 123,
+          "frames": 592,
+          "bytes": 13510357,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 124,
+          "frames": 593,
+          "bytes": 13370385,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 125,
+          "frames": 580,
+          "bytes": 13477569,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 126,
+          "frames": 661,
+          "bytes": 15058020,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 127,
+          "frames": 715,
+          "bytes": 16710546,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 128,
+          "frames": 610,
+          "bytes": 13693331,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 129,
+          "frames": 568,
+          "bytes": 12882477,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 130,
+          "frames": 607,
+          "bytes": 13752217,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 131,
+          "frames": 808,
+          "bytes": 18520805,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 132,
+          "frames": 590,
+          "bytes": 13359439,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 133,
+          "frames": 536,
+          "bytes": 12403428,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 134,
+          "frames": 1334,
+          "bytes": 30604277,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 135,
+          "frames": 841,
+          "bytes": 19382830,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 136,
+          "frames": 1750,
+          "bytes": 40210234,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 137,
+          "frames": 622,
+          "bytes": 14434067,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 138,
+          "frames": 678,
+          "bytes": 15479795,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 139,
+          "frames": 1706,
+          "bytes": 39605087,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 140,
+          "frames": 699,
+          "bytes": 16119265,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 141,
+          "frames": 729,
+          "bytes": 16552722,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 142,
+          "frames": 947,
+          "bytes": 21864341,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 143,
+          "frames": 1031,
+          "bytes": 23504079,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 144,
+          "frames": 706,
+          "bytes": 16213488,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 145,
+          "frames": 824,
+          "bytes": 18682103,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 146,
+          "frames": 777,
+          "bytes": 17562025,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 147,
+          "frames": 538,
+          "bytes": 12370988,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 148,
+          "frames": 899,
+          "bytes": 20645980,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 149,
+          "frames": 749,
+          "bytes": 17229314,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 150,
+          "frames": 1191,
+          "bytes": 27223093,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 151,
+          "frames": 839,
+          "bytes": 19356113,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 152,
+          "frames": 459,
+          "bytes": 10247590,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 153,
+          "frames": 624,
+          "bytes": 14444164,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 154,
+          "frames": 1590,
+          "bytes": 36613793,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 155,
+          "frames": 888,
+          "bytes": 20498452,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 156,
+          "frames": 569,
+          "bytes": 12811652,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 157,
+          "frames": 517,
+          "bytes": 11604590,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 158,
+          "frames": 579,
+          "bytes": 13331463,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 159,
+          "frames": 571,
+          "bytes": 12993247,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 160,
+          "frames": 1432,
+          "bytes": 32911176,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 161,
+          "frames": 631,
+          "bytes": 14218451,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 162,
+          "frames": 937,
+          "bytes": 21813636,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 163,
+          "frames": 587,
+          "bytes": 13497531,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 164,
+          "frames": 693,
+          "bytes": 15497562,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 165,
+          "frames": 783,
+          "bytes": 17742681,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 166,
+          "frames": 636,
+          "bytes": 14311756,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 167,
+          "frames": 974,
+          "bytes": 22488840,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 168,
+          "frames": 576,
+          "bytes": 13064876,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 169,
+          "frames": 2032,
+          "bytes": 47711827,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 170,
+          "frames": 668,
+          "bytes": 15449853,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 171,
+          "frames": 762,
+          "bytes": 17326758,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 172,
+          "frames": 424,
+          "bytes": 9419514,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 173,
+          "frames": 649,
+          "bytes": 14482146,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 174,
+          "frames": 631,
+          "bytes": 14472978,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 175,
+          "frames": 523,
+          "bytes": 11551526,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 176,
+          "frames": 513,
+          "bytes": 11547053,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 177,
+          "frames": 603,
+          "bytes": 13710289,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 178,
+          "frames": 509,
+          "bytes": 11158136,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 179,
+          "frames": 579,
+          "bytes": 13055453,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 180,
+          "frames": 460,
+          "bytes": 10346930,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 181,
+          "frames": 585,
+          "bytes": 12903228,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 182,
+          "frames": 496,
+          "bytes": 11062733,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 183,
+          "frames": 477,
+          "bytes": 10745737,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 184,
+          "frames": 477,
+          "bytes": 10807870,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 185,
+          "frames": 576,
+          "bytes": 12783084,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 186,
+          "frames": 1274,
+          "bytes": 27940713,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 187,
+          "frames": 495,
+          "bytes": 11029068,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 188,
+          "frames": 822,
+          "bytes": 18176978,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 189,
+          "frames": 648,
+          "bytes": 14403805,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 190,
+          "frames": 464,
+          "bytes": 10507329,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 191,
+          "frames": 679,
+          "bytes": 15282515,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 192,
+          "frames": 1061,
+          "bytes": 24148554,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 193,
+          "frames": 1991,
+          "bytes": 44941029,
+          "repaired_joint_samples": 1,
+          "resumed": false
+        },
+        {
+          "episode_index": 194,
+          "frames": 664,
+          "bytes": 15622285,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 195,
+          "frames": 433,
+          "bytes": 9900935,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 196,
+          "frames": 890,
+          "bytes": 20466525,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 197,
+          "frames": 596,
+          "bytes": 13585579,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 198,
+          "frames": 498,
+          "bytes": 11186475,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 199,
+          "frames": 574,
+          "bytes": 12999531,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 200,
+          "frames": 462,
+          "bytes": 10732987,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        }
+      ],
+      "converted_episodes": 201,
+      "converted_frames": 152569,
+      "bytes": 3407700255,
+      "repaired_joint_samples": 2,
+      "split": {
+        "config": "/home/aigc/human_policy/configs/datasets/unitree_g1_dex3_pick_apple.json",
+        "train_episodes": 181,
+        "val_episodes": 20,
+        "train_episode_indices": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          21,
+          22,
+          23,
+          25,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          47,
+          48,
+          49,
+          51,
+          52,
+          53,
+          54,
+          55,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          108,
+          109,
+          110,
+          111,
+          113,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120,
+          121,
+          122,
+          123,
+          124,
+          125,
+          126,
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136,
+          137,
+          138,
+          139,
+          140,
+          141,
+          142,
+          143,
+          144,
+          146,
+          147,
+          148,
+          150,
+          151,
+          152,
+          154,
+          155,
+          156,
+          157,
+          158,
+          159,
+          160,
+          161,
+          162,
+          163,
+          164,
+          165,
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172,
+          173,
+          174,
+          175,
+          176,
+          177,
+          178,
+          180,
+          181,
+          183,
+          184,
+          185,
+          186,
+          187,
+          188,
+          189,
+          190,
+          191,
+          192,
+          193,
+          194,
+          195,
+          196,
+          197,
+          199
+        ],
+        "val_episode_indices": [
+          7,
+          20,
+          24,
+          26,
+          37,
+          38,
+          46,
+          50,
+          56,
+          79,
+          107,
+          112,
+          114,
+          145,
+          149,
+          153,
+          179,
+          182,
+          198,
+          200
+        ],
+        "seed": 42
+      }
+    },
+    "pouring": {
+      "source": "/mnt/nvme0n1/lirui_backup/public_data/https-huggingface-co-datasets-unitreerobotics-g1-3/outputs/datasets/G1_Dex3_Pouring_Dataset",
+      "expected_episodes": 311,
+      "expected_frames": 121587,
+      "episodes": [
+        {
+          "episode_index": 0,
+          "frames": 448,
+          "bytes": 16876510,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 1,
+          "frames": 466,
+          "bytes": 17072305,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 2,
+          "frames": 601,
+          "bytes": 22656113,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 3,
+          "frames": 440,
+          "bytes": 16285299,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 4,
+          "frames": 387,
+          "bytes": 14406245,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 5,
+          "frames": 358,
+          "bytes": 13550569,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 6,
+          "frames": 289,
+          "bytes": 10897427,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 7,
+          "frames": 427,
+          "bytes": 16266882,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 8,
+          "frames": 393,
+          "bytes": 14835353,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 9,
+          "frames": 483,
+          "bytes": 18272024,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 10,
+          "frames": 311,
+          "bytes": 11787971,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 11,
+          "frames": 382,
+          "bytes": 14485217,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 12,
+          "frames": 449,
+          "bytes": 17348669,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 13,
+          "frames": 389,
+          "bytes": 14839102,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 14,
+          "frames": 416,
+          "bytes": 15833169,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 15,
+          "frames": 425,
+          "bytes": 16072530,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 16,
+          "frames": 417,
+          "bytes": 15898860,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 17,
+          "frames": 396,
+          "bytes": 15210969,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 18,
+          "frames": 435,
+          "bytes": 16636707,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 19,
+          "frames": 374,
+          "bytes": 14423300,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 20,
+          "frames": 364,
+          "bytes": 13966229,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 21,
+          "frames": 388,
+          "bytes": 15083691,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 22,
+          "frames": 337,
+          "bytes": 12987417,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 23,
+          "frames": 364,
+          "bytes": 13988073,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 24,
+          "frames": 351,
+          "bytes": 13260125,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 25,
+          "frames": 363,
+          "bytes": 13745514,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 26,
+          "frames": 398,
+          "bytes": 15522368,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 27,
+          "frames": 380,
+          "bytes": 14517974,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 28,
+          "frames": 450,
+          "bytes": 16928549,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 29,
+          "frames": 475,
+          "bytes": 18001880,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 30,
+          "frames": 482,
+          "bytes": 18382537,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 31,
+          "frames": 449,
+          "bytes": 17104749,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 32,
+          "frames": 392,
+          "bytes": 14891015,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 33,
+          "frames": 477,
+          "bytes": 18528383,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 34,
+          "frames": 455,
+          "bytes": 17779881,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 35,
+          "frames": 399,
+          "bytes": 15285010,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 36,
+          "frames": 381,
+          "bytes": 14855890,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 37,
+          "frames": 377,
+          "bytes": 14388535,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 38,
+          "frames": 565,
+          "bytes": 22459163,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 39,
+          "frames": 364,
+          "bytes": 14104289,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 40,
+          "frames": 424,
+          "bytes": 15931202,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 41,
+          "frames": 368,
+          "bytes": 14103189,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 42,
+          "frames": 340,
+          "bytes": 12664109,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 43,
+          "frames": 398,
+          "bytes": 15199464,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 44,
+          "frames": 394,
+          "bytes": 15576091,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 45,
+          "frames": 379,
+          "bytes": 14330781,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 46,
+          "frames": 406,
+          "bytes": 15283757,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 47,
+          "frames": 481,
+          "bytes": 18792320,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 48,
+          "frames": 309,
+          "bytes": 11656675,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 49,
+          "frames": 347,
+          "bytes": 13358062,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 50,
+          "frames": 317,
+          "bytes": 11985876,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 51,
+          "frames": 454,
+          "bytes": 17343735,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 52,
+          "frames": 367,
+          "bytes": 14015304,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 53,
+          "frames": 408,
+          "bytes": 15468980,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 54,
+          "frames": 353,
+          "bytes": 13386158,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 55,
+          "frames": 345,
+          "bytes": 13125920,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 56,
+          "frames": 425,
+          "bytes": 16890088,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 57,
+          "frames": 368,
+          "bytes": 14164374,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 58,
+          "frames": 378,
+          "bytes": 14347724,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 59,
+          "frames": 323,
+          "bytes": 12385471,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 60,
+          "frames": 355,
+          "bytes": 13673382,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 61,
+          "frames": 352,
+          "bytes": 13589170,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 62,
+          "frames": 381,
+          "bytes": 15062704,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 63,
+          "frames": 365,
+          "bytes": 14434967,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 64,
+          "frames": 366,
+          "bytes": 14305392,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 65,
+          "frames": 408,
+          "bytes": 15539781,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 66,
+          "frames": 332,
+          "bytes": 12910845,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 67,
+          "frames": 370,
+          "bytes": 14070946,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 68,
+          "frames": 375,
+          "bytes": 14473881,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 69,
+          "frames": 342,
+          "bytes": 13002900,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 70,
+          "frames": 429,
+          "bytes": 16590939,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 71,
+          "frames": 375,
+          "bytes": 14734159,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 72,
+          "frames": 401,
+          "bytes": 15367936,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 73,
+          "frames": 432,
+          "bytes": 17190093,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 74,
+          "frames": 387,
+          "bytes": 15588910,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 75,
+          "frames": 445,
+          "bytes": 17938989,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 76,
+          "frames": 465,
+          "bytes": 18452732,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 77,
+          "frames": 340,
+          "bytes": 13646331,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 78,
+          "frames": 369,
+          "bytes": 14509136,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 79,
+          "frames": 386,
+          "bytes": 15103641,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 80,
+          "frames": 357,
+          "bytes": 14248308,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 81,
+          "frames": 307,
+          "bytes": 12274095,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 82,
+          "frames": 412,
+          "bytes": 17009534,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 83,
+          "frames": 448,
+          "bytes": 17256114,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 84,
+          "frames": 538,
+          "bytes": 21117720,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 85,
+          "frames": 576,
+          "bytes": 22623726,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 86,
+          "frames": 323,
+          "bytes": 12983268,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 87,
+          "frames": 511,
+          "bytes": 19517357,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 88,
+          "frames": 418,
+          "bytes": 16603389,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 89,
+          "frames": 505,
+          "bytes": 19247178,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 90,
+          "frames": 510,
+          "bytes": 19747624,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 91,
+          "frames": 517,
+          "bytes": 20141906,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 92,
+          "frames": 332,
+          "bytes": 13224742,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 93,
+          "frames": 382,
+          "bytes": 15623455,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 94,
+          "frames": 449,
+          "bytes": 17955754,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 95,
+          "frames": 542,
+          "bytes": 21138415,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 96,
+          "frames": 530,
+          "bytes": 20633424,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 97,
+          "frames": 508,
+          "bytes": 20656617,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 98,
+          "frames": 397,
+          "bytes": 16382553,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 99,
+          "frames": 372,
+          "bytes": 15016177,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 100,
+          "frames": 473,
+          "bytes": 18553365,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 101,
+          "frames": 407,
+          "bytes": 16530639,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 102,
+          "frames": 455,
+          "bytes": 18302977,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 103,
+          "frames": 395,
+          "bytes": 15779921,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 104,
+          "frames": 299,
+          "bytes": 12121125,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 105,
+          "frames": 349,
+          "bytes": 13797451,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 106,
+          "frames": 314,
+          "bytes": 11735826,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 107,
+          "frames": 307,
+          "bytes": 11482915,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 108,
+          "frames": 347,
+          "bytes": 13222552,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 109,
+          "frames": 604,
+          "bytes": 22562785,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 110,
+          "frames": 504,
+          "bytes": 18589454,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 111,
+          "frames": 430,
+          "bytes": 16974725,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 112,
+          "frames": 466,
+          "bytes": 18532695,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 113,
+          "frames": 391,
+          "bytes": 15167704,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 114,
+          "frames": 486,
+          "bytes": 18421652,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 115,
+          "frames": 463,
+          "bytes": 17532735,
+          "repaired_joint_samples": 1,
+          "resumed": false
+        },
+        {
+          "episode_index": 116,
+          "frames": 312,
+          "bytes": 12028505,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 117,
+          "frames": 494,
+          "bytes": 19029363,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 118,
+          "frames": 467,
+          "bytes": 18126842,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 119,
+          "frames": 447,
+          "bytes": 17043071,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 120,
+          "frames": 481,
+          "bytes": 19204842,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 121,
+          "frames": 526,
+          "bytes": 20578256,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 122,
+          "frames": 553,
+          "bytes": 22104824,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 123,
+          "frames": 676,
+          "bytes": 27651776,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 124,
+          "frames": 505,
+          "bytes": 19840621,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 125,
+          "frames": 413,
+          "bytes": 16661568,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 126,
+          "frames": 529,
+          "bytes": 20615640,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 127,
+          "frames": 479,
+          "bytes": 19211119,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 128,
+          "frames": 445,
+          "bytes": 18169243,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 129,
+          "frames": 475,
+          "bytes": 18741806,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 130,
+          "frames": 422,
+          "bytes": 16929417,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 131,
+          "frames": 461,
+          "bytes": 18408594,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 132,
+          "frames": 453,
+          "bytes": 17011222,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 133,
+          "frames": 389,
+          "bytes": 15658196,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 134,
+          "frames": 414,
+          "bytes": 16553397,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 135,
+          "frames": 404,
+          "bytes": 16482710,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 136,
+          "frames": 331,
+          "bytes": 12997792,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 137,
+          "frames": 340,
+          "bytes": 13451304,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 138,
+          "frames": 363,
+          "bytes": 14723852,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 139,
+          "frames": 384,
+          "bytes": 14860903,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 140,
+          "frames": 359,
+          "bytes": 14567141,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 141,
+          "frames": 371,
+          "bytes": 14365580,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 142,
+          "frames": 386,
+          "bytes": 15512913,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 143,
+          "frames": 317,
+          "bytes": 12297223,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 144,
+          "frames": 429,
+          "bytes": 17316548,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 145,
+          "frames": 403,
+          "bytes": 16273441,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 146,
+          "frames": 379,
+          "bytes": 15121249,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 147,
+          "frames": 394,
+          "bytes": 15846563,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 148,
+          "frames": 403,
+          "bytes": 16354861,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 149,
+          "frames": 368,
+          "bytes": 14818908,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 150,
+          "frames": 386,
+          "bytes": 15876768,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 151,
+          "frames": 360,
+          "bytes": 14329238,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 152,
+          "frames": 403,
+          "bytes": 16529948,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 153,
+          "frames": 450,
+          "bytes": 18490994,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 154,
+          "frames": 420,
+          "bytes": 16594966,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 155,
+          "frames": 450,
+          "bytes": 17395690,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 156,
+          "frames": 473,
+          "bytes": 18537801,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 157,
+          "frames": 313,
+          "bytes": 12433316,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 158,
+          "frames": 350,
+          "bytes": 14680819,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 159,
+          "frames": 333,
+          "bytes": 13231993,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 160,
+          "frames": 369,
+          "bytes": 14390056,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 161,
+          "frames": 420,
+          "bytes": 17165632,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 162,
+          "frames": 515,
+          "bytes": 20079792,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 163,
+          "frames": 409,
+          "bytes": 15955888,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 164,
+          "frames": 415,
+          "bytes": 16481272,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 165,
+          "frames": 370,
+          "bytes": 15378283,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 166,
+          "frames": 391,
+          "bytes": 15622009,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 167,
+          "frames": 322,
+          "bytes": 12989398,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 168,
+          "frames": 367,
+          "bytes": 14513519,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 169,
+          "frames": 375,
+          "bytes": 15074827,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 170,
+          "frames": 404,
+          "bytes": 16173418,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 171,
+          "frames": 368,
+          "bytes": 14671948,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 172,
+          "frames": 326,
+          "bytes": 13257716,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 173,
+          "frames": 340,
+          "bytes": 13996967,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 174,
+          "frames": 376,
+          "bytes": 15009732,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 175,
+          "frames": 458,
+          "bytes": 18170829,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 176,
+          "frames": 371,
+          "bytes": 14886068,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 177,
+          "frames": 380,
+          "bytes": 15423885,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 178,
+          "frames": 336,
+          "bytes": 13417888,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 179,
+          "frames": 373,
+          "bytes": 15293754,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 180,
+          "frames": 369,
+          "bytes": 14596488,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 181,
+          "frames": 313,
+          "bytes": 12914562,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 182,
+          "frames": 349,
+          "bytes": 13926389,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 183,
+          "frames": 346,
+          "bytes": 13355774,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 184,
+          "frames": 377,
+          "bytes": 14910609,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 185,
+          "frames": 404,
+          "bytes": 16407305,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 186,
+          "frames": 340,
+          "bytes": 13511124,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 187,
+          "frames": 346,
+          "bytes": 13772724,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 188,
+          "frames": 341,
+          "bytes": 13745723,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 189,
+          "frames": 460,
+          "bytes": 18275394,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 190,
+          "frames": 418,
+          "bytes": 16921021,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 191,
+          "frames": 409,
+          "bytes": 16173859,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 192,
+          "frames": 425,
+          "bytes": 17109871,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 193,
+          "frames": 438,
+          "bytes": 17854290,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 194,
+          "frames": 329,
+          "bytes": 13169631,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 195,
+          "frames": 345,
+          "bytes": 13734310,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 196,
+          "frames": 388,
+          "bytes": 15470185,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 197,
+          "frames": 405,
+          "bytes": 16399989,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 198,
+          "frames": 357,
+          "bytes": 14372588,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 199,
+          "frames": 361,
+          "bytes": 14599618,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 200,
+          "frames": 432,
+          "bytes": 17712774,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 201,
+          "frames": 360,
+          "bytes": 14515076,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 202,
+          "frames": 376,
+          "bytes": 15622715,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 203,
+          "frames": 391,
+          "bytes": 15858428,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 204,
+          "frames": 364,
+          "bytes": 14496655,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 205,
+          "frames": 494,
+          "bytes": 18648953,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 206,
+          "frames": 340,
+          "bytes": 13488306,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 207,
+          "frames": 393,
+          "bytes": 15065442,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 208,
+          "frames": 354,
+          "bytes": 14152109,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 209,
+          "frames": 413,
+          "bytes": 15281333,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 210,
+          "frames": 361,
+          "bytes": 14514576,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 211,
+          "frames": 337,
+          "bytes": 13137710,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 212,
+          "frames": 355,
+          "bytes": 14031482,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 213,
+          "frames": 336,
+          "bytes": 13400273,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 214,
+          "frames": 400,
+          "bytes": 14994697,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 215,
+          "frames": 378,
+          "bytes": 15183118,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 216,
+          "frames": 335,
+          "bytes": 12922424,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 217,
+          "frames": 313,
+          "bytes": 12423611,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 218,
+          "frames": 338,
+          "bytes": 13744905,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 219,
+          "frames": 404,
+          "bytes": 16191190,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 220,
+          "frames": 339,
+          "bytes": 13982625,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 221,
+          "frames": 426,
+          "bytes": 17211005,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 222,
+          "frames": 324,
+          "bytes": 13056276,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 223,
+          "frames": 336,
+          "bytes": 13471368,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 224,
+          "frames": 330,
+          "bytes": 13240000,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 225,
+          "frames": 368,
+          "bytes": 15316736,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 226,
+          "frames": 349,
+          "bytes": 14162338,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 227,
+          "frames": 321,
+          "bytes": 12566775,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 228,
+          "frames": 289,
+          "bytes": 11788526,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 229,
+          "frames": 345,
+          "bytes": 13870812,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 230,
+          "frames": 383,
+          "bytes": 15579830,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 231,
+          "frames": 306,
+          "bytes": 12156684,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 232,
+          "frames": 362,
+          "bytes": 14378887,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 233,
+          "frames": 423,
+          "bytes": 17303750,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 234,
+          "frames": 312,
+          "bytes": 12633188,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 235,
+          "frames": 311,
+          "bytes": 12652462,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 236,
+          "frames": 338,
+          "bytes": 13751371,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 237,
+          "frames": 325,
+          "bytes": 13301267,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 238,
+          "frames": 371,
+          "bytes": 14370750,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 239,
+          "frames": 398,
+          "bytes": 16019528,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 240,
+          "frames": 353,
+          "bytes": 13693492,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 241,
+          "frames": 346,
+          "bytes": 13696228,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 242,
+          "frames": 361,
+          "bytes": 14436882,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 243,
+          "frames": 391,
+          "bytes": 15293352,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 244,
+          "frames": 406,
+          "bytes": 16110200,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 245,
+          "frames": 313,
+          "bytes": 12627093,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 246,
+          "frames": 335,
+          "bytes": 13307518,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 247,
+          "frames": 404,
+          "bytes": 16361232,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 248,
+          "frames": 465,
+          "bytes": 18751155,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 249,
+          "frames": 336,
+          "bytes": 13016876,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 250,
+          "frames": 425,
+          "bytes": 17181263,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 251,
+          "frames": 356,
+          "bytes": 14495521,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 252,
+          "frames": 373,
+          "bytes": 15240508,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 253,
+          "frames": 511,
+          "bytes": 21175986,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 254,
+          "frames": 359,
+          "bytes": 14500558,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 255,
+          "frames": 367,
+          "bytes": 14670234,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 256,
+          "frames": 465,
+          "bytes": 18726911,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 257,
+          "frames": 389,
+          "bytes": 15416397,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 258,
+          "frames": 524,
+          "bytes": 20632183,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 259,
+          "frames": 331,
+          "bytes": 13228798,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 260,
+          "frames": 335,
+          "bytes": 13062427,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 261,
+          "frames": 328,
+          "bytes": 12710540,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 262,
+          "frames": 306,
+          "bytes": 11970813,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 263,
+          "frames": 329,
+          "bytes": 12945845,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 264,
+          "frames": 360,
+          "bytes": 14283853,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 265,
+          "frames": 385,
+          "bytes": 15482453,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 266,
+          "frames": 427,
+          "bytes": 16268680,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 267,
+          "frames": 391,
+          "bytes": 15742767,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 268,
+          "frames": 387,
+          "bytes": 15494649,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 269,
+          "frames": 372,
+          "bytes": 14676044,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 270,
+          "frames": 334,
+          "bytes": 13222072,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 271,
+          "frames": 359,
+          "bytes": 14399428,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 272,
+          "frames": 304,
+          "bytes": 11949104,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 273,
+          "frames": 315,
+          "bytes": 12678755,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 274,
+          "frames": 326,
+          "bytes": 12822127,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 275,
+          "frames": 367,
+          "bytes": 14742150,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 276,
+          "frames": 349,
+          "bytes": 13760452,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 277,
+          "frames": 418,
+          "bytes": 15597676,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 278,
+          "frames": 331,
+          "bytes": 12820247,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 279,
+          "frames": 394,
+          "bytes": 15890520,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 280,
+          "frames": 329,
+          "bytes": 13062736,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 281,
+          "frames": 253,
+          "bytes": 10167139,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 282,
+          "frames": 396,
+          "bytes": 15621647,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 283,
+          "frames": 343,
+          "bytes": 13448610,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 284,
+          "frames": 330,
+          "bytes": 12698203,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 285,
+          "frames": 319,
+          "bytes": 12548645,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 286,
+          "frames": 375,
+          "bytes": 15337518,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 287,
+          "frames": 354,
+          "bytes": 13956335,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 288,
+          "frames": 335,
+          "bytes": 13277733,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 289,
+          "frames": 377,
+          "bytes": 15293842,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 290,
+          "frames": 352,
+          "bytes": 14292147,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 291,
+          "frames": 302,
+          "bytes": 12273702,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 292,
+          "frames": 524,
+          "bytes": 21337067,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 293,
+          "frames": 339,
+          "bytes": 14819468,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 294,
+          "frames": 341,
+          "bytes": 14989865,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 295,
+          "frames": 488,
+          "bytes": 21158749,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 296,
+          "frames": 383,
+          "bytes": 16974381,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 297,
+          "frames": 429,
+          "bytes": 18522464,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 298,
+          "frames": 389,
+          "bytes": 16894627,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 299,
+          "frames": 388,
+          "bytes": 17120433,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 300,
+          "frames": 327,
+          "bytes": 14527483,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 301,
+          "frames": 331,
+          "bytes": 14314571,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 302,
+          "frames": 434,
+          "bytes": 18534174,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 303,
+          "frames": 332,
+          "bytes": 14351455,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 304,
+          "frames": 329,
+          "bytes": 14549610,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 305,
+          "frames": 416,
+          "bytes": 17812127,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 306,
+          "frames": 341,
+          "bytes": 14887658,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 307,
+          "frames": 320,
+          "bytes": 14233411,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 308,
+          "frames": 349,
+          "bytes": 15090091,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 309,
+          "frames": 289,
+          "bytes": 13076947,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        },
+        {
+          "episode_index": 310,
+          "frames": 321,
+          "bytes": 14031180,
+          "repaired_joint_samples": 0,
+          "resumed": false
+        }
+      ],
+      "converted_episodes": 311,
+      "converted_frames": 121587,
+      "bytes": 4816664604,
+      "repaired_joint_samples": 1,
+      "split": {
+        "config": "/home/aigc/human_policy/configs/datasets/unitree_g1_dex3_pouring.json",
+        "train_episodes": 280,
+        "val_episodes": 31,
+        "train_episode_indices": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          34,
+          35,
+          36,
+          37,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          52,
+          53,
+          54,
+          55,
+          57,
+          58,
+          59,
+          60,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          97,
+          99,
+          101,
+          102,
+          103,
+          105,
+          106,
+          107,
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          119,
+          120,
+          121,
+          122,
+          123,
+          124,
+          125,
+          126,
+          127,
+          128,
+          129,
+          130,
+          132,
+          133,
+          135,
+          136,
+          137,
+          138,
+          139,
+          140,
+          141,
+          142,
+          143,
+          144,
+          145,
+          146,
+          147,
+          149,
+          150,
+          151,
+          152,
+          153,
+          154,
+          155,
+          156,
+          157,
+          158,
+          159,
+          160,
+          161,
+          162,
+          163,
+          165,
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172,
+          174,
+          175,
+          176,
+          177,
+          178,
+          179,
+          180,
+          181,
+          182,
+          183,
+          184,
+          185,
+          186,
+          187,
+          188,
+          189,
+          190,
+          192,
+          193,
+          194,
+          195,
+          196,
+          197,
+          198,
+          199,
+          200,
+          202,
+          204,
+          205,
+          206,
+          207,
+          208,
+          209,
+          210,
+          211,
+          212,
+          213,
+          214,
+          215,
+          216,
+          217,
+          218,
+          219,
+          220,
+          221,
+          222,
+          223,
+          224,
+          225,
+          226,
+          227,
+          228,
+          229,
+          230,
+          232,
+          233,
+          234,
+          235,
+          236,
+          237,
+          239,
+          240,
+          241,
+          243,
+          244,
+          245,
+          246,
+          247,
+          248,
+          250,
+          251,
+          252,
+          253,
+          254,
+          255,
+          256,
+          257,
+          258,
+          259,
+          260,
+          261,
+          262,
+          263,
+          264,
+          265,
+          266,
+          267,
+          268,
+          269,
+          270,
+          271,
+          272,
+          273,
+          274,
+          275,
+          276,
+          277,
+          278,
+          279,
+          280,
+          281,
+          282,
+          283,
+          284,
+          286,
+          287,
+          289,
+          290,
+          291,
+          292,
+          293,
+          294,
+          296,
+          297,
+          298,
+          299,
+          300,
+          301,
+          302,
+          303,
+          304,
+          305,
+          306,
+          307,
+          309,
+          310
+        ],
+        "val_episode_indices": [
+          0,
+          19,
+          26,
+          33,
+          38,
+          50,
+          51,
+          56,
+          61,
+          68,
+          96,
+          98,
+          100,
+          104,
+          118,
+          131,
+          134,
+          148,
+          164,
+          173,
+          191,
+          201,
+          203,
+          231,
+          238,
+          242,
+          249,
+          285,
+          288,
+          295,
+          308
+        ],
+        "seed": 42
+      }
+    }
+  },
+  "errors": [],
+  "elapsed_seconds": 358.8752855071798,
+  "status": "complete",
+  "training_camera_policy": {
+    "camera_names": [
+      "top"
+    ],
+    "source": "observation.images.cam_left_high",
+    "schema_upgrade": "explicit_head_camera_alias_v1"
+  }
+}

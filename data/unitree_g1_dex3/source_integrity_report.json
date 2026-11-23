@@ -1,0 +1,50 @@
+{
+  "status": "complete",
+  "raw_arrays_lossless": true,
+  "tasks": {
+    "block_stacking": {
+      "expected_episodes": 301,
+      "checked_episodes": 301,
+      "checked_frames": 281196,
+      "camera_frames": 1124784
+    },
+    "pick_apple": {
+      "expected_episodes": 201,
+      "checked_episodes": 201,
+      "checked_frames": 152569,
+      "camera_frames": 305138
+    },
+    "pouring": {
+      "expected_episodes": 311,
+      "checked_episodes": 311,
+      "checked_frames": 121587,
+      "camera_frames": 486348
+    }
+  },
+  "repairs": [
+    {
+      "task": "pick_apple",
+      "episode": 103,
+      "frame": 211,
+      "joint_index": 26,
+      "original": 428.8948059082031,
+      "interpolated": 0.04017641022801399
+    },
+    {
+      "task": "pick_apple",
+      "episode": 193,
+      "frame": 444,
+      "joint_index": 26,
+      "original": -1151.6363525390625,
+      "interpolated": 0.017027221620082855
+    },
+    {
+      "task": "pouring",
+      "episode": 115,
+      "frame": 54,
+      "joint_index": 26,
+      "original": -2991.563232421875,
+      "interpolated": -0.19144663214683533
+    }
+  ]
+}

@@ -160,14 +160,14 @@ target 共用同一条时间轴。旧数据没有 `fps` 时按30fps处理；只�
 
 ```bash
 cd /home/aigc/human_policy
-CUDA_VISIBLE_DEVICES=0 /home/aigc/miniconda/envs/human_policy/bin/python hdt/main.py \
+CUDA_VISIBLE_DEVICES=1 /home/aigc/miniconda/envs/human_policy/bin/python hdt/main.py \
   --batch_size 64 \
   --num_epochs 100000 \
   --lr 1e-5 \
   --chunk_size 100 \
-  --exptid my_task_vjepa \
-  --dataset_json_path /home/aigc/human_policy/my_task.json \
-  --model_cfg_path hdt/configs/models/act_input_vjepa.yaml \
+  --exptid my_task_pickapple \
+  --dataset_json_path /home/aigc/human_policy/training_experiments/unitree_g1_dex3_hat_20261031/configs/block_stacking.json \
+  --model_cfg_path /home/aigc/human_policy/training_experiments/unitree_g1_dex3_hat_20261031/configs/model.yaml \
   --base_dir /home/aigc/human_policy/data \
   --cond_mask_prob 0.0 \
   --no_wandb \
@@ -175,7 +175,8 @@ CUDA_VISIBLE_DEVICES=0 /home/aigc/miniconda/envs/human_policy/bin/python hdt/mai
   --future_dino_weight 0.0 \
   --future_dino_warmup_steps 0 \
   --future_dino_horizon 45 \
-  --future_dino_ablation none
+  --future_dino_ablation none \
+  --action_representation relative_chunk --lag_aug --visual_aug
 ```
 
 ### 5.2 次选：resnet18 + Future-DINO 头（ab4 配方）

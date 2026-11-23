@@ -1,0 +1,55 @@
+{
+  "status": "pass",
+  "checked_at": "2026-11-06T00:46:49.485758+08:00",
+  "jobs": [
+    {
+      "task": "block_stacking",
+      "gpu_index": 2,
+      "training_pid": 2219680,
+      "observed_optimizer_steps": 196,
+      "initial_val_losses": [
+        100.12341
+      ],
+      "latest_train_step": 196,
+      "latest_train_loss": 5.684760570526123,
+      "latest_train_eef_loss": 1.0545873641967773,
+      "metrics_finite": true,
+      "has_traceback": false,
+      "training_process_alive": true
+    },
+    {
+      "task": "pick_apple",
+      "gpu_index": 3,
+      "training_pid": 2219681,
+      "observed_optimizer_steps": 192,
+      "initial_val_losses": [
+        94.16489
+      ],
+      "latest_train_step": 192,
+      "latest_train_loss": 5.5643792152404785,
+      "latest_train_eef_loss": 0.9439897537231445,
+      "metrics_finite": true,
+      "has_traceback": false,
+      "training_process_alive": true
+    },
+    {
+      "task": "pouring",
+      "gpu_index": 4,
+      "training_pid": 2219682,
+      "observed_optimizer_steps": 195,
+      "initial_val_losses": [
+        97.90302
+      ],
+      "latest_train_step": 195,
+      "latest_train_loss": 5.491358280181885,
+      "latest_train_eef_loss": 0.9576917886734009,
+      "metrics_finite": true,
+      "has_traceback": false,
+      "training_process_alive": true
+    }
+  ],
+  "csv_reader_note": "Reconstruct inherited dynamic train/lr columns; original CSV header remains val-only. Training code unchanged.",
+  "data_preflight": "data_preflight.json",
+  "left_hand_verification": "left_hand_verification.json",
+  "runtime_configuration_verification": "runtime_configuration_verification.json"
+}

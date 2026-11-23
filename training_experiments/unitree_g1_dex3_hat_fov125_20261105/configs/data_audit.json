@@ -1,0 +1,44 @@
+{
+  "status": "pass",
+  "tasks": {
+    "block_stacking": {
+      "episodes": 301,
+      "frames": 281196,
+      "train": 271,
+      "val": 30,
+      "all_output_sha256_verified": true,
+      "all_actions_and_states_equal_previous": true,
+      "same_disjoint_complete_splits": true,
+      "decoded_changed_image_samples": 903,
+      "left_state_max_range": 1.7496451139450073,
+      "left_action_max_range": 1.7474658489227295,
+      "processing_report_sha256": "e4e7638c819c574fec3917bfeb0e71dc816f4abbb9344ec8e0ac21da63b87a4d"
+    },
+    "pick_apple": {
+      "episodes": 201,
+      "frames": 152569,
+      "train": 181,
+      "val": 20,
+      "all_output_sha256_verified": true,
+      "all_actions_and_states_equal_previous": true,
+      "same_disjoint_complete_splits": true,
+      "decoded_changed_image_samples": 603,
+      "left_state_max_range": 1.8193190097808838,
+      "left_action_max_range": 1.833902359008789,
+      "processing_report_sha256": "d6b0d30fd3a42aeaaf2cb3816ef29322aa731e65a6c843baec35ec2bb5d7c572"
+    },
+    "pouring": {
+      "episodes": 311,
+      "frames": 121587,
+      "train": 280,
+      "val": 31,
+      "all_output_sha256_verified": true,
+      "all_actions_and_states_equal_previous": true,
+      "same_disjoint_complete_splits": true,
+      "decoded_changed_image_samples": 933,
+      "left_state_max_range": 0.26033881306648254,
+      "left_action_max_range": 0.30126720666885376,
+      "processing_report_sha256": "7494649aea9eb30bde29f6a8ab954793a3ba451d057bb88c641199de6b98928d"
+    }
+  }
+}

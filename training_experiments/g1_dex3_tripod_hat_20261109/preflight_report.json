@@ -1,0 +1,98 @@
+{
+  "status": "pass",
+  "episodes": 40,
+  "frames": 24528,
+  "train_episodes": 36,
+  "val_episodes": 4,
+  "train_val_disjoint": true,
+  "embodiment": "dex3",
+  "camera_names": [
+    "top"
+  ],
+  "batches": {
+    "train": {
+      "image": [
+        64,
+        1,
+        3,
+        240,
+        320
+      ],
+      "state": [
+        64,
+        128
+      ],
+      "action": [
+        64,
+        100,
+        128
+      ],
+      "future": [
+        64,
+        1,
+        3,
+        240,
+        320
+      ],
+      "workers": 8
+    },
+    "val": {
+      "image": [
+        64,
+        1,
+        3,
+        240,
+        320
+      ],
+      "state": [
+        64,
+        128
+      ],
+      "action": [
+        64,
+        100,
+        128
+      ],
+      "future": [
+        64,
+        1,
+        3,
+        240,
+        320
+      ],
+      "workers": 8
+    }
+  },
+  "full_vjepa_act_cpu_forward_backward": true,
+  "future_dino_teacher_evaluated": true,
+  "losses": {
+    "l1": 0.5272506475448608,
+    "kl": 8.878464698791504,
+    "loss": 94.17491912841797,
+    "eef_loss": 1.4462921619415283,
+    "head_loss": 0.46716171503067017,
+    "waist_loss": 0.5180533528327942,
+    "future_dino_cosine_loss": 0.9979110360145569,
+    "future_dino_huber_loss": 0.7412946224212646,
+    "future_dino_loss": 1.0720405578613281,
+    "future_dino_effective_weight": 0.0
+  },
+  "both_hands": {
+    "left": {
+      "state_preserved_at_encoder_and_decoder": true,
+      "every_action_dimension_has_gradient": true,
+      "min_dimension_gradient_sum": 0.007812499534338713
+    },
+    "right": {
+      "state_preserved_at_encoder_and_decoder": true,
+      "every_action_dimension_has_gradient": true,
+      "min_dimension_gradient_sum": 0.007812499534338713
+    }
+  },
+  "finite_parameter_gradients": 319,
+  "state_zero_range": "98:128 only",
+  "existing_neck_loss_mask": "58:67",
+  "rgb_matches_real_loader": true,
+  "all_episode_end_padding_checked": true,
+  "policy_source": "/home/aigc/human_policy/training_experiments/g1_dex3_tripod_hat_20261109/source/hdt/policy.py"
+}

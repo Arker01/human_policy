@@ -1,0 +1,139 @@
+{
+  "status": "complete",
+  "camera_names": [
+    "top"
+  ],
+  "dataset_key": "observation.image.top",
+  "alias_target": "observation.image.left",
+  "source_video_key": "observation.images.cam_left_high",
+  "tasks": {
+    "block_stacking": {
+      "episodes": 301,
+      "frames": 281196,
+      "all_top_links_head_left": true
+    },
+    "pick_apple": {
+      "episodes": 201,
+      "frames": 152569,
+      "all_top_links_head_left": true
+    },
+    "pouring": {
+      "episodes": 311,
+      "frames": 121587,
+      "all_top_links_head_left": true
+    }
+  },
+  "total_episodes": 813,
+  "total_frames": 555352,
+  "model_configs": {
+    "act_resnet.yaml": [
+      "top"
+    ],
+    "act_with_future_dino.yaml": [
+      "top"
+    ],
+    "act_with_future_dino_nostate.yaml": [
+      "top"
+    ],
+    "act_input_vjepa.yaml": [
+      "top"
+    ],
+    "act_input_vjepa_nostate.yaml": [
+      "top"
+    ],
+    "act_with_future_dino_nostate_hist.yaml": [
+      "top"
+    ],
+    "act_input_vjepa_nostate_hist.yaml": [
+      "top"
+    ]
+  },
+  "dataloader_checks": [
+    {
+      "action_representation": "original",
+      "clip_frames": 1,
+      "episodes_checked": 9,
+      "current_history_future_equal_head_left": true,
+      "fallback_used": false,
+      "batch_image_shape": [
+        9,
+        1,
+        3,
+        240,
+        320
+      ],
+      "batch_future_shape": [
+        9,
+        1,
+        3,
+        240,
+        320
+      ]
+    },
+    {
+      "action_representation": "original",
+      "clip_frames": 4,
+      "episodes_checked": 9,
+      "current_history_future_equal_head_left": true,
+      "fallback_used": false,
+      "batch_image_shape": [
+        9,
+        1,
+        3,
+        240,
+        320
+      ],
+      "batch_future_shape": [
+        9,
+        8,
+        1,
+        3,
+        240,
+        320
+      ]
+    },
+    {
+      "action_representation": "relative_chunk",
+      "clip_frames": 1,
+      "episodes_checked": 9,
+      "current_history_future_equal_head_left": true,
+      "fallback_used": false,
+      "batch_image_shape": [
+        9,
+        1,
+        3,
+        240,
+        320
+      ],
+      "batch_future_shape": [
+        9,
+        1,
+        3,
+        240,
+        320
+      ]
+    },
+    {
+      "action_representation": "relative_chunk",
+      "clip_frames": 4,
+      "episodes_checked": 9,
+      "current_history_future_equal_head_left": true,
+      "fallback_used": false,
+      "batch_image_shape": [
+        9,
+        1,
+        3,
+        240,
+        320
+      ],
+      "batch_future_shape": [
+        9,
+        8,
+        1,
+        3,
+        240,
+        320
+      ]
+    }
+  ]
+}

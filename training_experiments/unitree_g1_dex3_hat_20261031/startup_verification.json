@@ -1,0 +1,40 @@
+{
+  "status": "pass",
+  "jobs": [
+    {
+      "task": "block_stacking",
+      "gpu_index": 1,
+      "training_pid": 1519958,
+      "step": 107,
+      "initial_val_loss": 100.14135,
+      "config_and_weights_verified": true,
+      "stats_embodiment": "dex3",
+      "checkpoint_dir": "/mnt/nvme0n1/human_policy_ckpt/unitree_g1_dex3_hat_20261031/block_stacking_ckpt",
+      "log": "/home/aigc/human_policy/training_experiments/unitree_g1_dex3_hat_20261031/logs/block_stacking.log"
+    },
+    {
+      "task": "pick_apple",
+      "gpu_index": 2,
+      "training_pid": 1519959,
+      "step": 112,
+      "initial_val_loss": 94.15964,
+      "config_and_weights_verified": true,
+      "stats_embodiment": "dex3",
+      "checkpoint_dir": "/mnt/nvme0n1/human_policy_ckpt/unitree_g1_dex3_hat_20261031/pick_apple_ckpt",
+      "log": "/home/aigc/human_policy/training_experiments/unitree_g1_dex3_hat_20261031/logs/pick_apple.log"
+    },
+    {
+      "task": "pouring",
+      "gpu_index": 3,
+      "training_pid": 1519960,
+      "step": 110,
+      "initial_val_loss": 97.91127,
+      "config_and_weights_verified": true,
+      "stats_embodiment": "dex3",
+      "checkpoint_dir": "/mnt/nvme0n1/human_policy_ckpt/unitree_g1_dex3_hat_20261031/pouring_ckpt",
+      "log": "/home/aigc/human_policy/training_experiments/unitree_g1_dex3_hat_20261031/logs/pouring.log"
+    }
+  ],
+  "same_training_arguments_verified": true,
+  "validation_batch_isolation_regression_test": "pass"
+}

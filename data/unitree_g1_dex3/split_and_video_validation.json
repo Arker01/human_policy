@@ -1,0 +1,21 @@
+{
+  "block_stacking": {
+    "train": 271,
+    "val": 30,
+    "all_files_covered": true,
+    "no_overlap": true
+  },
+  "pick_apple": {
+    "train": 181,
+    "val": 20,
+    "all_files_covered": true,
+    "no_overlap": true
+  },
+  "pouring": {
+    "train": 280,
+    "val": 31,
+    "all_files_covered": true,
+    "no_overlap": true
+  },
+  "source_video_jpeg_exact_checks": 10
+}

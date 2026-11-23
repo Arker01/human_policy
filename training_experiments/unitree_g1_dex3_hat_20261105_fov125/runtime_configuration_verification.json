@@ -1,0 +1,26 @@
+{
+  "block_stacking": {
+    "training_pid": 2219680,
+    "gpu_index": 2,
+    "process_command_matches_manifest": true,
+    "snapshot_first_in_pythonpath": true,
+    "normalization_stats_identical_to_previous": true,
+    "normalization_embodiment": "dex3"
+  },
+  "pick_apple": {
+    "training_pid": 2219681,
+    "gpu_index": 3,
+    "process_command_matches_manifest": true,
+    "snapshot_first_in_pythonpath": true,
+    "normalization_stats_identical_to_previous": true,
+    "normalization_embodiment": "dex3"
+  },
+  "pouring": {
+    "training_pid": 2219682,
+    "gpu_index": 4,
+    "process_command_matches_manifest": true,
+    "snapshot_first_in_pythonpath": true,
+    "normalization_stats_identical_to_previous": true,
+    "normalization_embodiment": "dex3"
+  }
+}

@@ -1,0 +1,11 @@
+{
+    "train": [
+        "402-pick_on_color_pad_right-2025_01_09-16_36_15",
+        "403-pick_on_color_pad_left-2025_01_09-16_58_04",
+        "404-pick_on_color_pad_right_far-2025_01_12-20_20_57",
+        "405-pick_on_color_pad_right_far_far-2025_01_13-19_29_04"
+    ],
+    "val": [
+        "903-picking-val-2024_11_18-18_58_16"
+    ]
+}

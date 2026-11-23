@@ -1,0 +1,58 @@
+{
+  "train": [
+    {
+      "dataset_path": "/mnt/nvme0n1/lirui_backup/public_data/pick_up_a_tripod_and_stand_it_on_the_desk_hat/episodes",
+      "type": "robot",
+      "file_list": [
+        "episode_000000.hdf5",
+        "episode_000001.hdf5",
+        "episode_000002.hdf5",
+        "episode_000003.hdf5",
+        "episode_000004.hdf5",
+        "episode_000005.hdf5",
+        "episode_000006.hdf5",
+        "episode_000008.hdf5",
+        "episode_000009.hdf5",
+        "episode_000010.hdf5",
+        "episode_000011.hdf5",
+        "episode_000012.hdf5",
+        "episode_000013.hdf5",
+        "episode_000014.hdf5",
+        "episode_000015.hdf5",
+        "episode_000016.hdf5",
+        "episode_000017.hdf5",
+        "episode_000019.hdf5",
+        "episode_000020.hdf5",
+        "episode_000021.hdf5",
+        "episode_000022.hdf5",
+        "episode_000023.hdf5",
+        "episode_000024.hdf5",
+        "episode_000025.hdf5",
+        "episode_000026.hdf5",
+        "episode_000027.hdf5",
+        "episode_000028.hdf5",
+        "episode_000029.hdf5",
+        "episode_000030.hdf5",
+        "episode_000031.hdf5",
+        "episode_000033.hdf5",
+        "episode_000034.hdf5",
+        "episode_000035.hdf5",
+        "episode_000036.hdf5",
+        "episode_000037.hdf5",
+        "episode_000038.hdf5"
+      ]
+    }
+  ],
+  "val": [
+    {
+      "dataset_path": "/mnt/nvme0n1/lirui_backup/public_data/pick_up_a_tripod_and_stand_it_on_the_desk_hat/episodes",
+      "type": "robot",
+      "file_list": [
+        "episode_000007.hdf5",
+        "episode_000018.hdf5",
+        "episode_000032.hdf5",
+        "episode_000039.hdf5"
+      ]
+    }
+  ]
+}

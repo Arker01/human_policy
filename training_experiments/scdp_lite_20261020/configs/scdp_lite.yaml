@@ -1,0 +1,9 @@
+scdp_lite:
+  enabled: false
+  anchors: 8
+  film_dim: 256
+  freeze_vjepa: true
+  freeze_hat: true
+  train_action_head: false
+# No guessed camera intrinsics/extrinsics. Training requires real per-frame
+# scdp_camera and baseline embodiment-specific normalization in conditioning_dict.

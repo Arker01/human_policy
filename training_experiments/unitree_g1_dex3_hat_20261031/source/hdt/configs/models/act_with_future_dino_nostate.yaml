@@ -1,0 +1,39 @@
+# ab4's config plus the one thing r3_ab4_nostate changes: normalized qpos[98:128]
+# (the dex5-only robot-configuration block) is forced to 0 for every embodiment.
+# Needed at EVAL time too -- the mask is a checkpoint buffer, so building from
+# act_with_future_dino.yaml would drop it and feed the model a state it never saw.
+common:
+  policy_class: ACT
+  state_dim: 128
+  action_dim: 128
+  camera_names:
+  - top
+model:
+  enc_layers: 4
+  dec_layers: 7
+  nheads: 8
+  hidden_dim: 512
+  kl_weight: 10
+  dim_feedforward: 3200
+  lr_backbone: 1e-5
+  backbone: resnet18
+  image_feature_strategy: ACT_linear
+  use_language_conditioning: false
+  future_dino:
+    enabled: true
+    weight: 0.3
+    target_encoder: dinov2_vits14
+    horizon: 16
+    num_layers: 4
+    num_heads: 8
+    dropout: 0.1
+    num_patches: 1024
+    normalize_target: true
+    huber_weight: 0.1
+    warmup_steps: 0
+    ablation: none
+  zero_state_dims: 98:128
+data:
+  image_resolution_hw:
+  - 240
+  - 320

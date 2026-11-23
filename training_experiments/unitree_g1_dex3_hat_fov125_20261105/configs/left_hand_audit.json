@@ -1,0 +1,20 @@
+{
+  "status": "pass",
+  "source": "exact 20261031 snapshot",
+  "zero_state_dims": [
+    98,
+    128
+  ],
+  "left_wrist_dims": [
+    80,
+    89
+  ],
+  "left_finger_dims": [
+    10,
+    28
+  ],
+  "left_state_preserved_at_encoder_and_decoder": true,
+  "every_left_action_dimension_has_positive_loss_gradient": true,
+  "neck_loss_mask_preserved": true,
+  "previous_snapshot_left_mask_found": false
+}

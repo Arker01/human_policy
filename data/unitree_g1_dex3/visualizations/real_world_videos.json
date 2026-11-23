@@ -1,0 +1,611 @@
+{
+  "status": "complete",
+  "source_manifest": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/sample_videos.json",
+  "videos": [
+    {
+      "task": "block_stacking",
+      "episode": "episode_000012",
+      "source_hdf5": "/home/aigc/human_policy/data/unitree_g1_dex3/block_stacking/episodes/episode_000012.hdf5",
+      "keypoint_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/block_stacking/episode_000012.mp4",
+      "real_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/block_stacking/episode_000012_real.mp4",
+      "comparison_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/block_stacking/episode_000012_compare.mp4",
+      "cameras": [
+        "left",
+        "right",
+        "left_wrist",
+        "right_wrist"
+      ],
+      "source_color_order": "RGB (direct cv2.imdecode, project reader convention)",
+      "camera_tile_pixels": [
+        320,
+        240
+      ],
+      "full_episode": true,
+      "duration_seconds": 38.333333333333336,
+      "real_validation": {
+        "frames": 1150,
+        "fps": 30.0,
+        "width": 640,
+        "height": 560,
+        "codec": "h264",
+        "bytes": 8548457,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.3904873132705688
+          },
+          {
+            "frame": 575,
+            "rgb_mean_absolute_error": 1.7780961990356445
+          },
+          {
+            "frame": 1149,
+            "rgb_mean_absolute_error": 1.887351155281067
+          }
+        ]
+      },
+      "comparison_validation": {
+        "frames": 1150,
+        "fps": 30.0,
+        "width": 1920,
+        "height": 760,
+        "codec": "h264",
+        "bytes": 11352083,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.5145593881607056
+          },
+          {
+            "frame": 575,
+            "rgb_mean_absolute_error": 1.5877375602722168
+          },
+          {
+            "frame": 1149,
+            "rgb_mean_absolute_error": 1.6426962614059448
+          }
+        ]
+      },
+      "elapsed_seconds": 78.97,
+      "status": "complete"
+    },
+    {
+      "task": "block_stacking",
+      "episode": "episode_000057",
+      "source_hdf5": "/home/aigc/human_policy/data/unitree_g1_dex3/block_stacking/episodes/episode_000057.hdf5",
+      "keypoint_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/block_stacking/episode_000057.mp4",
+      "real_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/block_stacking/episode_000057_real.mp4",
+      "comparison_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/block_stacking/episode_000057_compare.mp4",
+      "cameras": [
+        "left",
+        "right",
+        "left_wrist",
+        "right_wrist"
+      ],
+      "source_color_order": "RGB (direct cv2.imdecode, project reader convention)",
+      "camera_tile_pixels": [
+        320,
+        240
+      ],
+      "full_episode": true,
+      "duration_seconds": 30.633333333333333,
+      "real_validation": {
+        "frames": 919,
+        "fps": 30.0,
+        "width": 640,
+        "height": 560,
+        "codec": "h264",
+        "bytes": 6868343,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.3218592405319214
+          },
+          {
+            "frame": 459,
+            "rgb_mean_absolute_error": 1.8298112154006958
+          },
+          {
+            "frame": 918,
+            "rgb_mean_absolute_error": 1.9352009296417236
+          }
+        ]
+      },
+      "comparison_validation": {
+        "frames": 919,
+        "fps": 30.0,
+        "width": 1920,
+        "height": 760,
+        "codec": "h264",
+        "bytes": 9261592,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.4933563470840454
+          },
+          {
+            "frame": 459,
+            "rgb_mean_absolute_error": 1.5657246112823486
+          },
+          {
+            "frame": 918,
+            "rgb_mean_absolute_error": 1.6545933485031128
+          }
+        ]
+      },
+      "elapsed_seconds": 62.83,
+      "status": "complete"
+    },
+    {
+      "task": "block_stacking",
+      "episode": "episode_000140",
+      "source_hdf5": "/home/aigc/human_policy/data/unitree_g1_dex3/block_stacking/episodes/episode_000140.hdf5",
+      "keypoint_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/block_stacking/episode_000140.mp4",
+      "real_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/block_stacking/episode_000140_real.mp4",
+      "comparison_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/block_stacking/episode_000140_compare.mp4",
+      "cameras": [
+        "left",
+        "right",
+        "left_wrist",
+        "right_wrist"
+      ],
+      "source_color_order": "RGB (direct cv2.imdecode, project reader convention)",
+      "camera_tile_pixels": [
+        320,
+        240
+      ],
+      "full_episode": true,
+      "duration_seconds": 31.033333333333335,
+      "real_validation": {
+        "frames": 931,
+        "fps": 30.0,
+        "width": 640,
+        "height": 560,
+        "codec": "h264",
+        "bytes": 6770791,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.3457775115966797
+          },
+          {
+            "frame": 465,
+            "rgb_mean_absolute_error": 1.7075371742248535
+          },
+          {
+            "frame": 930,
+            "rgb_mean_absolute_error": 2.03495717048645
+          }
+        ]
+      },
+      "comparison_validation": {
+        "frames": 931,
+        "fps": 30.0,
+        "width": 1920,
+        "height": 760,
+        "codec": "h264",
+        "bytes": 9252447,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.4976011514663696
+          },
+          {
+            "frame": 465,
+            "rgb_mean_absolute_error": 1.5845173597335815
+          },
+          {
+            "frame": 930,
+            "rgb_mean_absolute_error": 1.692135214805603
+          }
+        ]
+      },
+      "elapsed_seconds": 65.12,
+      "status": "complete"
+    },
+    {
+      "task": "pick_apple",
+      "episode": "episode_000006",
+      "source_hdf5": "/home/aigc/human_policy/data/unitree_g1_dex3/pick_apple/episodes/episode_000006.hdf5",
+      "keypoint_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pick_apple/episode_000006.mp4",
+      "real_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pick_apple/episode_000006_real.mp4",
+      "comparison_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pick_apple/episode_000006_compare.mp4",
+      "cameras": [
+        "left",
+        "right"
+      ],
+      "source_color_order": "RGB (direct cv2.imdecode, project reader convention)",
+      "camera_tile_pixels": [
+        320,
+        240
+      ],
+      "full_episode": true,
+      "duration_seconds": 49.6,
+      "real_validation": {
+        "frames": 1488,
+        "fps": 30.0,
+        "width": 640,
+        "height": 296,
+        "codec": "h264",
+        "bytes": 6508293,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.3304986953735352
+          },
+          {
+            "frame": 744,
+            "rgb_mean_absolute_error": 1.815295934677124
+          },
+          {
+            "frame": 1487,
+            "rgb_mean_absolute_error": 1.7628976106643677
+          }
+        ]
+      },
+      "comparison_validation": {
+        "frames": 1488,
+        "fps": 30.0,
+        "width": 1920,
+        "height": 760,
+        "codec": "h264",
+        "bytes": 10703922,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.3082597255706787
+          },
+          {
+            "frame": 744,
+            "rgb_mean_absolute_error": 1.34512197971344
+          },
+          {
+            "frame": 1487,
+            "rgb_mean_absolute_error": 1.3907579183578491
+          }
+        ]
+      },
+      "elapsed_seconds": 79.77,
+      "status": "complete"
+    },
+    {
+      "task": "pick_apple",
+      "episode": "episode_000028",
+      "source_hdf5": "/home/aigc/human_policy/data/unitree_g1_dex3/pick_apple/episodes/episode_000028.hdf5",
+      "keypoint_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pick_apple/episode_000028.mp4",
+      "real_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pick_apple/episode_000028_real.mp4",
+      "comparison_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pick_apple/episode_000028_compare.mp4",
+      "cameras": [
+        "left",
+        "right"
+      ],
+      "source_color_order": "RGB (direct cv2.imdecode, project reader convention)",
+      "camera_tile_pixels": [
+        320,
+        240
+      ],
+      "full_episode": true,
+      "duration_seconds": 51.4,
+      "real_validation": {
+        "frames": 1542,
+        "fps": 30.0,
+        "width": 640,
+        "height": 296,
+        "codec": "h264",
+        "bytes": 6532265,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.2335197925567627
+          },
+          {
+            "frame": 771,
+            "rgb_mean_absolute_error": 1.369006872177124
+          },
+          {
+            "frame": 1541,
+            "rgb_mean_absolute_error": 1.6448514461517334
+          }
+        ]
+      },
+      "comparison_validation": {
+        "frames": 1542,
+        "fps": 30.0,
+        "width": 1920,
+        "height": 760,
+        "codec": "h264",
+        "bytes": 10812734,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.2830936908721924
+          },
+          {
+            "frame": 771,
+            "rgb_mean_absolute_error": 1.285720944404602
+          },
+          {
+            "frame": 1541,
+            "rgb_mean_absolute_error": 1.3466317653656006
+          }
+        ]
+      },
+      "elapsed_seconds": 80.77,
+      "status": "complete"
+    },
+    {
+      "task": "pick_apple",
+      "episode": "episode_000163",
+      "source_hdf5": "/home/aigc/human_policy/data/unitree_g1_dex3/pick_apple/episodes/episode_000163.hdf5",
+      "keypoint_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pick_apple/episode_000163.mp4",
+      "real_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pick_apple/episode_000163_real.mp4",
+      "comparison_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pick_apple/episode_000163_compare.mp4",
+      "cameras": [
+        "left",
+        "right"
+      ],
+      "source_color_order": "RGB (direct cv2.imdecode, project reader convention)",
+      "camera_tile_pixels": [
+        320,
+        240
+      ],
+      "full_episode": true,
+      "duration_seconds": 19.566666666666666,
+      "real_validation": {
+        "frames": 587,
+        "fps": 30.0,
+        "width": 640,
+        "height": 296,
+        "codec": "h264",
+        "bytes": 2600253,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.3222163915634155
+          },
+          {
+            "frame": 293,
+            "rgb_mean_absolute_error": 1.7212626934051514
+          },
+          {
+            "frame": 586,
+            "rgb_mean_absolute_error": 1.8292933702468872
+          }
+        ]
+      },
+      "comparison_validation": {
+        "frames": 587,
+        "fps": 30.0,
+        "width": 1920,
+        "height": 760,
+        "codec": "h264",
+        "bytes": 4377862,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.311205267906189
+          },
+          {
+            "frame": 293,
+            "rgb_mean_absolute_error": 1.3600322008132935
+          },
+          {
+            "frame": 586,
+            "rgb_mean_absolute_error": 1.3903921842575073
+          }
+        ]
+      },
+      "elapsed_seconds": 36.39,
+      "status": "complete"
+    },
+    {
+      "task": "pouring",
+      "episode": "episode_000012",
+      "source_hdf5": "/home/aigc/human_policy/data/unitree_g1_dex3/pouring/episodes/episode_000012.hdf5",
+      "keypoint_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pouring/episode_000012.mp4",
+      "real_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pouring/episode_000012_real.mp4",
+      "comparison_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pouring/episode_000012_compare.mp4",
+      "cameras": [
+        "left",
+        "right",
+        "left_wrist",
+        "right_wrist"
+      ],
+      "source_color_order": "RGB (direct cv2.imdecode, project reader convention)",
+      "camera_tile_pixels": [
+        320,
+        240
+      ],
+      "full_episode": true,
+      "duration_seconds": 14.966666666666667,
+      "real_validation": {
+        "frames": 449,
+        "fps": 30.0,
+        "width": 640,
+        "height": 560,
+        "codec": "h264",
+        "bytes": 3391287,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.2915457487106323
+          },
+          {
+            "frame": 224,
+            "rgb_mean_absolute_error": 1.5442904233932495
+          },
+          {
+            "frame": 448,
+            "rgb_mean_absolute_error": 1.8597962856292725
+          }
+        ]
+      },
+      "comparison_validation": {
+        "frames": 449,
+        "fps": 30.0,
+        "width": 1920,
+        "height": 760,
+        "codec": "h264",
+        "bytes": 4549478,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.4714850187301636
+          },
+          {
+            "frame": 224,
+            "rgb_mean_absolute_error": 1.5671905279159546
+          },
+          {
+            "frame": 448,
+            "rgb_mean_absolute_error": 1.625791072845459
+          }
+        ]
+      },
+      "elapsed_seconds": 28.44,
+      "status": "complete"
+    },
+    {
+      "task": "pouring",
+      "episode": "episode_000057",
+      "source_hdf5": "/home/aigc/human_policy/data/unitree_g1_dex3/pouring/episodes/episode_000057.hdf5",
+      "keypoint_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pouring/episode_000057.mp4",
+      "real_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pouring/episode_000057_real.mp4",
+      "comparison_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pouring/episode_000057_compare.mp4",
+      "cameras": [
+        "left",
+        "right",
+        "left_wrist",
+        "right_wrist"
+      ],
+      "source_color_order": "RGB (direct cv2.imdecode, project reader convention)",
+      "camera_tile_pixels": [
+        320,
+        240
+      ],
+      "full_episode": true,
+      "duration_seconds": 12.266666666666667,
+      "real_validation": {
+        "frames": 368,
+        "fps": 30.0,
+        "width": 640,
+        "height": 560,
+        "codec": "h264",
+        "bytes": 2842867,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.34049391746521
+          },
+          {
+            "frame": 184,
+            "rgb_mean_absolute_error": 1.5535342693328857
+          },
+          {
+            "frame": 367,
+            "rgb_mean_absolute_error": 1.7895666360855103
+          }
+        ]
+      },
+      "comparison_validation": {
+        "frames": 368,
+        "fps": 30.0,
+        "width": 1920,
+        "height": 760,
+        "codec": "h264",
+        "bytes": 3795203,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.4952869415283203
+          },
+          {
+            "frame": 184,
+            "rgb_mean_absolute_error": 1.5781558752059937
+          },
+          {
+            "frame": 367,
+            "rgb_mean_absolute_error": 1.6129169464111328
+          }
+        ]
+      },
+      "elapsed_seconds": 22.61,
+      "status": "complete"
+    },
+    {
+      "task": "pouring",
+      "episode": "episode_000140",
+      "source_hdf5": "/home/aigc/human_policy/data/unitree_g1_dex3/pouring/episodes/episode_000140.hdf5",
+      "keypoint_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pouring/episode_000140.mp4",
+      "real_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pouring/episode_000140_real.mp4",
+      "comparison_video": "/home/aigc/human_policy/data/unitree_g1_dex3/visualizations/pouring/episode_000140_compare.mp4",
+      "cameras": [
+        "left",
+        "right",
+        "left_wrist",
+        "right_wrist"
+      ],
+      "source_color_order": "RGB (direct cv2.imdecode, project reader convention)",
+      "camera_tile_pixels": [
+        320,
+        240
+      ],
+      "full_episode": true,
+      "duration_seconds": 11.966666666666667,
+      "real_validation": {
+        "frames": 359,
+        "fps": 30.0,
+        "width": 640,
+        "height": 560,
+        "codec": "h264",
+        "bytes": 3259236,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.3919122219085693
+          },
+          {
+            "frame": 179,
+            "rgb_mean_absolute_error": 1.8934003114700317
+          },
+          {
+            "frame": 358,
+            "rgb_mean_absolute_error": 1.8272032737731934
+          }
+        ]
+      },
+      "comparison_validation": {
+        "frames": 359,
+        "fps": 30.0,
+        "width": 1920,
+        "height": 760,
+        "codec": "h264",
+        "bytes": 4270001,
+        "sample_rgb_checks": [
+          {
+            "frame": 0,
+            "rgb_mean_absolute_error": 1.52006995677948
+          },
+          {
+            "frame": 179,
+            "rgb_mean_absolute_error": 1.6393829584121704
+          },
+          {
+            "frame": 358,
+            "rgb_mean_absolute_error": 1.6157838106155396
+          }
+        ]
+      },
+      "elapsed_seconds": 23.12,
+      "status": "complete"
+    }
+  ],
+  "errors": [],
+  "elapsed_seconds": 88.0,
+  "total_real_videos": 9,
+  "total_comparison_videos": 9,
+  "total_real_frames": 7793,
+  "total_comparison_frames": 7793,
+  "total_bytes": 115697114,
+  "exporter_sha256": "246bafad11c1cbad711688a1de255f3252467b48e07f175c7c5548c8b485b6f4"
+}

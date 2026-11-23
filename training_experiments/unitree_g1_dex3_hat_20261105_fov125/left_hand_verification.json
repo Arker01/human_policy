@@ -1,0 +1,10 @@
+{
+  "status": "pass",
+  "policy_source": "/home/aigc/human_policy/training_experiments/unitree_g1_dex3_hat_20261105_fov125/source/hdt/policy.py",
+  "left_hand_state_mask_all_one": true,
+  "left_hand_state_passed_to_model": true,
+  "left_eef_loss_gradient_min": 0.03833911940455437,
+  "left_keypoint_loss_gradient_min": 0.0013020833721384406,
+  "only_normalized_state_tail_zeroed": "98:128",
+  "existing_neck_loss_mask_preserved": true
+}
