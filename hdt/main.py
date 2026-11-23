@@ -453,8 +453,12 @@ def main(args, base_dir, processed_dir=None):
 
     # fixed parameters
     # TODO(roger): consolidate these to just loading from yaml
-    state_dim = 128
-    action_dim = 128
+    # State and action have historically both been 128-D, but SONIC-native keeps
+    # the same 128-D SAIL observation and predicts a 76-D command
+    # (64 post-FSQ tokens + two 6-D Inspire commands).  Keep the legacy defaults
+    # while allowing the model yaml to state the two interfaces independently.
+    state_dim = int(trainer_config.get('common', {}).get('state_dim', 128))
+    action_dim = int(trainer_config.get('common', {}).get('action_dim', 128))
     if policy_class == 'ACT':
         policy_config = {'lr': args['lr'],
                          'num_queries': args['chunk_size'],
@@ -595,7 +599,9 @@ def main(args, base_dir, processed_dir=None):
                                                         visual_aug_config=visual_aug_config,
                                                         hat_conditioning_config=hat_conditioning_cfg,
                                                         action_representation=action_representation,
-                                                        robot_target_fps=robot_target_fps)
+                                                        robot_target_fps=robot_target_fps,
+                                                        experiment_variant=VARIANT,
+                                                        action_dim=action_dim)
 
     if args.get("eval_ckpts", False):
         val_dataloader, policy = accelerator.prepare(val_dataloader, policy)
@@ -609,6 +615,9 @@ def main(args, base_dir, processed_dir=None):
         stats_path = os.path.join(ckpt_dir, f'dataset_stats.pkl')
         with open(stats_path, 'wb') as f:
             pickle.dump(stats, f)
+        deployment_metadata = train_dataloader.dataset.deployment_metadata()
+        with open(os.path.join(ckpt_dir, 'deployment_metadata.json'), 'w') as f:
+            json.dump(deployment_metadata, f, indent=2, sort_keys=True)
 
     train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, config)
 
@@ -742,7 +751,8 @@ def train_fn(accelerator, train_dataloader, val_dataloader, policy, optimizer, c
             if cur_iter >= num_epochs or config['val_and_jit_trace']:
                 break
 
-            if cur_iter % 1000 == 0:
+            if (cur_iter % 1000 == 0
+                    and not (cur_iter == 0 and os.environ.get('HDT_SKIP_INITIAL_VALIDATION') == '1')):
             # validation
                 with torch.no_grad():
                     policy.eval()
